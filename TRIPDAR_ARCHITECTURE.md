@@ -5,7 +5,7 @@ conceptual architecture for Tripdar.
 
 All implementation decisions must conform to this structure.
 Source Observation
-Tripdar observes ops.originalpsilly.com as the single authoritative source. It reads signals and stories in real time without storing or modifying them. This layer maintains read-only access to the source.
+Tripdar observes ops.originalpsilly.com as the single authoritative source for production and signal context. It reads observational signals in real time without storing or modifying them. This layer maintains read-only access to the source.
 Separate Presentation
 Signals (Tripdar) and stories (Triptales) are presented separately. They never influence each other's data. Presentation preserves the distinction between observational signals and narrative stories.
 Comparative Processing
