@@ -1,80 +1,133 @@
 /**
  * Tripdar Signal Capture UI
- * 
- * Minimal React UI that consumes the domain layer.
- * 
+ *
+ * Minimal React UI that communicates with server APIs.
+ *
  * Rules:
- * - Uses domain/index.ts exports only
- * - Contains NO validation logic (domain handles it)
- * - Contains NO aggregation language construction (domain handles it)
- * - Only renders questions, captures directions, calls store.append()
+ * - Contains NO aggregation logic (server handles it)
+ * - Contains NO signal storage (server handles it)
+ * - Only renders questions, sends answers, displays language
  */
 
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import {
-  Dimension,
-  Direction,
-  SignalStore,
-  createSignalStore,
-  aggregateAll,
-  FIXED_CONTEXT,
-  VALID_DIMENSIONS,
-  VALID_DIRECTIONS,
-} from "../domain";
+  createSignal,
+  getAggregation,
+  type SignalInput,
+  type AggregationResponse,
+} from "./api";
 
 // =============================================================================
-// QUESTION DEFINITIONS
+// FIXED CONTEXT (Meaning Layer v1.0)
 // =============================================================================
+
+/**
+ * Fixed context for prototype phase.
+ * Per implementation brief: one strain, one dose, baseline reference only.
+ */
+const FIXED_CONTEXT = {
+  strainId: "golden-teacher",
+  doseCategory: "MICRODOSE",
+  scale: "MICRO",
+  referenceFrame: "BASELINE",
+} as const;
+
+// =============================================================================
+// DIMENSION DEFINITIONS
+// =============================================================================
+
+/**
+ * Valid dimensions for prototype.
+ * Per implementation brief: three dimensions only.
+ */
+const DIMENSIONS = ["clarity", "calm", "presence"] as const;
+type DimensionId = (typeof DIMENSIONS)[number];
+
+/**
+ * Valid directions.
+ */
+const DIRECTIONS = ["MORE", "LESS", "SAME", "NOT_NOTICED"] as const;
+type Direction = (typeof DIRECTIONS)[number];
 
 /**
  * Question text for each dimension.
  * Per spec: questions are comparative, never ask "how much".
  */
-const QUESTIONS: Record<Dimension, string> = {
-  Clarity: "Compared to your usual state, did your thinking feel clearer or foggier?",
-  Calm: "Did you feel calmer or more restless than usual?",
-  Presence: "Did you feel more grounded in the moment, or was your mind more wandering?",
+const QUESTIONS: Record<DimensionId, string> = {
+  clarity:
+    "Compared to your usual state, did your thinking feel clearer or foggier?",
+  calm: "Did you feel calmer or more restless than usual?",
+  presence:
+    "Did you feel more grounded in the moment, or was your mind more wandering?",
 };
 
 /**
  * Direction labels for display.
  */
 const DIRECTION_LABELS: Record<Direction, string> = {
-  More: "More than usual",
-  Less: "Less than usual",
-  Same: "About the same",
-  "Not noticed": "Didn't notice",
+  MORE: "More than usual",
+  LESS: "Less than usual",
+  SAME: "About the same",
+  NOT_NOTICED: "Didn't notice",
 };
+
+// =============================================================================
+// SESSION IDENTIFIERS
+// =============================================================================
+
+/**
+ * Generate a simple unique ID for session/report grouping.
+ */
+function generateId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+// Session and report IDs persist for the duration of this component instance
+const sessionId = generateId();
+const reportId = generateId();
 
 // =============================================================================
 // QUESTION COMPONENT
 // =============================================================================
 
 interface QuestionProps {
-  dimension: Dimension;
-  onAnswer: (dimension: Dimension, direction: Direction) => void;
+  dimensionId: DimensionId;
+  onAnswer: (dimensionId: DimensionId, direction: Direction) => void;
   answered: boolean;
   selectedDirection: Direction | null;
+  error: string | null;
 }
 
-function Question({ dimension, onAnswer, answered, selectedDirection }: QuestionProps) {
+function Question({
+  dimensionId,
+  onAnswer,
+  answered,
+  selectedDirection,
+  error,
+}: QuestionProps) {
   return (
     <div>
-      <p><strong>{dimension}</strong></p>
-      <p>{QUESTIONS[dimension]}</p>
+      <p>
+        <strong>{dimensionId}</strong>
+      </p>
+      <p>{QUESTIONS[dimensionId]}</p>
       <div>
-        {VALID_DIRECTIONS.map((direction) => (
+        {DIRECTIONS.map((direction) => (
           <button
             key={direction}
-            onClick={() => onAnswer(dimension, direction)}
+            onClick={() => onAnswer(dimensionId, direction)}
             disabled={answered}
             style={{
               marginRight: 8,
               marginBottom: 8,
               padding: "8px 16px",
-              backgroundColor: selectedDirection === direction ? "#444" : "#222",
+              backgroundColor:
+                selectedDirection === direction ? "#444" : "#222",
               color: "#fff",
-              border: selectedDirection === direction ? "2px solid #888" : "1px solid #444",
+              border:
+                selectedDirection === direction
+                  ? "2px solid #888"
+                  : "1px solid #444",
               cursor: answered ? "not-allowed" : "pointer",
               opacity: answered ? 0.6 : 1,
             }}
@@ -83,7 +136,10 @@ function Question({ dimension, onAnswer, answered, selectedDirection }: Question
           </button>
         ))}
       </div>
-      {answered && <p style={{ color: "#888" }}>✓ Signal recorded</p>}
+      {answered && !error && (
+        <p style={{ color: "#888" }}>✓ Signal recorded</p>
+      )}
+      {error && <p style={{ color: "#c44" }}>{error}</p>}
       <hr style={{ margin: "16px 0", borderColor: "#333" }} />
     </div>
   );
@@ -94,38 +150,62 @@ function Question({ dimension, onAnswer, answered, selectedDirection }: Question
 // =============================================================================
 
 interface AggregationDisplayProps {
-  signalCount: number;
-  store: SignalStore;
+  aggregations: Record<DimensionId, AggregationResponse | null>;
 }
 
-function AggregationDisplay({ signalCount, store }: AggregationDisplayProps) {
-  const signals = store.getAll();
-  const aggregation = aggregateAll(signals);
+function AggregationDisplay({ aggregations }: AggregationDisplayProps) {
+  const hasAny = DIMENSIONS.some((d) => aggregations[d] !== null);
 
-  // Always show aggregation section when there are signals
-  // This displays either pattern language or "not enough reports" per spec
-  if (signalCount === 0) {
+  if (!hasAny) {
     return null;
   }
 
   return (
-    <div style={{ marginTop: 32, padding: 16, backgroundColor: "#111", border: "1px solid #333" }}>
-      <p><strong>Aggregation Output</strong></p>
-      <p style={{ color: "#888" }}>
-        {aggregation.strain} at {aggregation.dose.toLowerCase()} — {signals.length} signal(s)
+    <div
+      style={{
+        marginTop: 32,
+        padding: 16,
+        backgroundColor: "#111",
+        border: "1px solid #333",
+      }}
+    >
+      <p>
+        <strong>Pattern Language</strong>
       </p>
       <hr style={{ borderColor: "#333" }} />
-      {aggregation.dimensions.map((dim) => (
-        <p key={dim.dimension} style={{ color: dim.canSpeak ? "#fff" : "#666" }}>
-          {dim.sentence}
-        </p>
-      ))}
-      {aggregation.compositeSentence && (
-        <>
-          <hr style={{ borderColor: "#333" }} />
-          <p><em>{aggregation.compositeSentence}</em></p>
-        </>
-      )}
+      {DIMENSIONS.map((dimensionId) => {
+        const agg = aggregations[dimensionId];
+        if (!agg) return null;
+
+        // Render based on server response status
+        if (agg.status === "PATTERN_DETECTED") {
+          // Render sentence verbatim
+          return (
+            <p key={dimensionId} style={{ color: "#fff" }}>
+              {agg.sentence}
+            </p>
+          );
+        }
+
+        if (agg.status === "INSUFFICIENT_DATA") {
+          return (
+            <p key={dimensionId} style={{ color: "#666" }}>
+              Not enough reports yet for {dimensionId}.
+            </p>
+          );
+        }
+
+        if (agg.status === "NO_CLEAR_PATTERN") {
+          // Neutral placeholder - no pattern emerged
+          return (
+            <p key={dimensionId} style={{ color: "#666" }}>
+              No clear pattern for {dimensionId}.
+            </p>
+          );
+        }
+
+        return null;
+      })}
     </div>
   );
 }
@@ -135,64 +215,99 @@ function AggregationDisplay({ signalCount, store }: AggregationDisplayProps) {
 // =============================================================================
 
 export function SignalCapture() {
-  // Create store once (persists across renders via useMemo)
-  const store = useMemo(() => createSignalStore(), []);
-
   // Track which dimensions have been answered and their selections
-  const [answered, setAnswered] = useState<Record<Dimension, boolean>>({
-    Clarity: false,
-    Calm: false,
-    Presence: false,
+  const [answered, setAnswered] = useState<Record<DimensionId, boolean>>({
+    clarity: false,
+    calm: false,
+    presence: false,
   });
-  const [selections, setSelections] = useState<Record<Dimension, Direction | null>>({
-    Clarity: null,
-    Calm: null,
-    Presence: null,
+  const [selections, setSelections] = useState<
+    Record<DimensionId, Direction | null>
+  >({
+    clarity: null,
+    calm: null,
+    presence: null,
+  });
+  const [errors, setErrors] = useState<Record<DimensionId, string | null>>({
+    clarity: null,
+    calm: null,
+    presence: null,
   });
 
-  // Track signal count to trigger re-renders for aggregation display
-  const [signalCount, setSignalCount] = useState(0);
+  // Aggregation responses from server (per dimension)
+  const [aggregations, setAggregations] = useState<
+    Record<DimensionId, AggregationResponse | null>
+  >({
+    clarity: null,
+    calm: null,
+    presence: null,
+  });
 
-  const handleAnswer = (dimension: Dimension, direction: Direction) => {
-    // Append signal to store (domain handles validation)
-    const signal = store.append({ dimension, direction });
+  const handleAnswer = async (dimensionId: DimensionId, direction: Direction) => {
+    // Mark as answered immediately (optimistic for UI)
+    setAnswered((prev) => ({ ...prev, [dimensionId]: true }));
+    setSelections((prev) => ({ ...prev, [dimensionId]: direction }));
+    setErrors((prev) => ({ ...prev, [dimensionId]: null }));
 
-    if (signal) {
-      // Mark as answered
-      setAnswered((prev) => ({ ...prev, [dimension]: true }));
-      setSelections((prev) => ({ ...prev, [dimension]: direction }));
-      // Update signal count to trigger re-render of aggregation
-      setSignalCount((n) => n + 1);
+    // Build signal payload
+    const input: SignalInput = {
+      ...FIXED_CONTEXT,
+      dimensionId,
+      direction,
+      sessionId,
+      reportId,
+    };
+
+    // POST signal to server
+    const signalResult = await createSignal(input);
+
+    if ("error" in signalResult) {
+      // Show error verbatim
+      setErrors((prev) => ({ ...prev, [dimensionId]: signalResult.error }));
+      return;
     }
+
+    // On success, fetch aggregation for this dimension
+    const aggResult = await getAggregation(dimensionId);
+    setAggregations((prev) => ({ ...prev, [dimensionId]: aggResult }));
   };
 
   return (
-    <div style={{ maxWidth: 600, margin: "0 auto", padding: 24, fontFamily: "system-ui" }}>
+    <div
+      style={{ maxWidth: 600, margin: "0 auto", padding: 24, fontFamily: "system-ui" }}
+    >
       <h1>Tripdar Signal Capture</h1>
-      
+
       {/* Fixed context display */}
-      <div style={{ marginBottom: 24, padding: 12, backgroundColor: "#1a1a1a", border: "1px solid #333" }}>
+      <div
+        style={{
+          marginBottom: 24,
+          padding: 12,
+          backgroundColor: "#1a1a1a",
+          border: "1px solid #333",
+        }}
+      >
         <p style={{ margin: 0, color: "#888" }}>
-          <strong>Context:</strong> {FIXED_CONTEXT.strain} at {FIXED_CONTEXT.dose.toLowerCase()}
+          <strong>Context:</strong> Golden Teacher at microdose
         </p>
       </div>
 
       {/* Questions */}
-      {VALID_DIMENSIONS.map((dimension) => (
+      {DIMENSIONS.map((dimensionId) => (
         <Question
-          key={dimension}
-          dimension={dimension}
+          key={dimensionId}
+          dimensionId={dimensionId}
           onAnswer={handleAnswer}
-          answered={answered[dimension]}
-          selectedDirection={selections[dimension]}
+          answered={answered[dimensionId]}
+          selectedDirection={selections[dimensionId]}
+          error={errors[dimensionId]}
         />
       ))}
 
-      {/* Aggregation output (rendered verbatim from domain) */}
-      <AggregationDisplay signalCount={signalCount} store={store} />
+      {/* Aggregation output (rendered verbatim from server) */}
+      <AggregationDisplay aggregations={aggregations} />
     </div>
   );
 }
 
 export default SignalCapture;
-
