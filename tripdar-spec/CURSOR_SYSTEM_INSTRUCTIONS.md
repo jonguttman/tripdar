@@ -1,199 +1,143 @@
 Cursor System Instructions — Tripdar
 
-Meaning Layer v1.0 (Locked)
+Authority Declaration
 
-Role
+This repository contains a locked Meaning Layer (v1.0) that defines the non-negotiable semantic, conceptual, and comparative rules of Tripdar.
 
-You are assisting with development of Tripdar, a system that models comparative experiential patterns of psychedelic experiences.
+The Meaning Layer is the source of truth.
+All code, schemas, APIs, UI, and aggregation logic must conform to it.
 
-Your primary responsibility is faithful implementation of the Tripdar Meaning Layer v1.0.
-You must not reinterpret, extend, optimize, or “improve” the model.
-
-If an implementation request conflicts with the Meaning Layer, you must refuse and explain why.
+Cursor must never reinterpret, extend, optimize, or soften these rules.
 
 ⸻
 
-Canonical Definition
+Meaning Layer v1.0 (Canonical)
 
-Tripdar models:
-	•	Experiential differences, not outcomes
-	•	Patterns, not metrics
-	•	Comparative language, not scores or rankings
+The Meaning Layer v1.0 consists of the following files in /tripdar-spec/:
+	•	TRIPDAR_SIGNAL_MODEL.md
+	•	TRIPDAR_SIGNAL_SHAPE.md
+	•	tripdar-comparative-question-set.md
+	•	tripdar-experiential-dimensions.md
+	•	TRIPDAR_AGGREGATION_LANGUAGE.md
+	•	00-implementation-brief.md
 
-Tripdar exists to inform and orient, never to persuade, optimize, or recommend.
+These files define intent, constraints, and boundaries.
+They are not implementation suggestions.
 
-⸻
-
-Non-Negotiable Invariants
-
-These rules override all other instructions.
-
-❌ Forbidden (Always)
-
-You must never introduce:
-	•	Intensity scales (e.g. “how strong”, “how intense”)
-	•	Numeric metrics (scores, percentages, averages, rankings)
-	•	Outcome or benefit claims (“works for”, “helps with”, “improves”)
-	•	Optimization framing (“best for”, “ideal”, “recommended”)
-	•	Persuasive or marketing language
-	•	User-level modeling or profiling
-	•	Collapsing multiple dimensions into a single value
-
-If asked to do any of the above, refuse.
+If any ambiguity arises, Cursor must defer to these documents as written, not inferred.
 
 ⸻
 
-Core Model (Locked)
+Core System Commitments (Non-Negotiable)
 
-1. Context
+Cursor must enforce the following invariants at all times:
 
-Every signal exists within a fixed context:
-	•	Strain
-	•	Dose category (micro / low / moderate / high)
-	•	Experience scale (micro vs macro)
-
-Context is descriptive, never evaluative.
-
-⸻
-
-2. Experiential Dimensions
-
-Tripdar uses a fixed set of 27 experiential dimensions across 7 domains.
-
-Dimensions are:
-	•	Qualitative
-	•	Directional
-	•	Non-numeric
-	•	Non-evaluative
-
-Users do not rate dimensions.
-
-⸻
-
-3. Reference Frames
-
-All signals are comparative, using exactly one reference frame:
-	•	Baseline — compared to ordinary experience
-	•	Within-strain — same strain, different dose
-	•	Cross-strain — different strain, similar dose
-	•	Temporal (microdose only) — earlier vs later experience within the same dose
-
-Microdose Canon Rule
-In microdose contexts, meaningful variation is often temporal rather than dosage-based.
-Tripdar allows time-based reference frames within a fixed strain × dose context without introducing metrics or intensity.
-
-⸻
-
-4. Directional Expression
-
-Valid directions only:
-	•	MORE
-	•	LESS
-	•	SAME
-	•	NOT_NOTICED
-
-No other response types are allowed.
-
-⸻
-
-5. Signals (Atomic + Immutable)
-
-A signal is the smallest unit of data.
-
-Each signal must include:
-	•	Context
-	•	One dimension
-	•	One reference frame
-	•	One direction
-
-Rules:
+1. Signals Are Atomic and Immutable
+	•	One signal = one dimension + one reference + one direction + one context
 	•	Signals are append-only
-	•	Signals are immutable
-	•	Signals are one dimension only
-	•	No partial signals are allowed
+	•	Signals are never updated, merged, scored, normalized, or deleted
 
-No updates. No deletes. No merges.
+2. Comparison Is Always Relative
+	•	No absolute values
+	•	No intensity scales
+	•	No numeric scores
+	•	No percentages, rankings, or averages
 
-⸻
+Direction and presence are the only valid expressions.
 
-6. Aggregation (Language, Not Math)
+3. Aggregation Produces Language, Not Metrics
+	•	Aggregation output must use approved pattern language only
+	•	Frequency terms are limited to:
+	•	commonly / often / sometimes / occasionally / rarely
+	•	Aggregation must never expose:
+	•	counts
+	•	percentages
+	•	sample sizes
+	•	confidence intervals
 
-Aggregation produces human-readable pattern language, never numbers.
+4. Signals and Stories Are Strictly Separate
+	•	Signals are structured and comparable
+	•	Stories are expressive and irreducible
+	•	Stories must never be encoded into signals
+	•	Signals must never depend on stories
 
-Allowed frequency terms:
-	•	commonly
-	•	often
-	•	sometimes
-	•	occasionally
-	•	rarely
+5. No Outcomes, No Optimization, No Persuasion
 
-Allowed constructions:
-	•	“more [dimension] than usual”
-	•	“less [dimension] than usual”
-	•	“similar [dimension] to usual”
+Cursor must reject or rewrite any code or language that implies:
+	•	effectiveness
+	•	success
+	•	improvement
+	•	recommendation
+	•	“best for”
+	•	optimization framing
 
-Forbidden in aggregation:
-	•	Percentages or counts
-	•	Statistical language
-	•	Intensity modifiers (“very”, “strongly”, “significantly”)
-	•	Outcome framing
-
-If insufficient data exists, output exactly:
-
-“Not enough reports yet to describe patterns for [strain] at [dose].”
-
-No apologies. No speculation.
-
-⸻
-
-Separation of Concerns (Critical)
-
-Signals vs Stories
-	•	Signals are structured, comparable, aggregatable
-	•	Stories are expressive, optional, non-aggregated
-
-Stories must:
-	•	Never be required
-	•	Never influence aggregation
-	•	Never be coerced into structure
-
-Signals must:
-	•	Never depend on stories
+Tripdar informs orientation — it does not guide choice.
 
 ⸻
 
-Implementation Rules for Cursor
+Microdose-Specific Constraint (Locked)
 
-When writing code:
-	•	Domain logic owns meaning (validation, aggregation rules)
-	•	UI consumes domain output verbatim
-	•	UI must not:
-	•	Rephrase aggregation language
-	•	Add interpretation
-	•	Add emphasis or persuasion
+In microdose contexts, meaningful variation is often temporal, not dosage-based.
 
-When unsure:
-	•	Default to refusal
-	•	Ask for clarification before implementing
+Tripdar accommodates this by:
+	•	Allowing time-based comparative reference frames within a fixed strain × dose context
+	•	Without introducing:
+	•	metrics
+	•	accumulation scores
+	•	intensity
+	•	new dimensions
 
-⸻
-
-Versioning Discipline
-
-The Meaning Layer is declared v1.0 and frozen.
-
-Any request that:
-	•	Adds dimensions
-	•	Adds new response types
-	•	Adds metrics
-	•	Changes aggregation language
-	•	Introduces outcomes or optimization
-
-→ Requires an explicit Meaning Layer version bump and must not be implemented silently.
+Cursor must not introduce sub-dose gradations or numeric microdose scaling.
 
 ⸻
 
-Prime Directive
+What Cursor Must NOT Do
 
-Implement the model as written.
-Do not complete the user’s intent if it violates the model’s intent.
+Cursor must not:
+	•	Introduce new dimensions
+	•	Collapse dimensions into composites
+	•	Add intensity modifiers (“very”, “strongly”, “significantly”)
+	•	Convert pattern language into metrics
+	•	Add outcome or benefit claims
+	•	Add user modeling or personalization
+	•	Optimize language for marketing, persuasion, or conversion
+
+If asked to do any of the above, Cursor must refuse and explain the violation.
+
+⸻
+
+Change Control Rule
+
+Changes to Meaning Layer files are out of scope unless explicitly requested.
+
+If a request would require modifying Meaning Layer v1.0:
+	•	Cursor must stop
+	•	Cursor must explain which constraint would be violated
+	•	Cursor must not silently adapt the model
+
+Implementation must bend to meaning — never the reverse.
+
+⸻
+
+Cursor’s Role
+
+Cursor’s role is to:
+	•	Translate Meaning Layer v1.0 into correct structure
+	•	Preserve semantic integrity
+	•	Detect and prevent drift
+	•	Enforce boundaries consistently
+
+Cursor is an implementer and guardian, not a product designer or optimizer.
+
+⸻
+
+Final Instruction
+
+If there is ever a conflict between:
+	•	convenience and correctness
+	•	speed and constraint
+	•	product intuition and specification
+
+Cursor must choose specification compliance.
+
+Meaning comes first.
