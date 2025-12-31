@@ -1,0 +1,65 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DoseCategory {
+  MICRODOSE
+  LOW
+  MODERATE
+  HIGH
+}
+
+enum ExperienceScale {
+  MICRO
+  MACRO
+}
+
+enum ReferenceFrame {
+  BASELINE
+  WITHIN_STRAIN
+  CROSS_STRAIN
+}
+
+enum Direction {
+  MORE
+  LESS
+  SAME
+  NOT_NOTICED
+}
+
+model Signal {
+  // Immutability intent:
+  // - Signals are append-only.
+  // - Signals MUST NOT be updated or deleted (enforce in application logic; not encoded as schema constraints here).
+  // - Aggregation is computed from signals and MUST NOT be stored on this table.
+
+  id String @id // Unique identifier (provided by application; no helper defaults)
+
+  // Context
+  strainId      String
+  doseCategory  DoseCategory
+  scale         ExperienceScale
+
+  // Dimension (must be one of the 27 experiential dimensions; enforced in application logic)
+  dimensionId String
+
+  // Reference + conditional comparison fields (enforce conditional rules in application logic; schema uses only enums + nullability)
+  referenceFrame    ReferenceFrame
+  comparisonDose    DoseCategory? // REQUIRED ONLY when referenceFrame = WITHIN_STRAIN; MUST be null otherwise; MUST differ from doseCategory
+  comparisonStrainId String?      // REQUIRED ONLY when referenceFrame = CROSS_STRAIN; MUST be null otherwise; MUST differ from strainId
+
+  // Observation
+  direction Direction
+
+  // Grouping / anonymity
+  sessionId String // Anonymous session identifier
+  reportId  String // Groups signals from one submission
+
+  // Creation timestamp (set by application at insert-time; no additional timestamps are stored)
+  createdAt DateTime
+}
