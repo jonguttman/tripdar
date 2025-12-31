@@ -27,3 +27,15 @@ yarn-error.log*
 *.swp
 *.swo
 
+.env
+.env.*
+# Next.js
+.next/
+out/
+
+# Cursor
+.cursor/
+
+# Environment
+.env
+.env.*

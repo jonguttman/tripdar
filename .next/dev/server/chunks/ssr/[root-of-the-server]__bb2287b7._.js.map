@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 14, "column": 0}, "map": {"version":3,"sources":["file:///Users/jonathanguttman/Tripd.ar/src/app/learn/page.tsx"],"sourcesContent":["export default function LearnPage() {\n  return (\n    <main style={{ padding: \"2rem\", maxWidth: 720 }}>\n      <h2>About Tripdar</h2>\n      <p>\n        Tripdar shows patterns in how experiences are described across\n        strain and context. It does not recommend, rank, or evaluate.\n      </p>\n    </main>\n  );\n}\n\n"],"names":[],"mappings":";;;;;;AAAe,SAAS;IACtB,qBACE,6PAAC;QAAK,OAAO;YAAE,SAAS;YAAQ,UAAU;QAAI;;0BAC5C,6PAAC;0BAAG;;;;;;0BACJ,6PAAC;0BAAE;;;;;;;;;;;;AAMT"}}]
-}
