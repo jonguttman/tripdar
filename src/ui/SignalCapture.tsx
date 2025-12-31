@@ -1,3 +1,5 @@
+"use client";
+
 /**
  * Tripdar Signal Capture UI
  *
@@ -62,13 +64,32 @@ const QUESTIONS: Record<DimensionId, string> = {
 };
 
 /**
- * Direction labels for display.
+ * Dimension-specific answer labels.
+ * Maps each dimension to human-readable labels per direction.
+ * Submission still uses generic directions (MORE | LESS | SAME | NOT_NOTICED).
  */
-const DIRECTION_LABELS: Record<Direction, string> = {
-  MORE: "More than usual",
-  LESS: "Less than usual",
-  SAME: "About the same",
-  NOT_NOTICED: "Didn't notice",
+const ANSWER_LABELS: Record<
+  DimensionId,
+  Record<Direction, string>
+> = {
+  clarity: {
+    MORE: "Clearer than usual",
+    LESS: "Foggier than usual",
+    SAME: "About the same",
+    NOT_NOTICED: "Didn't notice",
+  },
+  calm: {
+    MORE: "Calmer than usual",
+    LESS: "More restless than usual",
+    SAME: "About the same",
+    NOT_NOTICED: "Didn't notice",
+  },
+  presence: {
+    MORE: "More grounded",
+    LESS: "More wandering",
+    SAME: "About the same",
+    NOT_NOTICED: "Didn't notice",
+  },
 };
 
 // =============================================================================
@@ -132,7 +153,7 @@ function Question({
               opacity: answered ? 0.6 : 1,
             }}
           >
-            {DIRECTION_LABELS[direction]}
+            {ANSWER_LABELS[dimensionId][direction]}
           </button>
         ))}
       </div>

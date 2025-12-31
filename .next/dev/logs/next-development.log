@@ -1,0 +1,9 @@
+[00:00:00.726] Server  LOG     ✓ Ready in 440ms
+[00:00:09.650] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:05:38.455] Server  LOG     ✓ Compiled in 16ms
+[00:05:38.546] Browser ERROR   uncaughtError: ReferenceError: DIRECTION_LABELS is not defined
+[00:05:42.335] Server  WARN    ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:05:42.413] Server  LOG     ✓ Compiled in 4ms
+[00:05:42.546] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:06:08.808] Server  WARN    ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:06:08.903] Browser ERROR   uncaughtError: ReferenceError: Can't find variable: DIRECTION_LABELS

@@ -1,0 +1,6 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 14, "column": 0}, "map": {"version":3,"sources":["file:///Users/jonathanguttman/Tripd.ar/src/app/page.tsx"],"sourcesContent":["import Link from \"next/link\";\n\nexport default function Home() {\n  return (\n    <main style={{ padding: \"2rem\", maxWidth: 720 }}>\n      <h1>Tripdar</h1>\n\n      <p>\n        Tripdar describes how psychedelic experiences are commonly reported,\n        without ratings, recommendations, or outcomes.\n      </p>\n\n      <nav style={{ marginTop: \"2rem\", display: \"grid\", gap: \"1rem\" }}>\n        <Link href=\"/learn\">\n          <button>Learn about experiences</button>\n        </Link>\n\n        <Link href=\"/share\">\n          <button>Share an experience</button>\n        </Link>\n\n        <Link href=\"/about\">\n          <button>I'm not sure yet</button>\n        </Link>\n      </nav>\n    </main>\n  );\n}\n\n"],"names":[],"mappings":";;;;;AAAA;;;AAEe,SAAS;IACtB,qBACE,6PAAC;QAAK,OAAO;YAAE,SAAS;YAAQ,UAAU;QAAI;;0BAC5C,6PAAC;0BAAG;;;;;;0BAEJ,6PAAC;0BAAE;;;;;;0BAKH,6PAAC;gBAAI,OAAO;oBAAE,WAAW;oBAAQ,SAAS;oBAAQ,KAAK;gBAAO;;kCAC5D,6PAAC,yMAAI;wBAAC,MAAK;kCACT,cAAA,6PAAC;sCAAO;;;;;;;;;;;kCAGV,6PAAC,yMAAI;wBAAC,MAAK;kCACT,cAAA,6PAAC;sCAAO;;;;;;;;;;;kCAGV,6PAAC,yMAAI;wBAAC,MAAK;kCACT,cAAA,6PAAC;sCAAO;;;;;;;;;;;;;;;;;;;;;;;AAKlB"}}]
+}

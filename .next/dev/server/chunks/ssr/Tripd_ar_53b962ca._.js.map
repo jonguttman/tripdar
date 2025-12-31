@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/jonathanguttman/Tripd.ar/src/app/layout.tsx"],"sourcesContent":["export const metadata = {\n  title: \"Tripdar\",\n  description: \"Describes how psychedelic experiences are commonly reported\",\n};\n\nexport default function RootLayout({\n  children,\n}: {\n  children: React.ReactNode;\n}) {\n  return (\n    <html lang=\"en\">\n      <body style={{ margin: 0, backgroundColor: \"#0a0a0a\", color: \"#fff\" }}>\n        {children}\n      </body>\n    </html>\n  );\n}\n\n"],"names":[],"mappings":";;;;;;;;AAAO,MAAM,WAAW;IACtB,OAAO;IACP,aAAa;AACf;AAEe,SAAS,WAAW,EACjC,QAAQ,EAGT;IACC,qBACE,6PAAC;QAAK,MAAK;kBACT,cAAA,6PAAC;YAAK,OAAO;gBAAE,QAAQ;gBAAG,iBAAiB;gBAAW,OAAO;YAAO;sBACjE;;;;;;;;;;;AAIT"}},
+    {"offset": {"line": 41, "column": 0}, "map": {"version":3,"sources":["file:///Users/jonathanguttman/Tripd.ar/node_modules/next/src/server/route-modules/app-page/vendored/rsc/react-jsx-dev-runtime.ts"],"sourcesContent":["module.exports = (\n  require('../../module.compiled') as typeof import('../../module.compiled')\n).vendored['react-rsc']!.ReactJsxDevRuntime\n"],"names":["module","exports","require","vendored","ReactJsxDevRuntime"],"mappings":"AAAAA,OAAOC,OAAO,GACZC,QAAQ,qIACRC,QAAQ,CAAC,YAAY,CAAEC,kBAAkB","ignoreList":[0]}}]
+}
