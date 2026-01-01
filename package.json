@@ -21,10 +21,10 @@
     "vitest": "^2.1.9"
   },
   "scripts": {
-    "dev": "vite",
-    "dev:server": "next dev",
-    "build": "tsc && vite build",
-    "build:server": "next build",
+    "dev": "next dev",
+    "dev:vite": "vite",
+    "build": "next build",
+    "build:vite": "tsc && vite build",
     "start": "next start",
     "preview": "vite preview",
     "test": "vitest run"
