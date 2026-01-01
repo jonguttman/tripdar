@@ -53,5 +53,3 @@ export function deleteSignal(): never {
     "deleteSignal is forbidden: Signals are append-only and must never be deleted (Meaning Layer v1.0)."
   );
 }
-
-

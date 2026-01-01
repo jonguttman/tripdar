@@ -3,34 +3,17 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "sqlite"
+  url      = "file:./dev.db"
 }
 
-enum DoseCategory {
-  MICRODOSE
-  LOW
-  MODERATE
-  HIGH
-}
-
-enum ExperienceScale {
-  MICRO
-  MACRO
-}
-
-enum ReferenceFrame {
-  BASELINE
-  WITHIN_STRAIN
-  CROSS_STRAIN
-}
-
-enum Direction {
-  MORE
-  LESS
-  SAME
-  NOT_NOTICED
-}
+// Note: SQLite does not support enums. Enum validation is enforced in application logic.
+// Valid values are documented here for reference:
+//
+// DoseCategory: MICRODOSE, LOW, MODERATE, HIGH
+// ExperienceScale: MICRO, MACRO
+// ReferenceFrame: BASELINE, WITHIN_STRAIN, CROSS_STRAIN
+// Direction: MORE, LESS, SAME, NOT_NOTICED
 
 model Signal {
   // Immutability intent:
@@ -42,19 +25,19 @@ model Signal {
 
   // Context
   strainId      String
-  doseCategory  DoseCategory
-  scale         ExperienceScale
+  doseCategory  String  // MICRODOSE, LOW, MODERATE, HIGH (validated in app)
+  scale         String  // MICRO, MACRO (validated in app)
 
-  // Dimension (must be one of the 27 experiential dimensions; enforced in application logic)
+  // Dimension (must be one of the 28 experiential dimensions; enforced in application logic)
   dimensionId String
 
-  // Reference + conditional comparison fields (enforce conditional rules in application logic; schema uses only enums + nullability)
-  referenceFrame    ReferenceFrame
-  comparisonDose    DoseCategory? // REQUIRED ONLY when referenceFrame = WITHIN_STRAIN; MUST be null otherwise; MUST differ from doseCategory
-  comparisonStrainId String?      // REQUIRED ONLY when referenceFrame = CROSS_STRAIN; MUST be null otherwise; MUST differ from strainId
+  // Reference + conditional comparison fields (enforce conditional rules in application logic)
+  referenceFrame     String   // BASELINE, WITHIN_STRAIN, CROSS_STRAIN (validated in app)
+  comparisonDose     String?  // REQUIRED ONLY when referenceFrame = WITHIN_STRAIN; MUST be null otherwise
+  comparisonStrainId String?  // REQUIRED ONLY when referenceFrame = CROSS_STRAIN; MUST be null otherwise
 
   // Observation
-  direction Direction
+  direction String  // MORE, LESS, SAME, NOT_NOTICED (validated in app)
 
   // Grouping / anonymity
   sessionId String // Anonymous session identifier

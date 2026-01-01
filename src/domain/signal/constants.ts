@@ -55,40 +55,40 @@ export type Direction = (typeof DIRECTIONS)[number];
 
 export const DIMENSION_IDS = [
   // Domain 1: Cognitive (5)
-  "Clarity",
-  "Fluidity",
-  "Introspection",
-  "Presence",
-  "Novelty",
+  "clarity",
+  "fluidity",
+  "introspection",
+  "presence",
+  "novelty",
   // Domain 2: Emotional (5)
-  "Openness",
-  "Calm",
-  "Sensitivity",
-  "Warmth",
-  "Depth",
+  "openness",
+  "calm",
+  "sensitivity",
+  "warmth",
+  "depth",
   // Domain 3: Somatic (5)
-  "Body Awareness",
-  "Energy",
-  "Relaxation",
-  "Groundedness",
-  "Sensory Acuity",
+  "body_awareness",
+  "energy",
+  "relaxation",
+  "groundedness",
+  "sensory_acuity",
   // Domain 4: Perceptual (4)
-  "Visual Nuance",
-  "Auditory Texture",
-  "Spatial Awareness",
-  "Aesthetic Sensitivity",
+  "visual_nuance",
+  "auditory_texture",
+  "spatial_awareness",
+  "aesthetic_sensitivity",
   // Domain 5: Temporal (3)
-  "Time Dilation",
-  "Flow",
-  "Duration Awareness",
+  "time_dilation",
+  "flow",
+  "duration_awareness",
   // Domain 6: Relational (3)
-  "Social Ease",
-  "Empathic Attunement",
-  "Environmental Connection",
+  "social_ease",
+  "empathic_attunement",
+  "environmental_connection",
   // Domain 7: Meaning (3)
-  "Significance",
-  "Perspective Shift",
-  "Integration Readiness",
+  "significance",
+  "perspective_shift",
+  "integration_readiness",
 ] as const;
 
 export type DimensionId = (typeof DIMENSION_IDS)[number];

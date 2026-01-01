@@ -279,16 +279,8 @@ export function SignalCapture() {
       reportId,
     };
 
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/56ca748c-dbb2-49eb-b6b2-0ceb6afc7b30',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SignalCapture.tsx:handleAnswer',message:'Signal input payload',data:{input},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H3'})}).catch(()=>{});
-    // #endregion
-
     // POST signal to server
     const signalResult = await createSignal(input);
-
-    // #region agent log
-    fetch('http://127.0.0.1:7243/ingest/56ca748c-dbb2-49eb-b6b2-0ceb6afc7b30',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'SignalCapture.tsx:handleAnswer',message:'Signal result from server',data:{signalResult,hasError:'error' in signalResult,hasId:signalResult && 'id' in signalResult},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H1,H2'})}).catch(()=>{});
-    // #endregion
 
     if ("error" in signalResult) {
       // Show error verbatim
