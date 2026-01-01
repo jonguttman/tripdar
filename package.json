@@ -23,7 +23,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:vite": "vite",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "build:vite": "tsc && vite build",
     "start": "next start",
     "preview": "vite preview",
