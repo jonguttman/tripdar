@@ -57,6 +57,7 @@ export type FrequencyTerm =
 /**
  * Minimal signal shape for aggregation.
  * Aggregation MUST NOT read fields beyond these.
+ * Note: direction is string to match Prisma's SQLite output.
  */
 export interface AggregationSignal {
   readonly strainId: string;
@@ -64,6 +65,6 @@ export interface AggregationSignal {
   readonly scale: string;
   readonly referenceFrame: string;
   readonly dimensionId: string;
-  readonly direction: Direction;
+  readonly direction: string;
 }
 

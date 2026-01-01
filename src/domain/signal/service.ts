@@ -31,7 +31,8 @@ export async function createSignal(
   const created = await prisma.signal.create({ data: record });
 
   // Freeze returned record so consumers cannot mutate it in-memory.
-  return Object.freeze(created);
+  // Cast back to SignalRecord since we validated the input and Prisma preserves values.
+  return Object.freeze(created as unknown as SignalRecord);
 }
 
 /**

@@ -69,7 +69,7 @@ const MINIMUM_SIGNALS_TO_SPEAK = 3;
  * The insufficient data message per spec.
  * "This is the only valid 'insufficient data' message. It is not an apology; it is a boundary."
  */
-function insufficientDataMessage(dimension: Dimension): string {
+function insufficientDataMessage(_dimension: Dimension): string {
   return `Not enough reports yet to describe patterns for ${FIXED_CONTEXT.strain} at ${FIXED_CONTEXT.dose.toLowerCase()}.`;
 }
 

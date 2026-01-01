@@ -10,7 +10,7 @@ function makeValidSignalInput(overrides: Partial<SignalRecord> = {}): SignalReco
     strainId: "strain_a",
     doseCategory: "MICRODOSE",
     scale: "MICRO",
-    dimensionId: "Clarity",
+    dimensionId: "clarity",
     referenceFrame: "BASELINE",
     comparisonDose: null,
     comparisonStrainId: null,

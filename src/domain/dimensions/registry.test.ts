@@ -13,7 +13,6 @@ import {
   ALL_DIMENSION_IDS,
   getDimension,
   type DimensionId,
-  type DimensionDefinition,
 } from "./registry";
 
 /**
@@ -82,7 +81,7 @@ describe("UI Labels", () => {
   it("all UI labels are non-empty strings", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, label] of Object.entries(dim.uiLabels)) {
+      for (const [_key, label] of Object.entries(dim.uiLabels)) {
         expect(typeof label).toBe("string");
         expect(label.length).toBeGreaterThan(0);
       }
@@ -100,7 +99,7 @@ describe("UI Labels", () => {
   it("no UI label contains intensity language", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, label] of Object.entries(dim.uiLabels)) {
+      for (const [_key, label] of Object.entries(dim.uiLabels)) {
         expect(label).not.toMatch(FORBIDDEN_PATTERNS.intensity);
       }
     }
@@ -109,7 +108,7 @@ describe("UI Labels", () => {
   it("no UI label contains evaluative language", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, label] of Object.entries(dim.uiLabels)) {
+      for (const [_key, label] of Object.entries(dim.uiLabels)) {
         expect(label).not.toMatch(FORBIDDEN_PATTERNS.evaluative);
       }
     }
@@ -118,7 +117,7 @@ describe("UI Labels", () => {
   it("no UI label contains outcome language", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, label] of Object.entries(dim.uiLabels)) {
+      for (const [_key, label] of Object.entries(dim.uiLabels)) {
         expect(label).not.toMatch(FORBIDDEN_PATTERNS.outcome);
       }
     }
@@ -140,7 +139,7 @@ describe("Aggregation Phrases", () => {
   it("all aggregation phrases are non-empty strings", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, phrase] of Object.entries(dim.aggregationPhrase)) {
+      for (const [_key, phrase] of Object.entries(dim.aggregationPhrase)) {
         expect(typeof phrase).toBe("string");
         expect(phrase.length).toBeGreaterThan(0);
       }
@@ -159,7 +158,7 @@ describe("Aggregation Phrases", () => {
   it("no aggregation phrase contains intensity language", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, phrase] of Object.entries(dim.aggregationPhrase)) {
+      for (const [_key, phrase] of Object.entries(dim.aggregationPhrase)) {
         expect(phrase).not.toMatch(FORBIDDEN_PATTERNS.intensity);
       }
     }
@@ -168,7 +167,7 @@ describe("Aggregation Phrases", () => {
   it("no aggregation phrase contains evaluative language", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, phrase] of Object.entries(dim.aggregationPhrase)) {
+      for (const [_key, phrase] of Object.entries(dim.aggregationPhrase)) {
         expect(phrase).not.toMatch(FORBIDDEN_PATTERNS.evaluative);
       }
     }
@@ -177,7 +176,7 @@ describe("Aggregation Phrases", () => {
   it("no aggregation phrase contains outcome language", () => {
     for (const id of ALL_DIMENSION_IDS) {
       const dim = DIMENSION_REGISTRY[id];
-      for (const [key, phrase] of Object.entries(dim.aggregationPhrase)) {
+      for (const [_key, phrase] of Object.entries(dim.aggregationPhrase)) {
         expect(phrase).not.toMatch(FORBIDDEN_PATTERNS.outcome);
       }
     }

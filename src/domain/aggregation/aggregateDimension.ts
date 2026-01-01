@@ -131,7 +131,7 @@ function countDirections(
   };
 
   for (const signal of signals) {
-    const dir = signal.direction;
+    const dir = signal.direction as Direction;
     if (dir in counts) {
       counts[dir]++;
     }
