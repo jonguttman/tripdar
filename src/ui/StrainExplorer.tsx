@@ -58,6 +58,17 @@ export function StrainExplorer() {
   const [view, setView] = useState<"grid" | "list">("grid");
   const [loading, setLoading] = useState(true);
 
+  // Normalize name for matching (handle B+ vs B plus, censored names, etc.)
+  const normalizeName = (name: string) => {
+    return name
+      .toLowerCase()
+      .replace(/[_-]/g, " ")
+      .replace(/\+/g, " plus")
+      .replace(/\*/g, "")  // Remove censoring asterisks
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
   // Fetch images from Vercel Blob on mount
   useEffect(() => {
     async function fetchImages() {
@@ -68,14 +79,26 @@ export function StrainExplorer() {
         if (data.success && data.images) {
           // Match images to strains by name
           const strainsWithImages = STRAIN_DATA.map((strain) => {
+            const normalizedStrainName = normalizeName(strain.name);
+
             const matchingImage = data.images.find((img: BlobImage) => {
-              const imgName = img.strainName.toLowerCase().replace(/[_-]/g, " ");
-              const strainName = strain.name.toLowerCase();
-              return (
-                imgName === strainName ||
-                imgName.includes(strainName) ||
-                strainName.includes(imgName)
-              );
+              if (!img.strainName) return false;
+              const normalizedImgName = normalizeName(img.strainName);
+
+              // Exact match
+              if (normalizedImgName === normalizedStrainName) return true;
+
+              // Partial matches (Thai Pink Buffalo → Pink Buffalo)
+              if (normalizedImgName.includes(normalizedStrainName)) return true;
+              if (normalizedStrainName.includes(normalizedImgName)) return true;
+
+              // Word-based matching for cases like "Ghost TAT" matching "Ghost"
+              const imgWords = normalizedImgName.split(" ");
+              const strainWords = normalizedStrainName.split(" ");
+              const matchingWords = strainWords.filter(w => imgWords.includes(w));
+              if (matchingWords.length >= 1 && matchingWords.length === strainWords.length) return true;
+
+              return false;
             });
             return {
               ...strain,
