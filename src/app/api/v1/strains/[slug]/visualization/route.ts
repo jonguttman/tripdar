@@ -13,11 +13,11 @@ import {
   authenticateRequest,
   addPartnerHeaders,
   withLogging,
-  recordSignal,
   createMeta,
   ApiSuccessResponse,
   ApiErrorResponse,
 } from "@/domain/partner";
+import { signVisualizationUrl } from "@/domain/partner/signedUrls";
 import { getStrainBySlug } from "@/domain/strain/data";
 
 interface VisualizationResponse {
@@ -41,7 +41,7 @@ export async function GET(
     return auth;
   }
 
-  const { partner, context, sessionHash } = auth;
+  const { partner, context } = auth;
   const { slug } = await params;
 
   return withLogging(context, `/api/v1/strains/${slug}/visualization`, async () => {
@@ -94,17 +94,19 @@ export async function GET(
         return addPartnerHeaders(response, partner, context);
       }
 
-      // Record signal
-      recordSignal(partner.id, "visualization_request", sessionHash, [slug]);
-
-      // Return the URL with a conceptual expiry
-      // In production, you might generate signed URLs with actual expiry
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+      // Generate signed URL with expiry
+      // This prevents hotlinking and ensures URLs expire
+      const signedResult = signVisualizationUrl(
+        matchingBlob.url,
+        partner.id,
+        slug,
+        60 // 60 minutes expiry
+      );
 
       const responseData: VisualizationResponse = {
         strainSlug: slug,
-        visualizationUrl: matchingBlob.url,
-        expiresAt: expiresAt.toISOString(),
+        visualizationUrl: signedResult.signedUrl,
+        expiresAt: signedResult.expiresAt,
         meta: createMeta(),
       };
 

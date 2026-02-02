@@ -60,3 +60,12 @@ export {
   recordSearch,
 } from "./middleware";
 export type { AuthenticatedRequest } from "./middleware";
+
+// Signed URLs
+export {
+  createSignedUrl,
+  verifySignedUrl,
+  signVisualizationUrl,
+  isUrlExpired,
+} from "./signedUrls";
+export type { SignedUrlParams, SignedUrlResult, VerificationResult } from "./signedUrls";
