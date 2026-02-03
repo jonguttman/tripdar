@@ -288,3 +288,13 @@ if (isMainModule) {
 // Also export the example runner for testing
 export { runExample };
 
+// =============================================================================
+// PARTNER & STRAIN EXPORTS
+// =============================================================================
+
+// Re-export strain data (internal use)
+export * from "./strain";
+
+// Re-export partner integration (for API routes)
+export * from "./partner";
+
