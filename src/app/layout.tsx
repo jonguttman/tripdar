@@ -1,3 +1,5 @@
+import { Providers } from "./providers";
+
 export const metadata = {
   title: "Tripdar",
   description: "Describes how psychedelic experiences are commonly reported",
@@ -11,7 +13,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body style={{ margin: 0, backgroundColor: "#0a0a0a", color: "#fff" }}>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

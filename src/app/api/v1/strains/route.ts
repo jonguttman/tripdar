@@ -19,7 +19,7 @@ import {
   StrainListResponse,
   ApiSuccessResponse,
 } from "@/domain/partner";
-import { getAllStrains } from "@/domain/strain/data";
+import { loadStrainData } from "@/domain/strain/blob-store";
 
 // Maximum page size to prevent bulk extraction
 const MAX_PAGE_SIZE = 20;
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
     if (vibeFilter) filters.vibe = vibeFilter;
 
     // Get all strains and apply filters
-    let strains = getAllStrains();
+    let strains = await loadStrainData();
 
     // Vibe filter - check if any vibe matches
     if (vibeFilter) {
