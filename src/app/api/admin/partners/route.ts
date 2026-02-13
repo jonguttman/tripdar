@@ -9,10 +9,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   registerPartner,
   listPartners,
-  rotateApiKey,
-  revokePartner,
-  generateApiKey,
-  hashApiKey
 } from "@/domain/partner/access";
 
 // Admin secret - set in environment variables
