@@ -17,7 +17,6 @@ import {
   ApiSuccessResponse,
   ApiErrorResponse,
 } from "@/domain/partner";
-import { signVisualizationUrl } from "@/domain/partner/signedUrls";
 import { getStrainBySlug } from "@/domain/strain/data";
 
 interface VisualizationResponse {
@@ -94,19 +93,14 @@ export async function GET(
         return addPartnerHeaders(response, partner, context);
       }
 
-      // Generate signed URL with expiry
-      // This prevents hotlinking and ensures URLs expire
-      const signedResult = signVisualizationUrl(
-        matchingBlob.url,
-        partner.id,
-        slug,
-        60 // 60 minutes expiry
-      );
+      // Return the blob URL directly for authenticated partners
+      // The partner has already authenticated with their API key
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour from now
 
       const responseData: VisualizationResponse = {
         strainSlug: slug,
-        visualizationUrl: signedResult.signedUrl,
-        expiresAt: signedResult.expiresAt,
+        visualizationUrl: matchingBlob.url,
+        expiresAt: expiresAt.toISOString(),
         meta: createMeta(),
       };
 
