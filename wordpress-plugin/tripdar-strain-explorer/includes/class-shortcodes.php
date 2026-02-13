@@ -1,0 +1,580 @@
+<?php
+/**
+ * Tripdar Shortcodes
+ *
+ * Handles all shortcode rendering for the plugin.
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+class Tripdar_Shortcodes {
+
+    private $api_client;
+
+    public function __construct() {
+        $this->api_client = new Tripdar_API_Client();
+    }
+
+    /**
+     * Register all shortcodes
+     */
+    public function register() {
+        add_shortcode('tripdar_explorer', [$this, 'render_explorer']);
+        add_shortcode('tripdar_library', [$this, 'render_library']);
+        add_shortcode('tripdar_quiz', [$this, 'render_quiz']);
+        add_shortcode('tripdar_strain', [$this, 'render_single_strain']);
+    }
+
+    /**
+     * [tripdar_explorer] - Full strain explorer with filters
+     */
+    public function render_explorer($atts) {
+        $atts = shortcode_atts([
+            'per_page' => 12,
+            'show_filters' => 'true',
+        ], $atts);
+
+        // Get available strains from settings
+        $available_strains = get_option('tripdar_available_strains', []);
+
+        // Fetch strains
+        $filters = [];
+        if (!empty($available_strains)) {
+            $filters['slugs'] = implode(',', $available_strains);
+        }
+
+        $response = $this->api_client->get_strains(1, intval($atts['per_page']), $filters);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return $this->render_error('Unable to load strains. Please try again later.');
+        }
+
+        $strains = $response['data']['strains'] ?? [];
+        $pagination = $response['data']['pagination'] ?? [];
+
+        ob_start();
+        ?>
+        <div class="tripdar-explorer" data-per-page="<?php echo esc_attr($atts['per_page']); ?>">
+            <div class="tripdar-explorer__header">
+                <div class="tripdar-codex-banner">
+                    <div class="tripdar-codex-banner__illustration">
+                        <svg viewBox="0 0 80 80" class="tripdar-mushroom-icon">
+                            <ellipse cx="40" cy="60" rx="8" ry="12" fill="currentColor" opacity="0.6"/>
+                            <ellipse cx="40" cy="35" rx="25" ry="20" fill="currentColor"/>
+                            <circle cx="32" cy="30" r="4" fill="white" opacity="0.3"/>
+                            <circle cx="45" cy="38" r="3" fill="white" opacity="0.3"/>
+                            <circle cx="52" cy="28" r="2" fill="white" opacity="0.3"/>
+                        </svg>
+                    </div>
+                    <h2 class="tripdar-codex-banner__title">The Strain Codex</h2>
+                    <p class="tripdar-codex-banner__subtitle">A mystical compendium of psilocybin experiences</p>
+                </div>
+
+                <?php if ($atts['show_filters'] === 'true'): ?>
+                <div class="tripdar-explorer__filters">
+                    <div class="tripdar-filter-group">
+                        <label class="tripdar-filter-label">Vibe</label>
+                        <select class="tripdar-filter-select" data-filter="vibe">
+                            <option value="">All Vibes</option>
+                            <option value="introspective">Introspective</option>
+                            <option value="euphoric">Euphoric</option>
+                            <option value="visual">Visual</option>
+                            <option value="creative">Creative</option>
+                            <option value="grounding">Grounding</option>
+                        </select>
+                    </div>
+                    <div class="tripdar-filter-group">
+                        <label class="tripdar-filter-label">Intensity</label>
+                        <select class="tripdar-filter-select" data-filter="potency">
+                            <option value="">All Levels</option>
+                            <option value="gentle">Gentle</option>
+                            <option value="moderate">Moderate</option>
+                            <option value="intense">Intense</option>
+                        </select>
+                    </div>
+                    <div class="tripdar-filter-group">
+                        <label class="tripdar-filter-label">Experience</label>
+                        <select class="tripdar-filter-select" data-filter="beginner">
+                            <option value="">All Levels</option>
+                            <option value="beginner">Beginner Friendly</option>
+                            <option value="experienced">Experienced</option>
+                        </select>
+                    </div>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="tripdar-explorer__grid">
+                <?php foreach ($strains as $strain): ?>
+                    <?php echo $this->render_strain_card($strain); ?>
+                <?php endforeach; ?>
+            </div>
+
+            <?php if (!empty($pagination) && $pagination['hasMore']): ?>
+            <div class="tripdar-explorer__pagination">
+                <button class="tripdar-btn tripdar-btn--load-more"
+                        data-page="2"
+                        data-total-pages="<?php echo esc_attr($pagination['totalPages']); ?>">
+                    Discover More Strains
+                </button>
+            </div>
+            <?php endif; ?>
+
+            <div class="tripdar-explorer__loading" style="display: none;">
+                <div class="tripdar-loading-spinner"></div>
+                <span>Consulting the codex...</span>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_library] - Simple strain grid without filters
+     */
+    public function render_library($atts) {
+        $atts = shortcode_atts([
+            'per_page' => 20,
+            'columns' => 4,
+        ], $atts);
+
+        $available_strains = get_option('tripdar_available_strains', []);
+
+        $filters = [];
+        if (!empty($available_strains)) {
+            $filters['slugs'] = implode(',', $available_strains);
+        }
+
+        $response = $this->api_client->get_strains(1, intval($atts['per_page']), $filters);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return $this->render_error('Unable to load strain library.');
+        }
+
+        $strains = $response['data']['strains'] ?? [];
+
+        ob_start();
+        ?>
+        <div class="tripdar-library tripdar-library--cols-<?php echo esc_attr($atts['columns']); ?>">
+            <?php foreach ($strains as $strain): ?>
+                <?php echo $this->render_strain_card($strain, 'compact'); ?>
+            <?php endforeach; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_quiz] - Mystical strain finder quiz
+     */
+    public function render_quiz($atts) {
+        $atts = shortcode_atts([
+            'title' => 'Discover Your Strain',
+            'show_alternatives' => 'true',
+        ], $atts);
+
+        // Fetch quiz questions
+        $response = $this->api_client->get_quiz_questions();
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return $this->render_error('Unable to load the strain finder. Please try again later.');
+        }
+
+        $questions = $response['data']['questions'] ?? [];
+        $available_strains = get_option('tripdar_available_strains', []);
+
+        ob_start();
+        ?>
+        <div class="tripdar-quiz"
+             data-available-strains="<?php echo esc_attr(json_encode($available_strains)); ?>"
+             data-show-alternatives="<?php echo esc_attr($atts['show_alternatives']); ?>">
+
+            <!-- Welcome Screen -->
+            <div class="tripdar-quiz__screen tripdar-quiz__screen--welcome active">
+                <div class="tripdar-quiz__illustration">
+                    <svg viewBox="0 0 120 120" class="tripdar-crystal-ball">
+                        <defs>
+                            <radialGradient id="crystal-glow" cx="50%" cy="50%" r="50%">
+                                <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.6"/>
+                                <stop offset="100%" stop-color="#6d28d9" stop-opacity="0.2"/>
+                            </radialGradient>
+                        </defs>
+                        <circle cx="60" cy="55" r="40" fill="url(#crystal-glow)" stroke="#a78bfa" stroke-width="2"/>
+                        <ellipse cx="60" cy="100" rx="25" ry="8" fill="#6d28d9" opacity="0.3"/>
+                        <path d="M45 45 Q50 35, 55 45" stroke="white" stroke-width="2" fill="none" opacity="0.5"/>
+                    </svg>
+                </div>
+                <h2 class="tripdar-quiz__title"><?php echo esc_html($atts['title']); ?></h2>
+                <p class="tripdar-quiz__intro">
+                    Answer a few questions and let the codex reveal the strain that resonates with your journey.
+                </p>
+                <button class="tripdar-btn tripdar-btn--primary tripdar-quiz__start">
+                    Begin Your Journey
+                </button>
+            </div>
+
+            <!-- Questions Container -->
+            <div class="tripdar-quiz__questions" style="display: none;">
+                <?php foreach ($questions as $index => $question): ?>
+                <div class="tripdar-quiz__screen tripdar-quiz__screen--question"
+                     data-question-id="<?php echo esc_attr($question['id']); ?>"
+                     data-question-index="<?php echo esc_attr($index); ?>">
+                    <div class="tripdar-quiz__progress">
+                        <div class="tripdar-quiz__progress-bar">
+                            <div class="tripdar-quiz__progress-fill" style="width: <?php echo (($index + 1) / count($questions)) * 100; ?>%"></div>
+                        </div>
+                        <span class="tripdar-quiz__progress-text"><?php echo $index + 1; ?> of <?php echo count($questions); ?></span>
+                    </div>
+
+                    <h3 class="tripdar-quiz__question-text"><?php echo esc_html($question['question']); ?></h3>
+
+                    <div class="tripdar-quiz__answers">
+                        <?php foreach ($question['answers'] as $answer): ?>
+                        <button class="tripdar-quiz__answer" data-answer-id="<?php echo esc_attr($answer['id']); ?>">
+                            <span class="tripdar-quiz__answer-label"><?php echo esc_html($answer['label']); ?></span>
+                            <?php if (!empty($answer['description'])): ?>
+                            <span class="tripdar-quiz__answer-desc"><?php echo esc_html($answer['description']); ?></span>
+                            <?php endif; ?>
+                        </button>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <!-- Loading Screen -->
+            <div class="tripdar-quiz__screen tripdar-quiz__screen--loading" style="display: none;">
+                <div class="tripdar-quiz__divination">
+                    <div class="tripdar-divination-orb"></div>
+                    <p class="tripdar-quiz__loading-text">The codex stirs...</p>
+                </div>
+            </div>
+
+            <!-- Result Screen -->
+            <div class="tripdar-quiz__screen tripdar-quiz__screen--result" style="display: none;">
+                <div class="tripdar-quiz__result-content">
+                    <!-- Populated via JavaScript -->
+                </div>
+            </div>
+
+            <!-- No Match Screen -->
+            <div class="tripdar-quiz__screen tripdar-quiz__screen--no-match" style="display: none;">
+                <div class="tripdar-quiz__illustration">
+                    <svg viewBox="0 0 80 80" class="tripdar-empty-tome">
+                        <rect x="15" y="10" width="50" height="60" rx="3" fill="none" stroke="currentColor" stroke-width="2"/>
+                        <line x1="25" y1="25" x2="55" y2="25" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+                        <line x1="25" y1="35" x2="55" y2="35" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+                        <line x1="25" y1="45" x2="45" y2="45" stroke="currentColor" stroke-width="1" opacity="0.5"/>
+                    </svg>
+                </div>
+                <h3 class="tripdar-quiz__no-match-title">The Codex Remains Silent</h3>
+                <p class="tripdar-quiz__no-match-text">
+                    No strains currently available match your journey. Check back soon as new strains are added to the collection.
+                </p>
+                <button class="tripdar-btn tripdar-btn--secondary tripdar-quiz__restart">
+                    Try Again
+                </button>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_strain slug="golden-teacher"] - Single strain display
+     */
+    public function render_single_strain($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'show_feedback' => 'true',
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return $this->render_error('Please specify a strain slug.');
+        }
+
+        $response = $this->api_client->get_strain($atts['slug']);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return $this->render_error('Strain not found.');
+        }
+
+        $strain = $response['data']['strain'] ?? null;
+        if (!$strain) {
+            return $this->render_error('Strain data unavailable.');
+        }
+
+        // Get visualization
+        $viz = $this->api_client->get_visualization($atts['slug']);
+        $image_url = ($viz && isset($viz['data']['url'])) ? $viz['data']['url'] : '';
+
+        ob_start();
+        ?>
+        <div class="tripdar-strain-detail" data-strain-slug="<?php echo esc_attr($strain['slug']); ?>">
+            <div class="tripdar-strain-detail__header">
+                <?php if ($image_url): ?>
+                <div class="tripdar-strain-detail__image">
+                    <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($strain['name']); ?>">
+                </div>
+                <?php endif; ?>
+
+                <div class="tripdar-strain-detail__info">
+                    <h2 class="tripdar-strain-detail__name"><?php echo esc_html($strain['name']); ?></h2>
+
+                    <div class="tripdar-strain-detail__tags">
+                        <?php foreach ($strain['vibe'] as $vibe): ?>
+                        <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($vibe); ?></span>
+                        <?php endforeach; ?>
+                        <span class="tripdar-tag tripdar-tag--potency tripdar-tag--<?php echo esc_attr(strtolower(str_replace(' ', '-', $strain['potency']))); ?>">
+                            <?php echo esc_html($strain['potency']); ?>
+                        </span>
+                        <?php if ($strain['beginnerFriendly'] === 'yes'): ?>
+                        <span class="tripdar-tag tripdar-tag--beginner">Beginner Friendly</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tripdar-strain-detail__body">
+                <div class="tripdar-strain-detail__section">
+                    <h3 class="tripdar-section-title">The Journey</h3>
+                    <p class="tripdar-strain-detail__description"><?php echo esc_html($strain['description']); ?></p>
+                </div>
+
+                <div class="tripdar-strain-detail__attributes">
+                    <div class="tripdar-attribute">
+                        <span class="tripdar-attribute__label">Visual Intensity</span>
+                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['visual']); ?></span>
+                    </div>
+                    <div class="tripdar-attribute">
+                        <span class="tripdar-attribute__label">Stability</span>
+                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['stability']); ?></span>
+                    </div>
+                </div>
+
+                <?php if (!empty($strain['notableTraits'])): ?>
+                <div class="tripdar-strain-detail__section">
+                    <h3 class="tripdar-section-title">Notable Traits</h3>
+                    <ul class="tripdar-traits-list">
+                        <?php foreach ($strain['notableTraits'] as $trait): ?>
+                        <li class="tripdar-trait"><?php echo esc_html($trait); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($atts['show_feedback'] === 'true'): ?>
+            <div class="tripdar-strain-detail__feedback">
+                <?php echo $this->render_feedback_widget($strain['slug']); ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Public method to render strain card (for AJAX)
+     */
+    public function render_strain_card_public($strain, $variant = 'default') {
+        return $this->render_strain_card($strain, $variant);
+    }
+
+    /**
+     * Public method to render strain detail (for AJAX modal)
+     */
+    public function render_strain_detail_public($strain, $image_url = '') {
+        ob_start();
+        ?>
+        <div class="tripdar-strain-detail" data-strain-slug="<?php echo esc_attr($strain['slug']); ?>">
+            <div class="tripdar-strain-detail__header">
+                <?php if ($image_url): ?>
+                <div class="tripdar-strain-detail__image">
+                    <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($strain['name']); ?>">
+                </div>
+                <?php endif; ?>
+
+                <div class="tripdar-strain-detail__info">
+                    <h2 class="tripdar-strain-detail__name"><?php echo esc_html($strain['name']); ?></h2>
+
+                    <div class="tripdar-strain-detail__tags">
+                        <?php foreach ($strain['vibe'] as $vibe): ?>
+                        <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($vibe); ?></span>
+                        <?php endforeach; ?>
+                        <span class="tripdar-tag tripdar-tag--potency tripdar-tag--<?php echo esc_attr(strtolower(str_replace(' ', '-', $strain['potency']))); ?>">
+                            <?php echo esc_html($strain['potency']); ?>
+                        </span>
+                        <?php if ($strain['beginnerFriendly'] === 'yes'): ?>
+                        <span class="tripdar-tag tripdar-tag--beginner">Beginner Friendly</span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tripdar-strain-detail__body">
+                <div class="tripdar-strain-detail__section">
+                    <h3 class="tripdar-section-title">The Journey</h3>
+                    <p class="tripdar-strain-detail__description"><?php echo esc_html($strain['description']); ?></p>
+                </div>
+
+                <div class="tripdar-strain-detail__attributes">
+                    <div class="tripdar-attribute">
+                        <span class="tripdar-attribute__label">Visual Intensity</span>
+                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['visual']); ?></span>
+                    </div>
+                    <div class="tripdar-attribute">
+                        <span class="tripdar-attribute__label">Stability</span>
+                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['stability']); ?></span>
+                    </div>
+                </div>
+
+                <?php if (!empty($strain['notableTraits'])): ?>
+                <div class="tripdar-strain-detail__section">
+                    <h3 class="tripdar-section-title">Notable Traits</h3>
+                    <ul class="tripdar-traits-list">
+                        <?php foreach ($strain['notableTraits'] as $trait): ?>
+                        <li class="tripdar-trait"><?php echo esc_html($trait); ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="tripdar-strain-detail__feedback">
+                <?php echo $this->render_feedback_widget($strain['slug']); ?>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render a strain card
+     */
+    private function render_strain_card($strain, $variant = 'default') {
+        $viz = $this->api_client->get_visualization($strain['slug']);
+        $image_url = ($viz && isset($viz['data']['url'])) ? $viz['data']['url'] : '';
+
+        ob_start();
+        ?>
+        <div class="tripdar-strain-card tripdar-strain-card--<?php echo esc_attr($variant); ?>"
+             data-slug="<?php echo esc_attr($strain['slug']); ?>">
+            <div class="tripdar-strain-card__image-wrapper">
+                <?php if ($image_url): ?>
+                <img class="tripdar-strain-card__image"
+                     src="<?php echo esc_url($image_url); ?>"
+                     alt="<?php echo esc_attr($strain['name']); ?>"
+                     loading="lazy">
+                <?php else: ?>
+                <div class="tripdar-strain-card__placeholder">
+                    <svg viewBox="0 0 60 60" class="tripdar-placeholder-icon">
+                        <ellipse cx="30" cy="45" rx="6" ry="10" fill="currentColor" opacity="0.5"/>
+                        <ellipse cx="30" cy="28" rx="18" ry="14" fill="currentColor"/>
+                    </svg>
+                </div>
+                <?php endif; ?>
+                <div class="tripdar-strain-card__overlay">
+                    <span class="tripdar-strain-card__potency tripdar-potency--<?php echo esc_attr(strtolower(str_replace(' ', '-', $strain['potency']))); ?>">
+                        <?php echo esc_html($strain['potency']); ?>
+                    </span>
+                </div>
+            </div>
+            <div class="tripdar-strain-card__content">
+                <h3 class="tripdar-strain-card__name"><?php echo esc_html($strain['name']); ?></h3>
+                <div class="tripdar-strain-card__vibes">
+                    <?php foreach (array_slice($strain['vibe'], 0, 2) as $vibe): ?>
+                    <span class="tripdar-vibe-tag"><?php echo esc_html($vibe); ?></span>
+                    <?php endforeach; ?>
+                </div>
+                <?php if ($variant !== 'compact'): ?>
+                <p class="tripdar-strain-card__excerpt">
+                    <?php echo esc_html(wp_trim_words($strain['description'], 15)); ?>
+                </p>
+                <?php endif; ?>
+                <button class="tripdar-btn tripdar-btn--ghost tripdar-strain-card__explore">
+                    Explore
+                </button>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render feedback widget
+     */
+    private function render_feedback_widget($strain_slug) {
+        ob_start();
+        ?>
+        <div class="tripdar-feedback" data-strain-slug="<?php echo esc_attr($strain_slug); ?>">
+            <div class="tripdar-feedback__prompt">
+                <h4 class="tripdar-feedback__title">Share Your Experience</h4>
+                <p class="tripdar-feedback__subtitle">Does this description match your journey with <?php echo esc_html(ucwords(str_replace('-', ' ', $strain_slug))); ?>?</p>
+            </div>
+
+            <div class="tripdar-feedback__rating">
+                <div class="tripdar-rating-slider">
+                    <input type="range"
+                           class="tripdar-rating-slider__input"
+                           min="1"
+                           max="5"
+                           value="3"
+                           step="1">
+                    <div class="tripdar-rating-slider__labels">
+                        <span class="tripdar-rating-label" data-value="1">Not at all</span>
+                        <span class="tripdar-rating-label" data-value="3">Somewhat</span>
+                        <span class="tripdar-rating-label" data-value="5">Spot on</span>
+                    </div>
+                </div>
+                <button class="tripdar-btn tripdar-btn--primary tripdar-feedback__submit">
+                    Submit Feedback
+                </button>
+            </div>
+
+            <div class="tripdar-feedback__thanks" style="display: none;">
+                <p class="tripdar-feedback__thanks-text">Thank you for sharing your experience!</p>
+            </div>
+
+            <div class="tripdar-feedback__survey-prompt" style="display: none;">
+                <p class="tripdar-feedback__survey-text">
+                    Your experience differs from the codex. Help us improve by sharing more details?
+                </p>
+                <button class="tripdar-btn tripdar-btn--secondary tripdar-feedback__survey-start">
+                    Share Feedback (45 seconds)
+                </button>
+                <button class="tripdar-btn tripdar-btn--ghost tripdar-feedback__survey-skip">
+                    Maybe Later
+                </button>
+            </div>
+
+            <div class="tripdar-feedback__survey" style="display: none;">
+                <!-- Survey loaded via JavaScript -->
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render error message
+     */
+    private function render_error($message) {
+        ob_start();
+        ?>
+        <div class="tripdar-error">
+            <div class="tripdar-error__icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="12" y1="8" x2="12" y2="12"/>
+                    <circle cx="12" cy="16" r="1" fill="currentColor"/>
+                </svg>
+            </div>
+            <p class="tripdar-error__message"><?php echo esc_html($message); ?></p>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+}

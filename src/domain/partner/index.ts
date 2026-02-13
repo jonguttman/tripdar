@@ -69,3 +69,35 @@ export {
   isUrlExpired,
 } from "./signedUrls";
 export type { SignedUrlParams, SignedUrlResult, VerificationResult } from "./signedUrls";
+
+// Quiz & Recommendations
+export {
+  generateRecommendation,
+  validateQuizSubmission,
+} from "./quiz.engine";
+export {
+  DEFAULT_QUIZ_QUESTIONS,
+  DEFAULT_SURVEY_QUESTIONS,
+} from "./quiz.types";
+export type {
+  QuizQuestion,
+  QuizAnswer,
+  QuizSubmission,
+  QuizRecommendation,
+  FeedbackRating,
+  FeedbackSurvey,
+  SurveyQuestion,
+  SurveyOption,
+} from "./quiz.types";
+
+// Feedback Collection
+export {
+  recordRating,
+  recordSurvey,
+  validateRating,
+  validateSurvey,
+  getStrainFeedbackStats,
+  getSurveyQuestions,
+  flushRatings,
+  flushSurveys,
+} from "./feedback";
