@@ -65,10 +65,17 @@ export async function GET(
     try {
       const { blobs } = await list({ prefix: "Strain_Graphics/" });
 
+      // Filter to only actual image files (not directories)
+      const imageBlobs = blobs.filter(blob =>
+        blob.pathname &&
+        !blob.pathname.endsWith('/') &&
+        /\.(png|jpg|jpeg|webp|gif)$/i.test(blob.pathname)
+      );
+
       // Find matching image
       const normalizedStrainName = strain.name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-      const matchingBlob = blobs.find(blob => {
+      const matchingBlob = imageBlobs.find(blob => {
         const filename = blob.pathname.replace("Strain_Graphics/", "").replace(/\.(png|jpg|jpeg|webp|gif)$/i, "");
         const normalizedFilename = filename.toLowerCase().replace(/[^a-z0-9]/g, "");
 
