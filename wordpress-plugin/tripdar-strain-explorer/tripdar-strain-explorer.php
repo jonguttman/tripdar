@@ -18,10 +18,12 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.0.0');
+define('TRIPDAR_VERSION', '1.0.1');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_API_BASE', 'https://tripd.ar/api/v1');
+define('TRIPDAR_GITHUB_USER', 'jonguttman');
+define('TRIPDAR_GITHUB_REPO', 'tripdar');
 
 /**
  * Main Plugin Class
@@ -62,12 +64,20 @@ class Tripdar_Strain_Explorer {
     private function load_dependencies() {
         require_once TRIPDAR_PLUGIN_DIR . 'includes/class-api-client.php';
         require_once TRIPDAR_PLUGIN_DIR . 'includes/class-shortcodes.php';
+        require_once TRIPDAR_PLUGIN_DIR . 'includes/class-github-updater.php';
 
         if (is_admin()) {
             require_once TRIPDAR_PLUGIN_DIR . 'admin/class-admin.php';
         }
 
         $this->api = new Tripdar_API_Client();
+
+        // Initialize GitHub updater for automatic updates
+        new Tripdar_GitHub_Updater(
+            __FILE__,
+            TRIPDAR_GITHUB_USER,
+            TRIPDAR_GITHUB_REPO
+        );
     }
 
     /**
