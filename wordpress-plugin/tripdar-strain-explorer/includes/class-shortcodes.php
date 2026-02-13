@@ -27,6 +27,8 @@ class Tripdar_Shortcodes {
         add_shortcode('tripdar_strain', [$this, 'render_single_strain']);
         add_shortcode('tripdar_search', [$this, 'render_search']);
         add_shortcode('tripdar_lineage', [$this, 'render_lineage']);
+        add_shortcode('tripdar_collection', [$this, 'render_collection']);
+        add_shortcode('tripdar_collections', [$this, 'render_collections_list']);
     }
 
     /**
@@ -172,6 +174,143 @@ class Tripdar_Shortcodes {
             return 'gentle';
         }
         return 'moderate';
+    }
+
+    /**
+     * [tripdar_collection slug="..."] - Display a single curated collection
+     */
+    public function render_collection($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'columns' => 3,
+            'show_description' => 'true',
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a collection slug.</p>';
+        }
+
+        $response = $this->api_client->get_collection($atts['slug']);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load collection.</p>';
+        }
+
+        $collection = $response['data']['collection'];
+        $strains = $response['data']['strains'] ?? [];
+        $show_description = filter_var($atts['show_description'], FILTER_VALIDATE_BOOLEAN);
+
+        ob_start();
+        ?>
+        <div class="tripdar-collection">
+            <div class="tripdar-collection__header">
+                <?php if (!empty($collection['coverImage'])): ?>
+                <div class="tripdar-collection__cover">
+                    <img src="<?php echo esc_url($collection['coverImage']); ?>"
+                         alt="<?php echo esc_attr($collection['name']); ?>">
+                </div>
+                <?php endif; ?>
+                <div class="tripdar-collection__info">
+                    <h2 class="tripdar-collection__title"><?php echo esc_html($collection['name']); ?></h2>
+                    <?php if ($show_description && !empty($collection['description'])): ?>
+                    <p class="tripdar-collection__description"><?php echo esc_html($collection['description']); ?></p>
+                    <?php endif; ?>
+                    <div class="tripdar-collection__meta">
+                        <span class="tripdar-collection__count"><?php echo count($strains); ?> strains</span>
+                        <?php if (!empty($collection['tags'])): ?>
+                        <div class="tripdar-collection__tags">
+                            <?php foreach ($collection['tags'] as $tag): ?>
+                            <span class="tripdar-tag"><?php echo esc_html($tag); ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <?php if (!empty($strains)): ?>
+            <div class="tripdar-collection__grid tripdar-collection__grid--cols-<?php echo esc_attr($atts['columns']); ?>">
+                <?php foreach ($strains as $strain): ?>
+                    <?php echo $this->render_strain_card($this->normalize_strain($strain)); ?>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <p class="tripdar-collection__empty">This collection is empty.</p>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_collections] - Display a list of all collections
+     */
+    public function render_collections_list($atts) {
+        $atts = shortcode_atts([
+            'featured_only' => 'false',
+            'columns' => 3,
+        ], $atts);
+
+        $response = $this->api_client->get_collections();
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load collections.</p>';
+        }
+
+        $collections = $response['data']['collections'] ?? [];
+        $featured_only = filter_var($atts['featured_only'], FILTER_VALIDATE_BOOLEAN);
+
+        // Filter to featured only if requested
+        if ($featured_only) {
+            $collections = array_filter($collections, function($c) {
+                return !empty($c['featured']);
+            });
+        }
+
+        if (empty($collections)) {
+            return '<p class="tripdar-collection__empty">No collections available.</p>';
+        }
+
+        ob_start();
+        ?>
+        <div class="tripdar-collections-list tripdar-collections-list--cols-<?php echo esc_attr($atts['columns']); ?>">
+            <?php foreach ($collections as $collection): ?>
+            <a href="?collection=<?php echo esc_attr($collection['slug']); ?>" class="tripdar-collection-card">
+                <?php if (!empty($collection['coverImage'])): ?>
+                <div class="tripdar-collection-card__image">
+                    <img src="<?php echo esc_url($collection['coverImage']); ?>"
+                         alt="<?php echo esc_attr($collection['name']); ?>">
+                </div>
+                <?php else: ?>
+                <div class="tripdar-collection-card__placeholder">
+                    <svg viewBox="0 0 60 60" class="tripdar-placeholder-icon">
+                        <rect x="10" y="10" width="40" height="40" rx="4" fill="currentColor" opacity="0.3"/>
+                        <rect x="18" y="18" width="10" height="10" rx="2" fill="currentColor"/>
+                        <rect x="32" y="18" width="10" height="10" rx="2" fill="currentColor"/>
+                        <rect x="18" y="32" width="10" height="10" rx="2" fill="currentColor"/>
+                        <rect x="32" y="32" width="10" height="10" rx="2" fill="currentColor"/>
+                    </svg>
+                </div>
+                <?php endif; ?>
+                <div class="tripdar-collection-card__content">
+                    <h3 class="tripdar-collection-card__title"><?php echo esc_html($collection['name']); ?></h3>
+                    <?php if (!empty($collection['description'])): ?>
+                    <p class="tripdar-collection-card__description">
+                        <?php echo esc_html(wp_trim_words($collection['description'], 15)); ?>
+                    </p>
+                    <?php endif; ?>
+                    <span class="tripdar-collection-card__count">
+                        <?php echo count($collection['strains'] ?? []); ?> strains
+                    </span>
+                    <?php if (!empty($collection['featured'])): ?>
+                    <span class="tripdar-collection-card__featured">Featured</span>
+                    <?php endif; ?>
+                </div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     /**
