@@ -87,6 +87,7 @@ class Tripdar_Shortcodes {
             'species' => isset($strain['species']) ? $strain['species'] : 'Psilocybe cubensis',
             'origin' => isset($strain['origin']) ? $strain['origin'] : '',
             'confidenceTier' => isset($strain['confidenceTier']) ? $strain['confidenceTier'] : '',
+            'visualizationUrl' => isset($strain['visualizationUrl']) ? $strain['visualizationUrl'] : '',
         ];
     }
 
@@ -448,11 +449,8 @@ class Tripdar_Shortcodes {
      * Render a strain card
      */
     private function render_strain_card($strain, $variant = 'default') {
-        $viz = $this->api_client->get_visualization($strain['slug']);
-        $image_url = '';
-        if ($viz && isset($viz['data'])) {
-            $image_url = $viz['data']['visualizationUrl'] ?? $viz['data']['url'] ?? '';
-        }
+        // Use visualization URL from strain data (included in list response)
+        $image_url = $strain['visualizationUrl'] ?? '';
 
         ob_start();
         ?>
