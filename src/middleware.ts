@@ -186,7 +186,7 @@ export function middleware(request: NextRequest) {
       status: 204,
       headers: {
         "Access-Control-Allow-Origin": origin || "*",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
         "Access-Control-Allow-Headers": "Authorization, X-API-Key, Content-Type",
         "Access-Control-Max-Age": "86400",
         "X-Request-ID": requestId,
@@ -194,21 +194,26 @@ export function middleware(request: NextRequest) {
     });
   }
 
-  // Only allow GET requests to the public API
-  if (request.method !== "GET") {
+  // Determine allowed methods based on path
+  const postAllowedPaths = ["/api/v1/quiz", "/api/v1/feedback"];
+  const isPostAllowed = postAllowedPaths.some(p => pathname.startsWith(p));
+  const allowedMethods = isPostAllowed ? ["GET", "POST"] : ["GET"];
+
+  // Enforce allowed methods
+  if (!allowedMethods.includes(request.method)) {
     return NextResponse.json(
       {
         success: false,
         error: {
           code: "METHOD_NOT_ALLOWED",
-          message: "Only GET requests are allowed on this endpoint.",
+          message: `Only ${allowedMethods.join(", ")} requests are allowed on this endpoint.`,
         },
       },
       {
         status: 405,
         headers: {
           "X-Request-ID": requestId,
-          Allow: "GET, OPTIONS",
+          Allow: [...allowedMethods, "OPTIONS"].join(", "),
           "X-Powered-By": "Tripdar",
         },
       }
