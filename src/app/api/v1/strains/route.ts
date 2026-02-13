@@ -8,6 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { list } from "@vercel/blob";
 import {
   authenticateRequest,
   addPartnerHeaders,
@@ -106,8 +107,36 @@ export async function GET(request: NextRequest) {
     // Slice for current page
     const pageStrains = strains.slice(startIndex, endIndex);
 
-    // Transform to public views
-    const publicStrains = toPublicViewList(pageStrains);
+    // Fetch blob list once and build visualization URL lookup
+    let visualizationMap: Map<string, string> = new Map();
+    try {
+      const { blobs } = await list({ prefix: "Strain_Graphics/" });
+      const imageBlobs = blobs.filter(blob =>
+        blob.pathname &&
+        !blob.pathname.endsWith('/') &&
+        /\.(png|jpg|jpeg|webp|gif)$/i.test(blob.pathname)
+      );
+
+      // Build lookup by normalized strain name
+      for (const blob of imageBlobs) {
+        const filename = blob.pathname.replace("Strain_Graphics/", "").replace(/\.(png|jpg|jpeg|webp|gif)$/i, "");
+        const normalizedName = filename.toLowerCase().replace(/[^a-z0-9]/g, "");
+        visualizationMap.set(normalizedName, blob.url);
+      }
+    } catch (error) {
+      console.error("Error fetching visualizations:", error);
+    }
+
+    // Helper to find visualization URL for a strain
+    const getVisualizationUrl = (strainId: string) => {
+      const strain = pageStrains.find(s => s.id === strainId);
+      if (!strain) return undefined;
+      const normalizedName = strain.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+      return visualizationMap.get(normalizedName);
+    };
+
+    // Transform to public views with visualization URLs
+    const publicStrains = toPublicViewList(pageStrains, getVisualizationUrl);
 
     // Record exploration signal (anonymous)
     recordStrainList(partner.id, sessionHash, filters);
