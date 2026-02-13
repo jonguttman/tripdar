@@ -369,20 +369,39 @@ export function getSignalAggregates(): Map<string, number> {
 }
 
 // =============================================================================
-// Initialize Default Partner (for development)
+// Initialize Default Partner
 // =============================================================================
 
 // Register TheMushroomTop.com as the first partner
+// Uses TRIPDAR_PARTNER_KEY env var for persistence across deploys
 if (partners.size === 0) {
-  const { apiKey } = registerPartner(
-    "The Mushroom Top",
-    ["themushroomtop.com", "*.themushroomtop.com", "localhost"],
-    120, // 120 requests per minute
-    "Primary partner - WordPress integration"
-  );
+  const envApiKey = process.env.TRIPDAR_PARTNER_KEY;
 
-  // In development, log the API key
-  if (process.env.NODE_ENV === "development") {
-    console.log(`[Partner] Registered "The Mushroom Top" with API key: ${apiKey}`);
+  if (envApiKey) {
+    // Use the persistent key from environment
+    const hash = hashApiKey(envApiKey);
+    const partner: Partner = {
+      id: "themushroomtop",
+      name: "The Mushroom Top",
+      apiKeyHash: hash,
+      allowedDomains: ["themushroomtop.com", "*.themushroomtop.com", "localhost"],
+      rateLimit: 120,
+      active: true,
+      createdAt: new Date(),
+      notes: "Primary partner - WordPress integration",
+    };
+    partners.set(partner.id, partner);
+    console.log(`[Partner] Registered "The Mushroom Top" with persistent API key`);
+  } else {
+    // Development fallback - generate random key
+    const { apiKey } = registerPartner(
+      "The Mushroom Top",
+      ["themushroomtop.com", "*.themushroomtop.com", "localhost"],
+      120,
+      "Primary partner - WordPress integration"
+    );
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[Partner] Registered "The Mushroom Top" with API key: ${apiKey}`);
+    }
   }
 }
