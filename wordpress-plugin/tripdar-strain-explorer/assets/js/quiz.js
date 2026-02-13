@@ -179,7 +179,7 @@
             // Build result HTML
             let html = `
                 <div class="tripdar-quiz__result-header">
-                    <p class="tripdar-quiz__result-title">The Codex Reveals</p>
+                    <p class="tripdar-quiz__result-title">Your Match</p>
                     <h2 class="tripdar-quiz__result-strain">${this.escapeHtml(recommendation.strain.name)}</h2>
                 </div>
                 <p class="tripdar-quiz__result-reasoning">${this.escapeHtml(recommendation.reasoning)}</p>
