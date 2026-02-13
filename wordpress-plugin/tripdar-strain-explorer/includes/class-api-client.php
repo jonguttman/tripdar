@@ -331,6 +331,78 @@ class Tripdar_API_Client {
     }
 
     /**
+     * Get strain ratings and reviews summary
+     */
+    public function get_ratings($slug) {
+        $cache_key = 'tripdar_ratings_' . sanitize_key($slug);
+
+        // Short cache for ratings (2 minutes)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request("/strains/{$slug}/ratings");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 120); // 2 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Submit a rating for a strain
+     */
+    public function submit_rating($slug, $rating) {
+        return $this->request("/strains/{$slug}/ratings", 'POST', [
+            'rating' => intval($rating),
+        ]);
+    }
+
+    /**
+     * Get approved reviews for a strain
+     */
+    public function get_reviews($slug, $page = 1, $per_page = 10) {
+        $cache_key = 'tripdar_reviews_' . sanitize_key($slug) . '_' . $page . '_' . $per_page;
+
+        // Short cache for reviews (2 minutes)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $query = http_build_query([
+            'page' => $page,
+            'pageSize' => $per_page,
+        ]);
+
+        $response = $this->request("/strains/{$slug}/reviews?{$query}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 120); // 2 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Submit a review for a strain
+     */
+    public function submit_review($slug, $rating, $body, $title = null) {
+        $data = [
+            'rating' => intval($rating),
+            'body' => $body,
+        ];
+
+        if ($title) {
+            $data['title'] = $title;
+        }
+
+        return $this->request("/strains/{$slug}/reviews", 'POST', $data);
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {

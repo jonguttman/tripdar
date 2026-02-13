@@ -117,6 +117,10 @@ class Tripdar_Strain_Explorer {
         // AJAX handlers - Search
         add_action('wp_ajax_tripdar_search_strains', [$this, 'handle_search_strains']);
         add_action('wp_ajax_nopriv_tripdar_search_strains', [$this, 'handle_search_strains']);
+
+        // AJAX handlers - Ratings
+        add_action('wp_ajax_tripdar_submit_rating', [$this, 'handle_submit_rating']);
+        add_action('wp_ajax_nopriv_tripdar_submit_rating', [$this, 'handle_submit_rating']);
     }
 
     /**
@@ -221,6 +225,15 @@ class Tripdar_Strain_Explorer {
             true
         );
 
+        // Ratings script
+        wp_enqueue_script(
+            'tripdar-ratings',
+            TRIPDAR_PLUGIN_URL . 'assets/js/ratings.js',
+            ['tripdar-explorer'],
+            TRIPDAR_VERSION,
+            true
+        );
+
         // Localize scripts with AJAX settings
         $ajax_settings = [
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -230,6 +243,7 @@ class Tripdar_Strain_Explorer {
         wp_localize_script('tripdar-explorer', 'tripdarExplorer', $ajax_settings);
         wp_localize_script('tripdar-quiz', 'tripdarQuiz', $ajax_settings);
         wp_localize_script('tripdar-feedback', 'tripdarFeedback', $ajax_settings);
+        wp_localize_script('tripdar-ratings', 'tripdarAjax', $ajax_settings);
     }
 
     /**
@@ -416,6 +430,35 @@ class Tripdar_Strain_Explorer {
             wp_send_json_success($result['data']);
         } else {
             wp_send_json_error($result['error'] ?? ['message' => 'Search failed']);
+        }
+    }
+
+    /**
+     * AJAX handler for rating submission
+     */
+    public function handle_submit_rating() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $slug = isset($_POST['slug']) ? sanitize_text_field($_POST['slug']) : '';
+        $rating = isset($_POST['rating']) ? intval($_POST['rating']) : 0;
+
+        if (empty($slug)) {
+            wp_send_json_error('Missing strain slug');
+            return;
+        }
+
+        if ($rating < 1 || $rating > 5) {
+            wp_send_json_error('Rating must be between 1 and 5');
+            return;
+        }
+
+        $result = $this->api->submit_rating($slug, $rating);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to submit rating';
+            wp_send_json_error($error_msg);
         }
     }
 

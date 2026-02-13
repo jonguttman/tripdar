@@ -29,6 +29,7 @@ class Tripdar_Shortcodes {
         add_shortcode('tripdar_lineage', [$this, 'render_lineage']);
         add_shortcode('tripdar_collection', [$this, 'render_collection']);
         add_shortcode('tripdar_collections', [$this, 'render_collections_list']);
+        add_shortcode('tripdar_reviews', [$this, 'render_reviews']);
     }
 
     /**
@@ -311,6 +312,127 @@ class Tripdar_Shortcodes {
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_reviews slug="..."] - Display ratings and reviews for a strain
+     */
+    public function render_reviews($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'show_form' => 'true',
+            'per_page' => 10,
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_ratings($atts['slug']);
+        $show_form = filter_var($atts['show_form'], FILTER_VALIDATE_BOOLEAN);
+
+        $aggregation = null;
+        $reviews = [];
+        if ($response && isset($response['success']) && $response['success']) {
+            $aggregation = $response['data']['aggregation'] ?? null;
+            $reviews = $response['data']['recentReviews'] ?? [];
+        }
+
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+
+        ob_start();
+        ?>
+        <div class="tripdar-reviews" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
+            <!-- Ratings Summary -->
+            <div class="tripdar-reviews__summary">
+                <h3 class="tripdar-reviews__title">Community Ratings</h3>
+                <?php if ($aggregation && $aggregation['totalRatings'] > 0): ?>
+                <div class="tripdar-reviews__stats">
+                    <div class="tripdar-reviews__average">
+                        <span class="tripdar-reviews__score"><?php echo number_format($aggregation['averageRating'], 1); ?></span>
+                        <span class="tripdar-reviews__stars"><?php echo $this->render_stars($aggregation['averageRating']); ?></span>
+                    </div>
+                    <span class="tripdar-reviews__count"><?php echo $aggregation['totalRatings']; ?> ratings</span>
+                    <div class="tripdar-reviews__distribution">
+                        <?php for ($i = 5; $i >= 1; $i--):
+                            $count = $aggregation['distribution'][$i] ?? 0;
+                            $percent = $aggregation['totalRatings'] > 0 ? ($count / $aggregation['totalRatings']) * 100 : 0;
+                        ?>
+                        <div class="tripdar-reviews__bar-row">
+                            <span class="tripdar-reviews__bar-label"><?php echo $i; ?> star</span>
+                            <div class="tripdar-reviews__bar">
+                                <div class="tripdar-reviews__bar-fill" style="width: <?php echo $percent; ?>%"></div>
+                            </div>
+                            <span class="tripdar-reviews__bar-count"><?php echo $count; ?></span>
+                        </div>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+                <?php else: ?>
+                <p class="tripdar-reviews__no-ratings">No ratings yet. Be the first to rate <?php echo esc_html($strain_name); ?>!</p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($show_form): ?>
+            <!-- Rating Form -->
+            <div class="tripdar-reviews__form">
+                <h4 class="tripdar-reviews__form-title">Rate this strain</h4>
+                <div class="tripdar-reviews__star-input" data-rating="0">
+                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                    <button type="button" class="tripdar-reviews__star" data-value="<?php echo $i; ?>">
+                        <svg viewBox="0 0 24 24" width="32" height="32">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <?php endfor; ?>
+                </div>
+                <button class="tripdar-btn tripdar-btn--primary tripdar-reviews__submit-rating" disabled>
+                    Submit Rating
+                </button>
+                <div class="tripdar-reviews__form-message" style="display: none;"></div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Reviews List -->
+            <?php if (!empty($reviews)): ?>
+            <div class="tripdar-reviews__list">
+                <h4 class="tripdar-reviews__list-title">Recent Reviews</h4>
+                <?php foreach ($reviews as $review): ?>
+                <div class="tripdar-reviews__review">
+                    <div class="tripdar-reviews__review-header">
+                        <span class="tripdar-reviews__review-stars"><?php echo $this->render_stars($review['rating']); ?></span>
+                        <span class="tripdar-reviews__review-date">
+                            <?php echo date('M j, Y', strtotime($review['createdAt'])); ?>
+                        </span>
+                    </div>
+                    <?php if (!empty($review['title'])): ?>
+                    <h5 class="tripdar-reviews__review-title"><?php echo esc_html($review['title']); ?></h5>
+                    <?php endif; ?>
+                    <p class="tripdar-reviews__review-body"><?php echo esc_html($review['body']); ?></p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render star rating display
+     */
+    private function render_stars($rating) {
+        $full = floor($rating);
+        $half = ($rating - $full) >= 0.5 ? 1 : 0;
+        $empty = 5 - $full - $half;
+
+        $output = str_repeat('★', $full);
+        if ($half) {
+            $output .= '½';
+        }
+        $output .= str_repeat('☆', $empty);
+
+        return $output;
     }
 
     /**

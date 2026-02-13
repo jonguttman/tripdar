@@ -47,3 +47,37 @@ model Signal {
   // Creation timestamp (set by application at insert-time; no additional timestamps are stored)
   createdAt DateTime
 }
+
+// ============================================================================
+// Community Ratings & Reviews
+// ============================================================================
+
+model StrainRating {
+  id          String   @id @default(cuid())
+  strainSlug  String
+  rating      Int      // 1-5 stars
+  sessionHash String   // Anonymous session identifier
+  partnerId   String   // Partner who facilitated this rating
+  createdAt   DateTime @default(now())
+
+  @@index([strainSlug])
+  @@index([partnerId])
+}
+
+model StrainReview {
+  id          String    @id @default(cuid())
+  strainSlug  String
+  rating      Int       // 1-5 stars
+  title       String?
+  body        String
+  sessionHash String    // Anonymous session identifier
+  partnerId   String    // Partner who facilitated this review
+  status      String    @default("pending") // pending, approved, rejected
+  createdAt   DateTime  @default(now())
+  moderatedAt DateTime?
+  moderatedBy String?
+
+  @@index([strainSlug, status])
+  @@index([partnerId])
+  @@index([status])
+}
