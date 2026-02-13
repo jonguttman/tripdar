@@ -1,0 +1,1102 @@
+/**
+ * Tripdar Strain Explorer - Storybook Theme
+ *
+ * A mystical, parchment-inspired aesthetic for the strain codex.
+ */
+
+/* =============================================================================
+   CSS Variables
+   ============================================================================= */
+
+:root {
+    /* Parchment palette */
+    --tripdar-parchment: #faf6f1;
+    --tripdar-parchment-dark: #f0e6d8;
+    --tripdar-ink: #2c1810;
+    --tripdar-ink-light: #5c4033;
+    --tripdar-ink-muted: #8b7355;
+
+    /* Accent colors */
+    --tripdar-violet: #8b5cf6;
+    --tripdar-violet-dark: #6d28d9;
+    --tripdar-violet-light: #a78bfa;
+    --tripdar-gold: #d4a574;
+    --tripdar-gold-light: #e8c9a0;
+    --tripdar-moss: #4d7c5a;
+    --tripdar-moss-light: #7eb08c;
+
+    /* Potency colors */
+    --tripdar-potency-gentle: #7eb08c;
+    --tripdar-potency-moderate: #d4a574;
+    --tripdar-potency-intense: #c45b4a;
+    --tripdar-potency-variable: #8b7355;
+
+    /* Typography */
+    --tripdar-font-display: 'Cormorant Garamond', 'Georgia', serif;
+    --tripdar-font-body: 'Lora', 'Georgia', serif;
+    --tripdar-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+    /* Spacing */
+    --tripdar-space-xs: 0.25rem;
+    --tripdar-space-sm: 0.5rem;
+    --tripdar-space-md: 1rem;
+    --tripdar-space-lg: 1.5rem;
+    --tripdar-space-xl: 2rem;
+    --tripdar-space-xxl: 3rem;
+
+    /* Borders & Shadows */
+    --tripdar-border-color: rgba(44, 24, 16, 0.15);
+    --tripdar-border-radius: 8px;
+    --tripdar-shadow-sm: 0 2px 4px rgba(44, 24, 16, 0.08);
+    --tripdar-shadow-md: 0 4px 12px rgba(44, 24, 16, 0.12);
+    --tripdar-shadow-lg: 0 8px 24px rgba(44, 24, 16, 0.16);
+}
+
+/* =============================================================================
+   Base Typography
+   ============================================================================= */
+
+.tripdar-explorer,
+.tripdar-library,
+.tripdar-quiz,
+.tripdar-strain-detail,
+.tripdar-feedback {
+    font-family: var(--tripdar-font-body);
+    color: var(--tripdar-ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* =============================================================================
+   Codex Banner
+   ============================================================================= */
+
+.tripdar-codex-banner {
+    background: linear-gradient(135deg, var(--tripdar-parchment) 0%, var(--tripdar-parchment-dark) 100%);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    padding: var(--tripdar-space-xl);
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-codex-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%232c1810' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.tripdar-codex-banner__illustration {
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-mushroom-icon {
+    width: 80px;
+    height: 80px;
+    color: var(--tripdar-violet);
+}
+
+.tripdar-codex-banner__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 2.5rem;
+    font-weight: 600;
+    color: var(--tripdar-ink);
+    margin: 0 0 var(--tripdar-space-sm);
+    letter-spacing: 0.02em;
+}
+
+.tripdar-codex-banner__subtitle {
+    font-size: 1.125rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0;
+    font-style: italic;
+}
+
+/* =============================================================================
+   Explorer Grid
+   ============================================================================= */
+
+.tripdar-explorer__filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-xl);
+    padding: var(--tripdar-space-md);
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-filter-group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-xs);
+}
+
+.tripdar-filter-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-filter-select {
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.875rem;
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    background: white;
+    color: var(--tripdar-ink);
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.tripdar-filter-select:focus {
+    outline: none;
+    border-color: var(--tripdar-violet);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.tripdar-explorer__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--tripdar-space-lg);
+}
+
+/* =============================================================================
+   Strain Card
+   ============================================================================= */
+
+.tripdar-strain-card {
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    cursor: pointer;
+}
+
+.tripdar-strain-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--tripdar-shadow-lg);
+}
+
+.tripdar-strain-card__image-wrapper {
+    position: relative;
+    aspect-ratio: 4/3;
+    background: var(--tripdar-parchment);
+    overflow: hidden;
+}
+
+.tripdar-strain-card__image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.tripdar-strain-card:hover .tripdar-strain-card__image {
+    transform: scale(1.05);
+}
+
+.tripdar-strain-card__placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-placeholder-icon {
+    width: 60px;
+    height: 60px;
+    opacity: 0.4;
+}
+
+.tripdar-strain-card__overlay {
+    position: absolute;
+    top: var(--tripdar-space-sm);
+    right: var(--tripdar-space-sm);
+}
+
+.tripdar-strain-card__potency {
+    display: inline-block;
+    padding: var(--tripdar-space-xs) var(--tripdar-space-sm);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-radius: 4px;
+    color: white;
+}
+
+.tripdar-potency--gentle,
+.tripdar-strain-card__potency.tripdar-potency--low,
+.tripdar-strain-card__potency.tripdar-potency--low-moderate {
+    background: var(--tripdar-potency-gentle);
+}
+
+.tripdar-potency--moderate,
+.tripdar-strain-card__potency.tripdar-potency--moderate {
+    background: var(--tripdar-potency-moderate);
+}
+
+.tripdar-potency--intense,
+.tripdar-strain-card__potency.tripdar-potency--high,
+.tripdar-strain-card__potency.tripdar-potency--very-high {
+    background: var(--tripdar-potency-intense);
+}
+
+.tripdar-potency--variable,
+.tripdar-strain-card__potency.tripdar-potency--variable {
+    background: var(--tripdar-potency-variable);
+}
+
+.tripdar-strain-card__content {
+    padding: var(--tripdar-space-md);
+}
+
+.tripdar-strain-card__name {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-sm);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-strain-card__vibes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-xs);
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-vibe-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: lowercase;
+    color: var(--tripdar-violet-dark);
+    background: rgba(139, 92, 246, 0.1);
+    border-radius: 12px;
+}
+
+.tripdar-strain-card__excerpt {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-md);
+    line-height: 1.5;
+}
+
+.tripdar-strain-card__explore {
+    width: 100%;
+}
+
+/* =============================================================================
+   Buttons
+   ============================================================================= */
+
+.tripdar-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tripdar-space-sm);
+    padding: var(--tripdar-space-sm) var(--tripdar-space-lg);
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: var(--tripdar-border-radius);
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tripdar-btn--primary {
+    background: var(--tripdar-violet);
+    color: white;
+    border-color: var(--tripdar-violet);
+}
+
+.tripdar-btn--primary:hover {
+    background: var(--tripdar-violet-dark);
+    border-color: var(--tripdar-violet-dark);
+}
+
+.tripdar-btn--secondary {
+    background: transparent;
+    color: var(--tripdar-violet);
+    border-color: var(--tripdar-violet);
+}
+
+.tripdar-btn--secondary:hover {
+    background: var(--tripdar-violet);
+    color: white;
+}
+
+.tripdar-btn--ghost {
+    background: transparent;
+    color: var(--tripdar-ink-muted);
+    border-color: var(--tripdar-border-color);
+}
+
+.tripdar-btn--ghost:hover {
+    color: var(--tripdar-ink);
+    border-color: var(--tripdar-ink-muted);
+}
+
+.tripdar-btn--load-more {
+    background: var(--tripdar-parchment);
+    color: var(--tripdar-ink);
+    border-color: var(--tripdar-border-color);
+    padding: var(--tripdar-space-md) var(--tripdar-space-xl);
+}
+
+.tripdar-btn--load-more:hover {
+    background: var(--tripdar-parchment-dark);
+}
+
+/* =============================================================================
+   Quiz Styles
+   ============================================================================= */
+
+.tripdar-quiz {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: var(--tripdar-space-xl);
+}
+
+.tripdar-quiz__screen {
+    display: none;
+    animation: tripdarFadeIn 0.4s ease;
+}
+
+.tripdar-quiz__screen.active {
+    display: block;
+}
+
+@keyframes tripdarFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.tripdar-quiz__screen--welcome {
+    text-align: center;
+    padding: var(--tripdar-space-xxl) var(--tripdar-space-lg);
+    background: linear-gradient(135deg, var(--tripdar-parchment) 0%, var(--tripdar-parchment-dark) 100%);
+    border-radius: var(--tripdar-border-radius);
+    border: 2px solid var(--tripdar-border-color);
+}
+
+.tripdar-crystal-ball {
+    width: 120px;
+    height: 120px;
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-quiz__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-md);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-quiz__intro {
+    font-size: 1.125rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-xl);
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Quiz Progress */
+.tripdar-quiz__progress {
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-quiz__progress-bar {
+    height: 4px;
+    background: var(--tripdar-parchment-dark);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-quiz__progress-fill {
+    height: 100%;
+    background: var(--tripdar-violet);
+    transition: width 0.3s ease;
+}
+
+.tripdar-quiz__progress-text {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+    text-align: center;
+    display: block;
+}
+
+/* Quiz Questions */
+.tripdar-quiz__question-text {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.5rem;
+    font-weight: 500;
+    text-align: center;
+    margin: 0 0 var(--tripdar-space-xl);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-quiz__answers {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-md);
+}
+
+.tripdar-quiz__answer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-xs);
+    padding: var(--tripdar-space-md) var(--tripdar-space-lg);
+    background: white;
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tripdar-quiz__answer:hover {
+    border-color: var(--tripdar-violet-light);
+    background: rgba(139, 92, 246, 0.02);
+}
+
+.tripdar-quiz__answer.selected {
+    border-color: var(--tripdar-violet);
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.tripdar-quiz__answer-label {
+    font-weight: 600;
+    color: var(--tripdar-ink);
+}
+
+.tripdar-quiz__answer-desc {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+}
+
+/* Quiz Loading */
+.tripdar-quiz__screen--loading {
+    text-align: center;
+    padding: var(--tripdar-space-xxl);
+}
+
+.tripdar-quiz__divination {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--tripdar-space-lg);
+}
+
+.tripdar-divination-orb {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--tripdar-violet-light), var(--tripdar-violet-dark));
+    animation: tripdarPulse 2s ease-in-out infinite;
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.4);
+}
+
+@keyframes tripdarPulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 1;
+    }
+}
+
+.tripdar-quiz__loading-text {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-style: italic;
+    color: var(--tripdar-ink-muted);
+    animation: tripdarFadeInOut 2s ease-in-out infinite;
+}
+
+@keyframes tripdarFadeInOut {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 1; }
+}
+
+/* Quiz Result */
+.tripdar-quiz__result-content {
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 2px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-xl);
+}
+
+.tripdar-quiz__result-header {
+    text-align: center;
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-quiz__result-title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.125rem;
+    color: var(--tripdar-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin: 0 0 var(--tripdar-space-sm);
+}
+
+.tripdar-quiz__result-strain {
+    font-family: var(--tripdar-font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    color: var(--tripdar-violet-dark);
+    margin: 0;
+}
+
+.tripdar-quiz__result-reasoning {
+    font-size: 1rem;
+    font-style: italic;
+    color: var(--tripdar-ink-muted);
+    text-align: center;
+    margin: var(--tripdar-space-lg) 0;
+    padding: var(--tripdar-space-md);
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+}
+
+.tripdar-quiz__result-actions {
+    display: flex;
+    gap: var(--tripdar-space-md);
+    justify-content: center;
+    margin-top: var(--tripdar-space-xl);
+}
+
+/* =============================================================================
+   Feedback Widget
+   ============================================================================= */
+
+.tripdar-feedback {
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-lg);
+    margin-top: var(--tripdar-space-xl);
+}
+
+.tripdar-feedback__prompt {
+    text-align: center;
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-feedback__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-xs);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-feedback__subtitle {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0;
+}
+
+/* Rating Slider */
+.tripdar-rating-slider {
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-rating-slider__input {
+    width: 100%;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(to right,
+        var(--tripdar-potency-intense) 0%,
+        var(--tripdar-potency-moderate) 50%,
+        var(--tripdar-potency-gentle) 100%
+    );
+    -webkit-appearance: none;
+    appearance: none;
+    cursor: pointer;
+}
+
+.tripdar-rating-slider__input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid var(--tripdar-violet);
+    cursor: grab;
+    box-shadow: var(--tripdar-shadow-md);
+}
+
+.tripdar-rating-slider__input::-moz-range-thumb {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: white;
+    border: 3px solid var(--tripdar-violet);
+    cursor: grab;
+    box-shadow: var(--tripdar-shadow-md);
+}
+
+.tripdar-rating-slider__labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--tripdar-space-sm);
+}
+
+.tripdar-rating-label {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-feedback__rating {
+    text-align: center;
+}
+
+.tripdar-feedback__thanks {
+    text-align: center;
+    padding: var(--tripdar-space-lg);
+}
+
+.tripdar-feedback__thanks-text {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.125rem;
+    color: var(--tripdar-moss);
+}
+
+/* Survey Prompt */
+.tripdar-feedback__survey-prompt {
+    text-align: center;
+    padding: var(--tripdar-space-md);
+    background: rgba(139, 92, 246, 0.05);
+    border-radius: var(--tripdar-border-radius);
+    margin-top: var(--tripdar-space-md);
+}
+
+.tripdar-feedback__survey-text {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink);
+    margin: 0 0 var(--tripdar-space-md);
+}
+
+/* Survey Form */
+.tripdar-feedback__survey {
+    margin-top: var(--tripdar-space-lg);
+}
+
+.tripdar-survey-question {
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-survey-question__text {
+    font-weight: 600;
+    margin-bottom: var(--tripdar-space-sm);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-survey-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-survey-option {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tripdar-space-xs);
+    padding: var(--tripdar-space-xs) var(--tripdar-space-md);
+    background: white;
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: 20px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tripdar-survey-option:hover {
+    border-color: var(--tripdar-violet-light);
+}
+
+.tripdar-survey-option input {
+    display: none;
+}
+
+.tripdar-survey-option.selected {
+    background: var(--tripdar-violet);
+    border-color: var(--tripdar-violet);
+    color: white;
+}
+
+.tripdar-survey-textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: var(--tripdar-space-md);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    font-family: var(--tripdar-font-body);
+    font-size: 0.875rem;
+    resize: vertical;
+}
+
+.tripdar-survey-textarea:focus {
+    outline: none;
+    border-color: var(--tripdar-violet);
+}
+
+/* =============================================================================
+   Strain Detail
+   ============================================================================= */
+
+.tripdar-strain-detail {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.tripdar-strain-detail__header {
+    display: flex;
+    gap: var(--tripdar-space-xl);
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-strain-detail__image {
+    flex: 0 0 300px;
+    aspect-ratio: 1;
+    border-radius: var(--tripdar-border-radius);
+    overflow: hidden;
+    background: var(--tripdar-parchment);
+}
+
+.tripdar-strain-detail__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tripdar-strain-detail__info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.tripdar-strain-detail__name {
+    font-family: var(--tripdar-font-display);
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-md);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-strain-detail__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-tag {
+    display: inline-block;
+    padding: var(--tripdar-space-xs) var(--tripdar-space-md);
+    font-size: 0.75rem;
+    font-weight: 600;
+    border-radius: 20px;
+}
+
+.tripdar-tag--vibe {
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--tripdar-violet-dark);
+}
+
+.tripdar-tag--potency {
+    color: white;
+}
+
+.tripdar-tag--low,
+.tripdar-tag--low-moderate {
+    background: var(--tripdar-potency-gentle);
+}
+
+.tripdar-tag--moderate {
+    background: var(--tripdar-potency-moderate);
+}
+
+.tripdar-tag--high,
+.tripdar-tag--very-high {
+    background: var(--tripdar-potency-intense);
+}
+
+.tripdar-tag--variable {
+    background: var(--tripdar-potency-variable);
+}
+
+.tripdar-tag--beginner {
+    background: var(--tripdar-moss-light);
+    color: white;
+}
+
+.tripdar-strain-detail__body {
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-xl);
+}
+
+.tripdar-strain-detail__section {
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-strain-detail__section:last-child {
+    margin-bottom: 0;
+}
+
+.tripdar-section-title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-md);
+    color: var(--tripdar-ink);
+    padding-bottom: var(--tripdar-space-sm);
+    border-bottom: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-strain-detail__description {
+    font-size: 1.0625rem;
+    line-height: 1.7;
+    color: var(--tripdar-ink-light);
+    margin: 0;
+}
+
+.tripdar-strain-detail__attributes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-attribute {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-xs);
+    padding: var(--tripdar-space-md);
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+}
+
+.tripdar-attribute__label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-attribute__value {
+    font-size: 1rem;
+    color: var(--tripdar-ink);
+}
+
+.tripdar-traits-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.tripdar-trait {
+    position: relative;
+    padding-left: var(--tripdar-space-lg);
+    margin-bottom: var(--tripdar-space-sm);
+    color: var(--tripdar-ink-light);
+}
+
+.tripdar-trait::before {
+    content: '~';
+    position: absolute;
+    left: 0;
+    color: var(--tripdar-violet);
+    font-weight: bold;
+}
+
+/* =============================================================================
+   Loading & Error States
+   ============================================================================= */
+
+.tripdar-explorer__loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--tripdar-space-md);
+    padding: var(--tripdar-space-xl);
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-loading-spinner {
+    width: 24px;
+    height: 24px;
+    border: 3px solid var(--tripdar-parchment-dark);
+    border-top-color: var(--tripdar-violet);
+    border-radius: 50%;
+    animation: tripdarSpin 0.8s linear infinite;
+}
+
+@keyframes tripdarSpin {
+    to { transform: rotate(360deg); }
+}
+
+.tripdar-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--tripdar-space-md);
+    padding: var(--tripdar-space-xxl);
+    text-align: center;
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-error__icon {
+    width: 48px;
+    height: 48px;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-error__message {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0;
+}
+
+/* =============================================================================
+   Pagination
+   ============================================================================= */
+
+.tripdar-explorer__pagination {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--tripdar-space-xl);
+}
+
+/* =============================================================================
+   Library Grid Variants
+   ============================================================================= */
+
+.tripdar-library {
+    display: grid;
+    gap: var(--tripdar-space-md);
+}
+
+.tripdar-library--cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.tripdar-library--cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.tripdar-library--cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.tripdar-strain-card--compact .tripdar-strain-card__content {
+    padding: var(--tripdar-space-sm);
+}
+
+.tripdar-strain-card--compact .tripdar-strain-card__name {
+    font-size: 1rem;
+}
+
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    .tripdar-codex-banner__title {
+        font-size: 1.75rem;
+    }
+
+    .tripdar-explorer__filters {
+        flex-direction: column;
+    }
+
+    .tripdar-filter-select {
+        width: 100%;
+    }
+
+    .tripdar-explorer__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tripdar-strain-detail__header {
+        flex-direction: column;
+    }
+
+    .tripdar-strain-detail__image {
+        flex: none;
+        width: 100%;
+        max-width: 300px;
+        margin: 0 auto;
+    }
+
+    .tripdar-strain-detail__name {
+        font-size: 1.75rem;
+        text-align: center;
+    }
+
+    .tripdar-strain-detail__tags {
+        justify-content: center;
+    }
+
+    .tripdar-quiz {
+        padding: var(--tripdar-space-md);
+    }
+
+    .tripdar-quiz__title {
+        font-size: 1.5rem;
+    }
+
+    .tripdar-quiz__result-actions {
+        flex-direction: column;
+    }
+
+    .tripdar-library--cols-3,
+    .tripdar-library--cols-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .tripdar-library--cols-2,
+    .tripdar-library--cols-3,
+    .tripdar-library--cols-4 {
+        grid-template-columns: 1fr;
+    }
+}
