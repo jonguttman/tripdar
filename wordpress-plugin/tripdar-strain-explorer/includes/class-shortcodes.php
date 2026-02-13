@@ -25,6 +25,153 @@ class Tripdar_Shortcodes {
         add_shortcode('tripdar_library', [$this, 'render_library']);
         add_shortcode('tripdar_quiz', [$this, 'render_quiz']);
         add_shortcode('tripdar_strain', [$this, 'render_single_strain']);
+        add_shortcode('tripdar_search', [$this, 'render_search']);
+        add_shortcode('tripdar_lineage', [$this, 'render_lineage']);
+    }
+
+    /**
+     * [tripdar_search] - Strain search with autocomplete
+     */
+    public function render_search($atts) {
+        $atts = shortcode_atts([
+            'placeholder' => 'Search strains...',
+            'limit' => 10,
+            'show_details' => 'true',
+        ], $atts);
+
+        $show_details = filter_var($atts['show_details'], FILTER_VALIDATE_BOOLEAN);
+
+        ob_start();
+        ?>
+        <div class="tripdar-search" data-limit="<?php echo esc_attr($atts['limit']); ?>">
+            <div class="tripdar-search__input-wrapper">
+                <input type="text"
+                       class="tripdar-search__input"
+                       placeholder="<?php echo esc_attr($atts['placeholder']); ?>"
+                       autocomplete="off"
+                       data-tripdar-search>
+                <span class="tripdar-search__icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="M21 21l-4.35-4.35"></path>
+                    </svg>
+                </span>
+                <span class="tripdar-search__loading" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" class="tripdar-spinner">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4" stroke-linecap="round">
+                            <animateTransform attributeName="transform" type="rotate" dur="1s" values="0 12 12;360 12 12" repeatCount="indefinite"/>
+                        </circle>
+                    </svg>
+                </span>
+            </div>
+            <div class="tripdar-search__results" style="display: none;">
+                <!-- Results populated by JS -->
+            </div>
+            <?php if ($show_details): ?>
+            <div class="tripdar-search__detail" style="display: none;">
+                <!-- Selected strain detail populated by JS -->
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_lineage] - Display strain family tree
+     */
+    public function render_lineage($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'show_children' => 'true',
+            'max_depth' => 3,
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_lineage($atts['slug']);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load strain lineage.</p>';
+        }
+
+        $lineage = $response['data']['lineage'];
+        $show_children = filter_var($atts['show_children'], FILTER_VALIDATE_BOOLEAN);
+
+        ob_start();
+        ?>
+        <div class="tripdar-lineage">
+            <h3 class="tripdar-lineage__title">
+                Family Tree: <?php echo esc_html($lineage['name']); ?>
+            </h3>
+
+            <?php if (!empty($lineage['lineageNotes'])): ?>
+            <p class="tripdar-lineage__notes">
+                <?php echo esc_html($lineage['lineageNotes']); ?>
+            </p>
+            <?php endif; ?>
+
+            <div class="tripdar-lineage__tree">
+                <?php $this->render_lineage_node($lineage, 0, intval($atts['max_depth'])); ?>
+            </div>
+
+            <?php if ($show_children && !empty($lineage['children'])): ?>
+            <div class="tripdar-lineage__children">
+                <h4 class="tripdar-lineage__children-title">Derived Strains</h4>
+                <ul class="tripdar-lineage__children-list">
+                    <?php foreach ($lineage['children'] as $childId): ?>
+                    <li><?php echo esc_html(ucwords(str_replace('-', ' ', $childId))); ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Recursively render a lineage node
+     */
+    private function render_lineage_node($node, $depth, $maxDepth) {
+        if ($depth > $maxDepth) return;
+
+        $indent = str_repeat('  ', $depth);
+        $potency_class = $this->get_potency_class($node['potency']);
+        ?>
+        <div class="tripdar-lineage__node tripdar-lineage__node--depth-<?php echo $depth; ?>">
+            <div class="tripdar-lineage__node-content">
+                <span class="tripdar-lineage__node-name"><?php echo esc_html($node['name']); ?></span>
+                <span class="tripdar-lineage__node-meta">
+                    <span class="tripdar-lineage__potency tripdar-lineage__potency--<?php echo esc_attr($potency_class); ?>">
+                        <?php echo esc_html($node['potency']); ?>
+                    </span>
+                </span>
+            </div>
+            <?php if (!empty($node['parents'])): ?>
+            <div class="tripdar-lineage__parents">
+                <?php foreach ($node['parents'] as $parent): ?>
+                    <?php $this->render_lineage_node($parent, $depth + 1, $maxDepth); ?>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Get CSS class for potency level
+     */
+    private function get_potency_class($potency) {
+        $potency_lower = strtolower($potency);
+        if (strpos($potency_lower, 'very high') !== false || strpos($potency_lower, 'high') !== false) {
+            return 'intense';
+        } elseif (strpos($potency_lower, 'low') !== false) {
+            return 'gentle';
+        }
+        return 'moderate';
     }
 
     /**

@@ -238,6 +238,59 @@ class Tripdar_API_Client {
     }
 
     /**
+     * Search strains with fuzzy matching
+     */
+    public function search_strains($query, $limit = 10) {
+        if (empty($query) || strlen($query) < 2) {
+            return [
+                'success' => true,
+                'data' => ['results' => [], 'query' => $query]
+            ];
+        }
+
+        $cache_key = 'tripdar_search_' . md5($query . '_' . $limit);
+
+        // Short cache for search results (1 minute)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $query_string = http_build_query([
+            'q' => $query,
+            'limit' => min(20, max(1, intval($limit))),
+        ]);
+
+        $response = $this->request("/strains/search?{$query_string}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 60); // 1 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Get strain lineage (family tree)
+     */
+    public function get_lineage($slug) {
+        $cache_key = 'tripdar_lineage_' . sanitize_key($slug);
+
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request("/strains/{$slug}/lineage");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 300); // 5 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {

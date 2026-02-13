@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.0.5
+ * Version: 1.1.0
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.0.5');
+define('TRIPDAR_VERSION', '1.1.0');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
@@ -113,6 +113,10 @@ class Tripdar_Strain_Explorer {
         add_action('wp_ajax_nopriv_tripdar_load_strains', [$this, 'handle_load_strains']);
         add_action('wp_ajax_tripdar_get_strain', [$this, 'handle_get_strain']);
         add_action('wp_ajax_nopriv_tripdar_get_strain', [$this, 'handle_get_strain']);
+
+        // AJAX handlers - Search
+        add_action('wp_ajax_tripdar_search_strains', [$this, 'handle_search_strains']);
+        add_action('wp_ajax_nopriv_tripdar_search_strains', [$this, 'handle_search_strains']);
     }
 
     /**
@@ -203,6 +207,15 @@ class Tripdar_Strain_Explorer {
         wp_enqueue_script(
             'tripdar-feedback',
             TRIPDAR_PLUGIN_URL . 'assets/js/feedback.js',
+            ['tripdar-explorer'],
+            TRIPDAR_VERSION,
+            true
+        );
+
+        // Autocomplete search script
+        wp_enqueue_script(
+            'tripdar-autocomplete',
+            TRIPDAR_PLUGIN_URL . 'assets/js/autocomplete.js',
             ['tripdar-explorer'],
             TRIPDAR_VERSION,
             true
@@ -380,6 +393,29 @@ class Tripdar_Strain_Explorer {
             wp_send_json_success(['html' => $html]);
         } else {
             wp_send_json_error($result['error'] ?? ['message' => 'Failed to load strain']);
+        }
+    }
+
+    /**
+     * Handle strain search via AJAX
+     */
+    public function handle_search_strains() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $query = isset($_POST['query']) ? sanitize_text_field($_POST['query']) : '';
+        $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 10;
+
+        if (strlen($query) < 2) {
+            wp_send_json_success(['results' => []]);
+            return;
+        }
+
+        $result = $this->api->search_strains($query, $limit);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            wp_send_json_error($result['error'] ?? ['message' => 'Search failed']);
         }
     }
 
