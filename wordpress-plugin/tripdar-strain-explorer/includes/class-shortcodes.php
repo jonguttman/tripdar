@@ -30,6 +30,8 @@ class Tripdar_Shortcodes {
         add_shortcode('tripdar_collection', [$this, 'render_collection']);
         add_shortcode('tripdar_collections', [$this, 'render_collections_list']);
         add_shortcode('tripdar_reviews', [$this, 'render_reviews']);
+        add_shortcode('tripdar_reports', [$this, 'render_trip_reports']);
+        add_shortcode('tripdar_report_form', [$this, 'render_report_form']);
     }
 
     /**
@@ -433,6 +435,171 @@ class Tripdar_Shortcodes {
         $output .= str_repeat('☆', $empty);
 
         return $output;
+    }
+
+    /**
+     * [tripdar_reports slug="..."] - Display approved trip reports for a strain
+     */
+    public function render_trip_reports($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'per_page' => 5,
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_trip_reports($atts['slug'], 1, intval($atts['per_page']));
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load trip reports.</p>';
+        }
+
+        $reports = $response['data']['reports'] ?? [];
+        $total = $response['data']['total'] ?? 0;
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+
+        ob_start();
+        ?>
+        <div class="tripdar-trip-reports" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
+            <h3 class="tripdar-trip-reports__title">Trip Reports for <?php echo esc_html($strain_name); ?></h3>
+
+            <?php if (empty($reports)): ?>
+            <p class="tripdar-trip-reports__empty">
+                No trip reports yet. Be the first to share your experience!
+            </p>
+            <?php else: ?>
+            <p class="tripdar-trip-reports__count"><?php echo $total; ?> experience<?php echo $total === 1 ? '' : 's'; ?> shared</p>
+
+            <div class="tripdar-trip-reports__list">
+                <?php foreach ($reports as $report): ?>
+                <article class="tripdar-trip-report">
+                    <header class="tripdar-trip-report__header">
+                        <h4 class="tripdar-trip-report__title"><?php echo esc_html($report['title']); ?></h4>
+                        <div class="tripdar-trip-report__meta">
+                            <span class="tripdar-trip-report__dose tripdar-trip-report__dose--<?php echo esc_attr(strtolower($report['doseCategory'])); ?>">
+                                <?php echo esc_html($report['doseCategory']); ?> (<?php echo esc_html($report['doseAmount']); ?>)
+                            </span>
+                            <span class="tripdar-trip-report__setting"><?php echo esc_html(ucfirst($report['setting'])); ?></span>
+                            <?php if (!empty($report['peakIntensity'])): ?>
+                            <span class="tripdar-trip-report__intensity">Peak: <?php echo $report['peakIntensity']; ?>/10</span>
+                            <?php endif; ?>
+                            <?php if (!empty($report['duration'])): ?>
+                            <span class="tripdar-trip-report__duration"><?php echo esc_html($report['duration']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </header>
+
+                    <?php if (!empty($report['intention'])): ?>
+                    <p class="tripdar-trip-report__intention">
+                        <strong>Intention:</strong> <?php echo esc_html($report['intention']); ?>
+                    </p>
+                    <?php endif; ?>
+
+                    <div class="tripdar-trip-report__body">
+                        <?php echo nl2br(esc_html($report['body'])); ?>
+                    </div>
+
+                    <footer class="tripdar-trip-report__footer">
+                        <span class="tripdar-trip-report__date">
+                            <?php echo date('M j, Y', strtotime($report['createdAt'])); ?>
+                        </span>
+                    </footer>
+                </article>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_report_form slug="..."] - Trip report submission form
+     */
+    public function render_report_form($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+        $dose_categories = ['MICRODOSE', 'LOW', 'MODERATE', 'HIGH', 'HEROIC'];
+        $settings = ['nature', 'home', 'ceremony', 'social', 'solo', 'therapeutic', 'creative', 'other'];
+
+        ob_start();
+        ?>
+        <div class="tripdar-report-form" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
+            <h3 class="tripdar-report-form__title">Share Your Experience with <?php echo esc_html($strain_name); ?></h3>
+            <p class="tripdar-report-form__intro">Help others by sharing your trip report. All submissions are reviewed before publishing.</p>
+
+            <form class="tripdar-report-form__form">
+                <div class="tripdar-report-form__row">
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Dose Category *</label>
+                        <select name="doseCategory" class="tripdar-report-form__select" required>
+                            <option value="">Select...</option>
+                            <?php foreach ($dose_categories as $cat): ?>
+                            <option value="<?php echo esc_attr($cat); ?>"><?php echo esc_html(ucfirst(strtolower($cat))); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Dose Amount *</label>
+                        <input type="text" name="doseAmount" class="tripdar-report-form__input" placeholder="e.g., 2.5g" required>
+                    </div>
+                </div>
+
+                <div class="tripdar-report-form__row">
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Setting *</label>
+                        <select name="setting" class="tripdar-report-form__select" required>
+                            <option value="">Select...</option>
+                            <?php foreach ($settings as $setting): ?>
+                            <option value="<?php echo esc_attr($setting); ?>"><?php echo esc_html(ucfirst($setting)); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Duration</label>
+                        <input type="text" name="duration" class="tripdar-report-form__input" placeholder="e.g., 4-6 hours">
+                    </div>
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Peak Intensity (1-10)</label>
+                    <input type="number" name="peakIntensity" class="tripdar-report-form__input" min="1" max="10" placeholder="5">
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Intention (optional)</label>
+                    <input type="text" name="intention" class="tripdar-report-form__input" placeholder="What were you hoping to achieve?">
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Title *</label>
+                    <input type="text" name="title" class="tripdar-report-form__input" placeholder="Give your experience a title" required>
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Your Experience * (min 50 characters)</label>
+                    <textarea name="body" class="tripdar-report-form__textarea" rows="8" placeholder="Describe your experience in detail..." required></textarea>
+                    <span class="tripdar-report-form__charcount">0 / 50 minimum</span>
+                </div>
+
+                <button type="submit" class="tripdar-btn tripdar-btn--primary tripdar-report-form__submit">
+                    Submit Trip Report
+                </button>
+
+                <div class="tripdar-report-form__message" style="display: none;"></div>
+            </form>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     /**

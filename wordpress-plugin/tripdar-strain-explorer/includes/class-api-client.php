@@ -403,6 +403,39 @@ class Tripdar_API_Client {
     }
 
     /**
+     * Get approved trip reports for a strain
+     */
+    public function get_trip_reports($slug, $page = 1, $per_page = 10) {
+        $cache_key = 'tripdar_reports_' . sanitize_key($slug) . '_' . $page . '_' . $per_page;
+
+        // Short cache for reports (2 minutes)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $query = http_build_query([
+            'page' => $page,
+            'pageSize' => $per_page,
+        ]);
+
+        $response = $this->request("/strains/{$slug}/reports?{$query}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 120); // 2 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Submit a trip report
+     */
+    public function submit_trip_report($data) {
+        return $this->request('/reports', 'POST', $data);
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {

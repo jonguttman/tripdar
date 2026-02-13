@@ -121,6 +121,10 @@ class Tripdar_Strain_Explorer {
         // AJAX handlers - Ratings
         add_action('wp_ajax_tripdar_submit_rating', [$this, 'handle_submit_rating']);
         add_action('wp_ajax_nopriv_tripdar_submit_rating', [$this, 'handle_submit_rating']);
+
+        // AJAX handlers - Trip Reports
+        add_action('wp_ajax_tripdar_submit_report', [$this, 'handle_submit_report']);
+        add_action('wp_ajax_nopriv_tripdar_submit_report', [$this, 'handle_submit_report']);
     }
 
     /**
@@ -234,6 +238,15 @@ class Tripdar_Strain_Explorer {
             true
         );
 
+        // Trip report form script
+        wp_enqueue_script(
+            'tripdar-reports',
+            TRIPDAR_PLUGIN_URL . 'assets/js/report-form.js',
+            ['tripdar-explorer'],
+            TRIPDAR_VERSION,
+            true
+        );
+
         // Localize scripts with AJAX settings
         $ajax_settings = [
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -244,6 +257,7 @@ class Tripdar_Strain_Explorer {
         wp_localize_script('tripdar-quiz', 'tripdarQuiz', $ajax_settings);
         wp_localize_script('tripdar-feedback', 'tripdarFeedback', $ajax_settings);
         wp_localize_script('tripdar-ratings', 'tripdarAjax', $ajax_settings);
+        wp_localize_script('tripdar-reports', 'tripdarReports', $ajax_settings);
     }
 
     /**
@@ -458,6 +472,51 @@ class Tripdar_Strain_Explorer {
             wp_send_json_success($result['data']);
         } else {
             $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to submit rating';
+            wp_send_json_error($error_msg);
+        }
+    }
+
+    /**
+     * AJAX handler for trip report submission
+     */
+    public function handle_submit_report() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $data_json = isset($_POST['data']) ? stripslashes($_POST['data']) : '';
+
+        if (empty($data_json)) {
+            wp_send_json_error('Missing report data');
+            return;
+        }
+
+        $data = json_decode($data_json, true);
+
+        if (!$data || !isset($data['strainSlug'])) {
+            wp_send_json_error('Invalid report data');
+            return;
+        }
+
+        // Validate required fields
+        $required = ['doseCategory', 'doseAmount', 'setting', 'title', 'body'];
+        foreach ($required as $field) {
+            if (empty($data[$field])) {
+                wp_send_json_error("Missing required field: {$field}");
+                return;
+            }
+        }
+
+        // Validate body length
+        if (strlen($data['body']) < 50) {
+            wp_send_json_error('Report body must be at least 50 characters');
+            return;
+        }
+
+        $result = $this->api->submit_trip_report($data);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to submit report';
             wp_send_json_error($error_msg);
         }
     }
