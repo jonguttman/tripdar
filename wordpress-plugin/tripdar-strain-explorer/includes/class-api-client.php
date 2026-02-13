@@ -35,27 +35,24 @@ class Tripdar_API_Client {
     }
 
     /**
-     * Make authenticated API request
+     * Make API request (authenticated if key provided, otherwise public access)
      */
     private function request($endpoint, $method = 'GET', $body = null) {
         $api_key = $this->get_api_key();
 
-        if (empty($api_key)) {
-            return [
-                'success' => false,
-                'error' => ['code' => 'NO_API_KEY', 'message' => 'Tripdar API key not configured']
-            ];
-        }
-
         $args = [
             'method' => $method,
             'headers' => [
-                'Authorization' => 'Bearer ' . $api_key,
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
             ],
             'timeout' => 15,
         ];
+
+        // Add auth header if API key is configured
+        if (!empty($api_key)) {
+            $args['headers']['Authorization'] = 'Bearer ' . $api_key;
+        }
 
         if ($body !== null && $method !== 'GET') {
             $args['body'] = json_encode($body);
