@@ -1373,3 +1373,255 @@
     font-size: 0.875rem;
     color: var(--tripdar-ink-light);
 }
+
+/* =============================================================================
+   Collection Component
+   ============================================================================= */
+
+.tripdar-collection,
+.tripdar-collections-list {
+    font-family: var(--tripdar-font-body);
+    color: var(--tripdar-ink);
+    line-height: 1.6;
+}
+
+.tripdar-collection__header {
+    display: flex;
+    gap: var(--tripdar-space-xl);
+    margin-bottom: var(--tripdar-space-xl);
+    padding: var(--tripdar-space-lg);
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-collection__cover {
+    flex: 0 0 200px;
+    aspect-ratio: 16/9;
+    border-radius: var(--tripdar-border-radius);
+    overflow: hidden;
+    background: var(--tripdar-parchment-dark);
+}
+
+.tripdar-collection__cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tripdar-collection__info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.tripdar-collection__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-sm);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-collection__description {
+    font-size: 1rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-md);
+    line-height: 1.6;
+}
+
+.tripdar-collection__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-md);
+    flex-wrap: wrap;
+}
+
+.tripdar-collection__count {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-light);
+    padding: var(--tripdar-space-xs) var(--tripdar-space-sm);
+    background: var(--tripdar-parchment-dark);
+    border-radius: 4px;
+}
+
+.tripdar-collection__tags {
+    display: flex;
+    gap: var(--tripdar-space-xs);
+    flex-wrap: wrap;
+}
+
+.tripdar-collection__grid {
+    display: grid;
+    gap: var(--tripdar-space-lg);
+}
+
+.tripdar-collection__grid--cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.tripdar-collection__grid--cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.tripdar-collection__grid--cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.tripdar-collection__empty {
+    text-align: center;
+    padding: var(--tripdar-space-xxl);
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px dashed var(--tripdar-border-color);
+}
+
+/* Collections List */
+.tripdar-collections-list {
+    display: grid;
+    gap: var(--tripdar-space-lg);
+}
+
+.tripdar-collections-list--cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.tripdar-collections-list--cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.tripdar-collections-list--cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.tripdar-collection-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tripdar-collection-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--tripdar-shadow-lg);
+    text-decoration: none;
+    color: inherit;
+}
+
+.tripdar-collection-card__image {
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    background: var(--tripdar-parchment);
+}
+
+.tripdar-collection-card__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.tripdar-collection-card:hover .tripdar-collection-card__image img {
+    transform: scale(1.05);
+}
+
+.tripdar-collection-card__placeholder {
+    aspect-ratio: 16/9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tripdar-parchment);
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-collection-card__content {
+    padding: var(--tripdar-space-md);
+    position: relative;
+}
+
+.tripdar-collection-card__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-xs);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-collection-card__description {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-sm);
+    line-height: 1.5;
+}
+
+.tripdar-collection-card__count {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-light);
+    display: inline-block;
+}
+
+.tripdar-collection-card__featured {
+    position: absolute;
+    top: var(--tripdar-space-sm);
+    right: var(--tripdar-space-sm);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    background: var(--tripdar-violet);
+    color: white;
+    border-radius: 4px;
+}
+
+/* Collection responsive */
+@media (max-width: 768px) {
+    .tripdar-collection__header {
+        flex-direction: column;
+    }
+
+    .tripdar-collection__cover {
+        flex: none;
+        width: 100%;
+        max-width: 300px;
+        margin: 0 auto;
+    }
+
+    .tripdar-collection__title {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+
+    .tripdar-collection__description {
+        text-align: center;
+    }
+
+    .tripdar-collection__meta {
+        justify-content: center;
+    }
+
+    .tripdar-collection__grid--cols-3,
+    .tripdar-collection__grid--cols-4,
+    .tripdar-collections-list--cols-3,
+    .tripdar-collections-list--cols-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .tripdar-collection__grid--cols-2,
+    .tripdar-collection__grid--cols-3,
+    .tripdar-collection__grid--cols-4,
+    .tripdar-collections-list--cols-2,
+    .tripdar-collections-list--cols-3,
+    .tripdar-collections-list--cols-4 {
+        grid-template-columns: 1fr;
+    }
+}

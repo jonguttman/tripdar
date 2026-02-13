@@ -291,6 +291,46 @@ class Tripdar_API_Client {
     }
 
     /**
+     * Get all collections
+     */
+    public function get_collections() {
+        $cache_key = 'tripdar_collections';
+
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request('/collections');
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 300); // 5 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Get a single collection by slug
+     */
+    public function get_collection($slug) {
+        $cache_key = 'tripdar_collection_' . sanitize_key($slug);
+
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request("/collections/{$slug}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 300); // 5 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {
