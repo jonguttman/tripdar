@@ -116,3 +116,38 @@ model TripReport {
   @@index([partnerId])
   @@index([status])
 }
+
+// ============================================================================
+// Analytics
+// ============================================================================
+
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  eventType   String   // page_view, quiz_complete, search, rating, report
+  entitySlug  String?  // Strain slug or other entity reference
+  partnerId   String   // Partner who generated this event
+  sessionHash String   // Anonymous session identifier
+  metadata    String?  // JSON string for additional event data
+  createdAt   DateTime @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([partnerId, createdAt])
+  @@index([entitySlug, createdAt])
+}
+
+model AnalyticsSummary {
+  id              String   @id @default(cuid())
+  period          String   // daily, weekly, monthly
+  periodStart     DateTime
+  strainSlug      String?  // null for overall summary
+  views           Int      @default(0)
+  searches        Int      @default(0)
+  quizCompletions Int      @default(0)
+  ratings         Int      @default(0)
+  reviews         Int      @default(0)
+  reports         Int      @default(0)
+  avgRating       Float?
+
+  @@unique([period, periodStart, strainSlug])
+  @@index([period, periodStart])
+}
