@@ -46,23 +46,55 @@ export async function GET(request: NextRequest) {
     const filters: Record<string, string> = {};
     const potencyFilter = searchParams.get("potency");
     const beginnerFilter = searchParams.get("beginner");
+    const vibeFilter = searchParams.get("vibe");
 
     if (potencyFilter) filters.potency = potencyFilter;
     if (beginnerFilter) filters.beginner = beginnerFilter;
+    if (vibeFilter) filters.vibe = vibeFilter;
 
     // Get all strains and apply filters
     let strains = getAllStrains();
 
-    if (potencyFilter) {
+    // Vibe filter - check if any vibe matches
+    if (vibeFilter) {
+      const vibeSearch = vibeFilter.toLowerCase();
       strains = strains.filter(s =>
-        s.potency.toLowerCase().includes(potencyFilter.toLowerCase())
+        s.vibe.some(v => v.toLowerCase().includes(vibeSearch))
       );
     }
 
+    // Potency/intensity filter
+    // Map UI values: "gentle" → low, "moderate" → moderate, "intense" → high
+    if (potencyFilter) {
+      const potencySearch = potencyFilter.toLowerCase();
+      strains = strains.filter(s => {
+        const p = s.potency.toLowerCase();
+        if (potencySearch === "gentle") {
+          return p.includes("low");
+        } else if (potencySearch === "intense") {
+          return p.includes("high") || p.includes("very high");
+        } else if (potencySearch === "moderate") {
+          return p.includes("moderate") || p.includes("medium");
+        }
+        // Direct match fallback
+        return p.includes(potencySearch);
+      });
+    }
+
+    // Beginner/experience filter
+    // Map UI values: "beginner" → yes, "experienced" → no or maybe
     if (beginnerFilter) {
-      strains = strains.filter(s =>
-        s.beginner.toLowerCase() === beginnerFilter.toLowerCase()
-      );
+      const beginnerSearch = beginnerFilter.toLowerCase();
+      strains = strains.filter(s => {
+        const b = s.beginner.toLowerCase();
+        if (beginnerSearch === "beginner") {
+          return b === "yes";
+        } else if (beginnerSearch === "experienced") {
+          return b === "no" || b === "maybe";
+        }
+        // Direct match fallback (yes/no/maybe)
+        return b === beginnerSearch;
+      });
     }
 
     // Calculate pagination
