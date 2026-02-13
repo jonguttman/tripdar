@@ -1,7 +1,7 @@
 /**
  * Tripdar Strain Explorer - Storybook Theme
  *
- * A mystical, parchment-inspired aesthetic for the strain codex.
+ * A mystical, parchment-inspired aesthetic for the strain explorer.
  */
 
 /* =============================================================================
@@ -68,7 +68,7 @@
 }
 
 /* =============================================================================
-   Codex Banner
+   Banner (deprecated - kept for backwards compatibility)
    ============================================================================= */
 
 .tripdar-codex-banner {

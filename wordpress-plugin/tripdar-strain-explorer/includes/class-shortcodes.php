@@ -120,22 +120,8 @@ class Tripdar_Shortcodes {
         ob_start();
         ?>
         <div class="tripdar-explorer" data-per-page="<?php echo esc_attr($atts['per_page']); ?>">
+            <?php if ($atts['show_filters'] === 'true'): ?>
             <div class="tripdar-explorer__header">
-                <div class="tripdar-codex-banner">
-                    <div class="tripdar-codex-banner__illustration">
-                        <svg viewBox="0 0 80 80" class="tripdar-mushroom-icon">
-                            <ellipse cx="40" cy="60" rx="8" ry="12" fill="currentColor" opacity="0.6"/>
-                            <ellipse cx="40" cy="35" rx="25" ry="20" fill="currentColor"/>
-                            <circle cx="32" cy="30" r="4" fill="white" opacity="0.3"/>
-                            <circle cx="45" cy="38" r="3" fill="white" opacity="0.3"/>
-                            <circle cx="52" cy="28" r="2" fill="white" opacity="0.3"/>
-                        </svg>
-                    </div>
-                    <h2 class="tripdar-codex-banner__title">The Strain Codex</h2>
-                    <p class="tripdar-codex-banner__subtitle">A mystical compendium of psilocybin experiences</p>
-                </div>
-
-                <?php if ($atts['show_filters'] === 'true'): ?>
                 <div class="tripdar-explorer__filters">
                     <div class="tripdar-filter-group">
                         <label class="tripdar-filter-label">Vibe</label>
@@ -187,7 +173,7 @@ class Tripdar_Shortcodes {
 
             <div class="tripdar-explorer__loading" style="display: none;">
                 <div class="tripdar-loading-spinner"></div>
-                <span>Consulting the codex...</span>
+                <span>Loading strains...</span>
             </div>
         </div>
         <?php
@@ -271,7 +257,7 @@ class Tripdar_Shortcodes {
                 </div>
                 <h2 class="tripdar-quiz__title"><?php echo esc_html($atts['title']); ?></h2>
                 <p class="tripdar-quiz__intro">
-                    Answer a few questions and let the codex reveal the strain that resonates with your journey.
+                    Answer a few questions and discover the strain that resonates with your journey.
                 </p>
                 <button class="tripdar-btn tripdar-btn--primary tripdar-quiz__start">
                     Begin Your Journey
@@ -311,7 +297,7 @@ class Tripdar_Shortcodes {
             <div class="tripdar-quiz__screen tripdar-quiz__screen--loading" style="display: none;">
                 <div class="tripdar-quiz__divination">
                     <div class="tripdar-divination-orb"></div>
-                    <p class="tripdar-quiz__loading-text">The codex stirs...</p>
+                    <p class="tripdar-quiz__loading-text">Finding your match...</p>
                 </div>
             </div>
 
@@ -332,7 +318,7 @@ class Tripdar_Shortcodes {
                         <line x1="25" y1="45" x2="45" y2="45" stroke="currentColor" stroke-width="1" opacity="0.5"/>
                     </svg>
                 </div>
-                <h3 class="tripdar-quiz__no-match-title">The Codex Remains Silent</h3>
+                <h3 class="tripdar-quiz__no-match-title">No Matches Found</h3>
                 <p class="tripdar-quiz__no-match-text">
                     No strains currently available match your journey. Check back soon as new strains are added to the collection.
                 </p>
@@ -552,7 +538,7 @@ class Tripdar_Shortcodes {
 
             <div class="tripdar-feedback__survey-prompt" style="display: none;">
                 <p class="tripdar-feedback__survey-text">
-                    Your experience differs from the codex. Help us improve by sharing more details?
+                    Your experience differs from our data. Help us improve by sharing more details?
                 </p>
                 <button class="tripdar-btn tripdar-btn--secondary tripdar-feedback__survey-start">
                     Share Feedback (45 seconds)

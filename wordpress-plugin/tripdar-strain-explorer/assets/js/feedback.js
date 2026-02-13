@@ -304,7 +304,7 @@
                         </div>
                         <h4 class="tripdar-survey__complete-title">Thank You!</h4>
                         <p class="tripdar-survey__complete-text">
-                            Your insights help us improve the codex for everyone.
+                            Your insights help us improve Tripdar for everyone.
                         </p>
                     </div>
                 `;
