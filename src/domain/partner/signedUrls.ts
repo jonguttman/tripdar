@@ -19,6 +19,9 @@ import { createHmac, randomBytes } from "crypto";
 // Secret key for signing - in production, use environment variable
 const SIGNING_SECRET = process.env.TRIPDAR_SIGNING_SECRET || randomBytes(32).toString("hex");
 
+// Base URL for signed asset URLs
+const ASSET_BASE_URL = process.env.TRIPDAR_ASSET_BASE_URL || "https://tripd.ar";
+
 // Default expiry time for signed URLs
 const DEFAULT_EXPIRY_SECONDS = 60 * 60; // 1 hour
 
@@ -104,7 +107,7 @@ export function createSignedUrl(params: SignedUrlParams): SignedUrlResult {
 
   // Build the signed URL
   // This URL points to our verification endpoint which will redirect to the actual asset
-  const signedUrl = `/api/v1/assets/verify?token=${token}`;
+  const signedUrl = `${ASSET_BASE_URL}/api/v1/assets/verify?token=${token}`;
 
   return {
     signedUrl,
