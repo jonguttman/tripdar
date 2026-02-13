@@ -373,7 +373,10 @@ class Tripdar_Shortcodes {
 
         // Get visualization
         $viz = $this->api_client->get_visualization($atts['slug']);
-        $image_url = ($viz && isset($viz['data']['url'])) ? $viz['data']['url'] : '';
+        $image_url = '';
+        if ($viz && isset($viz['data'])) {
+            $image_url = $viz['data']['visualizationUrl'] ?? $viz['data']['url'] ?? '';
+        }
 
         ob_start();
         echo $this->render_strain_detail_html($strain, $image_url, $atts['show_feedback'] === 'true');
@@ -460,7 +463,10 @@ class Tripdar_Shortcodes {
      */
     private function render_strain_card($strain, $variant = 'default') {
         $viz = $this->api_client->get_visualization($strain['slug']);
-        $image_url = ($viz && isset($viz['data']['url'])) ? $viz['data']['url'] : '';
+        $image_url = '';
+        if ($viz && isset($viz['data'])) {
+            $image_url = $viz['data']['visualizationUrl'] ?? $viz['data']['url'] ?? '';
+        }
 
         ob_start();
         ?>
