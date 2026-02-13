@@ -81,3 +81,38 @@ model StrainReview {
   @@index([partnerId])
   @@index([status])
 }
+
+// ============================================================================
+// Trip Reports
+// ============================================================================
+
+model TripReport {
+  id            String    @id @default(cuid())
+  strainSlug    String
+  sessionHash   String    // Anonymous session identifier
+  partnerId     String    // Partner who facilitated this report
+
+  // Dosing info
+  doseAmount    String    // e.g., "2.5g", "1 stem"
+  doseCategory  String    // MICRODOSE, LOW, MODERATE, HIGH, HEROIC
+
+  // Experience context
+  setting       String    // e.g., "nature", "home", "ceremony"
+  intention     String?   // What they hoped to achieve
+
+  // The report itself
+  title         String
+  body          String    // Full trip narrative
+  duration      String?   // e.g., "4-6 hours"
+  peakIntensity Int?      // 1-10 scale
+
+  // Moderation
+  status        String    @default("pending") // pending, approved, rejected
+  createdAt     DateTime  @default(now())
+  moderatedAt   DateTime?
+  moderatedBy   String?
+
+  @@index([strainSlug, status])
+  @@index([partnerId])
+  @@index([status])
+}
