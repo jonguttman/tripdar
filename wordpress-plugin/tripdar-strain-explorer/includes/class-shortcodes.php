@@ -28,6 +28,69 @@ class Tripdar_Shortcodes {
     }
 
     /**
+     * Normalize strain data from API format to template format
+     */
+    private function normalize_strain($strain) {
+        if (!is_array($strain)) {
+            return $strain;
+        }
+
+        // Get vibes (API returns 'vibes', normalize to array)
+        $vibes = [];
+        if (isset($strain['vibes']) && is_array($strain['vibes'])) {
+            $vibes = $strain['vibes'];
+        } elseif (isset($strain['vibe']) && is_array($strain['vibe'])) {
+            $vibes = $strain['vibe'];
+        }
+
+        // Get characteristics
+        $chars = isset($strain['characteristics']) ? $strain['characteristics'] : [];
+
+        // Map potency tier to display text
+        $potency_map = [
+            'very-high' => 'Very High',
+            'high' => 'High',
+            'moderate' => 'Moderate',
+            'low' => 'Low',
+            'variable' => 'Variable',
+        ];
+        $potency_tier = isset($chars['potencyTier']) ? $chars['potencyTier'] : 'moderate';
+        $potency = isset($potency_map[$potency_tier]) ? $potency_map[$potency_tier] : ucfirst($potency_tier);
+
+        // Map visual intensity
+        $visual_map = [
+            'very-high' => 'Very High',
+            'high' => 'High',
+            'medium' => 'Medium',
+            'low' => 'Low',
+        ];
+        $visual_tier = isset($chars['visualIntensity']) ? $chars['visualIntensity'] : 'medium';
+        $visual = isset($visual_map[$visual_tier]) ? $visual_map[$visual_tier] : ucfirst($visual_tier);
+
+        // Map stability
+        $stability_tier = isset($chars['experienceStability']) ? $chars['experienceStability'] : 'medium';
+        $stability = ucfirst($stability_tier);
+
+        // Map beginner suitable
+        $beginner = isset($chars['beginnerSuitable']) ? $chars['beginnerSuitable'] : 'maybe';
+
+        return [
+            'slug' => isset($strain['slug']) ? $strain['slug'] : '',
+            'name' => isset($strain['name']) ? $strain['name'] : '',
+            'description' => isset($strain['description']) ? $strain['description'] : '',
+            'vibes' => $vibes,
+            'potency' => $potency,
+            'potencyTier' => $potency_tier,
+            'visual' => $visual,
+            'stability' => $stability,
+            'beginnerFriendly' => $beginner,
+            'species' => isset($strain['species']) ? $strain['species'] : 'Psilocybe cubensis',
+            'origin' => isset($strain['origin']) ? $strain['origin'] : '',
+            'confidenceTier' => isset($strain['confidenceTier']) ? $strain['confidenceTier'] : '',
+        ];
+    }
+
+    /**
      * [tripdar_explorer] - Full strain explorer with filters
      */
     public function render_explorer($atts) {
@@ -108,11 +171,11 @@ class Tripdar_Shortcodes {
 
             <div class="tripdar-explorer__grid">
                 <?php foreach ($strains as $strain): ?>
-                    <?php echo $this->render_strain_card($strain); ?>
+                    <?php echo $this->render_strain_card($this->normalize_strain($strain)); ?>
                 <?php endforeach; ?>
             </div>
 
-            <?php if (!empty($pagination) && $pagination['hasMore']): ?>
+            <?php if (!empty($pagination) && isset($pagination['hasMore']) && $pagination['hasMore']): ?>
             <div class="tripdar-explorer__pagination">
                 <button class="tripdar-btn tripdar-btn--load-more"
                         data-page="2"
@@ -159,7 +222,7 @@ class Tripdar_Shortcodes {
         ?>
         <div class="tripdar-library tripdar-library--cols-<?php echo esc_attr($atts['columns']); ?>">
             <?php foreach ($strains as $strain): ?>
-                <?php echo $this->render_strain_card($strain, 'compact'); ?>
+                <?php echo $this->render_strain_card($this->normalize_strain($strain), 'compact'); ?>
             <?php endforeach; ?>
         </div>
         <?php
@@ -301,78 +364,19 @@ class Tripdar_Shortcodes {
             return $this->render_error('Strain not found.');
         }
 
-        $strain = $response['data']['strain'] ?? null;
-        if (!$strain) {
+        $raw_strain = $response['data']['strain'] ?? null;
+        if (!$raw_strain) {
             return $this->render_error('Strain data unavailable.');
         }
+
+        $strain = $this->normalize_strain($raw_strain);
 
         // Get visualization
         $viz = $this->api_client->get_visualization($atts['slug']);
         $image_url = ($viz && isset($viz['data']['url'])) ? $viz['data']['url'] : '';
 
         ob_start();
-        ?>
-        <div class="tripdar-strain-detail" data-strain-slug="<?php echo esc_attr($strain['slug']); ?>">
-            <div class="tripdar-strain-detail__header">
-                <?php if ($image_url): ?>
-                <div class="tripdar-strain-detail__image">
-                    <img src="<?php echo esc_url($image_url); ?>" alt="<?php echo esc_attr($strain['name']); ?>">
-                </div>
-                <?php endif; ?>
-
-                <div class="tripdar-strain-detail__info">
-                    <h2 class="tripdar-strain-detail__name"><?php echo esc_html($strain['name']); ?></h2>
-
-                    <div class="tripdar-strain-detail__tags">
-                        <?php foreach ($strain['vibe'] as $vibe): ?>
-                        <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($vibe); ?></span>
-                        <?php endforeach; ?>
-                        <span class="tripdar-tag tripdar-tag--potency tripdar-tag--<?php echo esc_attr(strtolower(str_replace(' ', '-', $strain['potency']))); ?>">
-                            <?php echo esc_html($strain['potency']); ?>
-                        </span>
-                        <?php if ($strain['beginnerFriendly'] === 'yes'): ?>
-                        <span class="tripdar-tag tripdar-tag--beginner">Beginner Friendly</span>
-                        <?php endif; ?>
-                    </div>
-                </div>
-            </div>
-
-            <div class="tripdar-strain-detail__body">
-                <div class="tripdar-strain-detail__section">
-                    <h3 class="tripdar-section-title">The Journey</h3>
-                    <p class="tripdar-strain-detail__description"><?php echo esc_html($strain['description']); ?></p>
-                </div>
-
-                <div class="tripdar-strain-detail__attributes">
-                    <div class="tripdar-attribute">
-                        <span class="tripdar-attribute__label">Visual Intensity</span>
-                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['visual']); ?></span>
-                    </div>
-                    <div class="tripdar-attribute">
-                        <span class="tripdar-attribute__label">Stability</span>
-                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['stability']); ?></span>
-                    </div>
-                </div>
-
-                <?php if (!empty($strain['notableTraits'])): ?>
-                <div class="tripdar-strain-detail__section">
-                    <h3 class="tripdar-section-title">Notable Traits</h3>
-                    <ul class="tripdar-traits-list">
-                        <?php foreach ($strain['notableTraits'] as $trait): ?>
-                        <li class="tripdar-trait"><?php echo esc_html($trait); ?></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-                <?php endif; ?>
-            </div>
-
-            <?php if ($atts['show_feedback'] === 'true'): ?>
-            <div class="tripdar-strain-detail__feedback">
-                <?php echo $this->render_feedback_widget($strain['slug']); ?>
-            </div>
-            <?php endif; ?>
-        </div>
-        <?php
+        echo $this->render_strain_detail_html($strain, $image_url, $atts['show_feedback'] === 'true');
         return ob_get_clean();
     }
 
@@ -380,13 +384,20 @@ class Tripdar_Shortcodes {
      * Public method to render strain card (for AJAX)
      */
     public function render_strain_card_public($strain, $variant = 'default') {
-        return $this->render_strain_card($strain, $variant);
+        return $this->render_strain_card($this->normalize_strain($strain), $variant);
     }
 
     /**
      * Public method to render strain detail (for AJAX modal)
      */
     public function render_strain_detail_public($strain, $image_url = '') {
+        return $this->render_strain_detail_html($this->normalize_strain($strain), $image_url, true);
+    }
+
+    /**
+     * Render strain detail HTML
+     */
+    private function render_strain_detail_html($strain, $image_url = '', $show_feedback = true) {
         ob_start();
         ?>
         <div class="tripdar-strain-detail" data-strain-slug="<?php echo esc_attr($strain['slug']); ?>">
@@ -401,10 +412,12 @@ class Tripdar_Shortcodes {
                     <h2 class="tripdar-strain-detail__name"><?php echo esc_html($strain['name']); ?></h2>
 
                     <div class="tripdar-strain-detail__tags">
-                        <?php foreach ($strain['vibe'] as $vibe): ?>
-                        <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($vibe); ?></span>
-                        <?php endforeach; ?>
-                        <span class="tripdar-tag tripdar-tag--potency tripdar-tag--<?php echo esc_attr(strtolower(str_replace(' ', '-', $strain['potency']))); ?>">
+                        <?php if (!empty($strain['vibes']) && is_array($strain['vibes'])): ?>
+                            <?php foreach ($strain['vibes'] as $vibe): ?>
+                            <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($vibe); ?></span>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                        <span class="tripdar-tag tripdar-tag--potency tripdar-tag--<?php echo esc_attr($strain['potencyTier']); ?>">
                             <?php echo esc_html($strain['potency']); ?>
                         </span>
                         <?php if ($strain['beginnerFriendly'] === 'yes'): ?>
@@ -430,22 +443,13 @@ class Tripdar_Shortcodes {
                         <span class="tripdar-attribute__value"><?php echo esc_html($strain['stability']); ?></span>
                     </div>
                 </div>
-
-                <?php if (!empty($strain['notableTraits'])): ?>
-                <div class="tripdar-strain-detail__section">
-                    <h3 class="tripdar-section-title">Notable Traits</h3>
-                    <ul class="tripdar-traits-list">
-                        <?php foreach ($strain['notableTraits'] as $trait): ?>
-                        <li class="tripdar-trait"><?php echo esc_html($trait); ?></li>
-                        <?php endforeach; ?>
-                    </ul>
-                </div>
-                <?php endif; ?>
             </div>
 
+            <?php if ($show_feedback): ?>
             <div class="tripdar-strain-detail__feedback">
                 <?php echo $this->render_feedback_widget($strain['slug']); ?>
             </div>
+            <?php endif; ?>
         </div>
         <?php
         return ob_get_clean();
@@ -477,7 +481,7 @@ class Tripdar_Shortcodes {
                 </div>
                 <?php endif; ?>
                 <div class="tripdar-strain-card__overlay">
-                    <span class="tripdar-strain-card__potency tripdar-potency--<?php echo esc_attr(strtolower(str_replace(' ', '-', $strain['potency']))); ?>">
+                    <span class="tripdar-strain-card__potency tripdar-potency--<?php echo esc_attr($strain['potencyTier']); ?>">
                         <?php echo esc_html($strain['potency']); ?>
                     </span>
                 </div>
@@ -485,9 +489,11 @@ class Tripdar_Shortcodes {
             <div class="tripdar-strain-card__content">
                 <h3 class="tripdar-strain-card__name"><?php echo esc_html($strain['name']); ?></h3>
                 <div class="tripdar-strain-card__vibes">
-                    <?php foreach (array_slice($strain['vibe'], 0, 2) as $vibe): ?>
-                    <span class="tripdar-vibe-tag"><?php echo esc_html($vibe); ?></span>
-                    <?php endforeach; ?>
+                    <?php if (!empty($strain['vibes']) && is_array($strain['vibes'])): ?>
+                        <?php foreach (array_slice($strain['vibes'], 0, 2) as $vibe): ?>
+                        <span class="tripdar-vibe-tag"><?php echo esc_html($vibe); ?></span>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
                 <?php if ($variant !== 'compact'): ?>
                 <p class="tripdar-strain-card__excerpt">
