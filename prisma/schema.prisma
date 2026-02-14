@@ -151,3 +151,89 @@ model AnalyticsSummary {
   @@unique([period, periodStart, strainSlug])
   @@index([period, periodStart])
 }
+
+// ============================================================================
+// Community Confidence (Feature 1)
+// ============================================================================
+
+model StrainConfidence {
+  id                 String   @id @default(cuid())
+  strainSlug         String   @unique
+  baseConfidence     Int      // From strain data (0-100)
+  triedCount         Int      @default(0)
+  ratingCount        Int      @default(0)
+  reportCount        Int      @default(0)
+  avgRating          Float?
+  computedConfidence Int      @default(0) // Weighted combination (0-100)
+  verifiedTier       String   @default("emerging") // emerging, developing, established, verified
+  lastUpdated        DateTime @default(now()) @updatedAt
+
+  @@index([verifiedTier])
+}
+
+// ============================================================================
+// Dosage Curves (Feature 2)
+// ============================================================================
+
+model DoseCurveData {
+  id               String   @id @default(cuid())
+  strainSlug       String
+  doseCategory     String   // MICRODOSE, LOW, MODERATE, HIGH, HEROIC
+  reportCount      Int      @default(0)
+  avgPeakIntensity Float?
+  minPeakIntensity Int?
+  maxPeakIntensity Int?
+  lastUpdated      DateTime @default(now()) @updatedAt
+
+  @@unique([strainSlug, doseCategory])
+  @@index([strainSlug])
+}
+
+// ============================================================================
+// Setting Insights (Feature 4)
+// ============================================================================
+
+model SettingInsight {
+  id                  String   @id @default(cuid())
+  strainSlug          String
+  setting             String   // nature, home, ceremony, social, solo, etc.
+  reportCount         Int      @default(0)
+  avgIntensity        Float?
+  recommendationScore Float    @default(0)
+  lastUpdated         DateTime @default(now()) @updatedAt
+
+  @@unique([strainSlug, setting])
+  @@index([strainSlug, recommendationScore(sort: Desc)])
+}
+
+// ============================================================================
+// User Profiles & Recommendations (Feature 3)
+// ============================================================================
+
+model UserStrainProfile {
+  id          String   @id @default(cuid())
+  sessionHash String
+  strainSlug  String
+  tried       Boolean  @default(true)
+  rating      Int?     // 1-5 if rated
+  createdAt   DateTime @default(now())
+
+  @@unique([sessionHash, strainSlug])
+  @@index([sessionHash])
+  @@index([strainSlug])
+}
+
+model StrainCorrelation {
+  id                String   @id @default(cuid())
+  strainA           String
+  strainB           String
+  coOccurrenceCount Int      @default(0)
+  avgRatingA        Float?
+  avgRatingB        Float?
+  similarityScore   Float    @default(0) // Computed correlation
+  lastUpdated       DateTime @default(now()) @updatedAt
+
+  @@unique([strainA, strainB])
+  @@index([strainA, similarityScore(sort: Desc)])
+  @@index([strainB, similarityScore(sort: Desc)])
+}

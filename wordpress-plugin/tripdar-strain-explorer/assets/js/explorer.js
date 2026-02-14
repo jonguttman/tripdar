@@ -26,6 +26,9 @@
         }
 
         init() {
+            // Load "tried" state from localStorage
+            this.triedStrains = JSON.parse(localStorage.getItem('tripdar_tried') || '[]');
+
             // Filter changes
             this.elements.filterSelects.forEach(select => {
                 select.addEventListener('change', () => this.onFilterChange());
@@ -36,14 +39,25 @@
                 this.elements.loadMoreBtn.addEventListener('click', () => this.loadMore());
             }
 
-            // Strain card clicks
+            // Strain card clicks (but not on the tried button)
             this.container.addEventListener('click', (e) => {
+                // Handle "I've tried this" button
+                const triedBtn = e.target.closest('.tripdar-tried-btn');
+                if (triedBtn) {
+                    e.stopPropagation();
+                    this.handleTriedClick(triedBtn);
+                    return;
+                }
+
                 const card = e.target.closest('.tripdar-strain-card');
                 if (card) {
                     const slug = card.dataset.slug;
                     this.openStrainModal(slug);
                 }
             });
+
+            // Mark already-tried strains
+            this.updateTriedButtons();
 
             // Listen for quiz strain view
             document.addEventListener('tripdar:view-strain', (e) => {
@@ -103,6 +117,9 @@
                     } else {
                         this.elements.grid.insertAdjacentHTML('beforeend', data.data.html);
                     }
+
+                    // Update tried state on new cards
+                    this.updateTriedButtons();
 
                     // Update pagination
                     if (data.data.hasMore) {
@@ -175,6 +192,9 @@
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
 
+            // Track strain view
+            this.trackEvent('strain_view', slug);
+
             // Load strain details
             try {
                 const response = await fetch(tripdarExplorer.ajaxUrl, {
@@ -214,6 +234,50 @@
                     </div>
                 `;
             }
+        }
+
+        handleTriedClick(btn) {
+            const slug = btn.dataset.slug;
+            if (!slug) return;
+
+            if (this.triedStrains.includes(slug)) {
+                // Un-try
+                this.triedStrains = this.triedStrains.filter(s => s !== slug);
+                btn.classList.remove('active');
+                btn.querySelector('.tripdar-tried-btn__text').textContent = "I've tried this";
+            } else {
+                // Mark as tried
+                this.triedStrains.push(slug);
+                btn.classList.add('active');
+                btn.querySelector('.tripdar-tried-btn__text').textContent = 'Tried';
+                this.trackEvent('strain_tried', slug);
+            }
+
+            localStorage.setItem('tripdar_tried', JSON.stringify(this.triedStrains));
+        }
+
+        updateTriedButtons() {
+            this.container.querySelectorAll('.tripdar-tried-btn').forEach(btn => {
+                const slug = btn.dataset.slug;
+                if (this.triedStrains.includes(slug)) {
+                    btn.classList.add('active');
+                    btn.querySelector('.tripdar-tried-btn__text').textContent = 'Tried';
+                }
+            });
+        }
+
+        trackEvent(eventType, entitySlug) {
+            // Fire-and-forget analytics
+            fetch(tripdarExplorer.ajaxUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'tripdar_track_event',
+                    nonce: tripdarExplorer.nonce,
+                    event_type: eventType,
+                    entity_slug: entitySlug
+                })
+            }).catch(() => {}); // Silently ignore errors
         }
 
         closeModal() {
