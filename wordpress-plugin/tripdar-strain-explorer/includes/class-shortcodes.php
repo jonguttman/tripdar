@@ -32,6 +32,12 @@ class Tripdar_Shortcodes {
         add_shortcode('tripdar_reviews', [$this, 'render_reviews']);
         add_shortcode('tripdar_reports', [$this, 'render_trip_reports']);
         add_shortcode('tripdar_report_form', [$this, 'render_report_form']);
+        // New data value shortcodes
+        add_shortcode('tripdar_compare', [$this, 'render_compare']);
+        add_shortcode('tripdar_recommendations', [$this, 'render_recommendations']);
+        add_shortcode('tripdar_similar', [$this, 'render_similar']);
+        add_shortcode('tripdar_dosage_curve', [$this, 'render_dosage_curve']);
+        add_shortcode('tripdar_lineage_tree', [$this, 'render_lineage_tree']);
     }
 
     /**
@@ -989,6 +995,7 @@ class Tripdar_Shortcodes {
                         <span class="tripdar-tag tripdar-tag--beginner">Beginner Friendly</span>
                         <?php endif; ?>
                     </div>
+                    <?php echo $this->render_confidence_badge($strain['slug']); ?>
                 </div>
             </div>
 
@@ -1054,6 +1061,7 @@ class Tripdar_Shortcodes {
                     <span class="tripdar-strain-card__potency tripdar-potency--<?php echo esc_attr($strain['potencyTier']); ?>">
                         <?php echo esc_html($strain['potency']); ?>
                     </span>
+                    <?php echo $this->render_confidence_badge($strain['slug']); ?>
                 </div>
             </div>
             <div class="tripdar-strain-card__content">
@@ -1187,6 +1195,391 @@ class Tripdar_Shortcodes {
         if (strpos($v, 'low') !== false) return 2;
         if (strpos($v, 'variable') !== false) return -1;
         return 3;
+    }
+
+    // =========================================================================
+    // NEW DATA VALUE SHORTCODES
+    // =========================================================================
+
+    /**
+     * [tripdar_compare] - Strain comparison tool
+     *
+     * Usage: [tripdar_compare] or [tripdar_compare strains="golden-teacher,penis-envy"]
+     */
+    public function render_compare($atts) {
+        $atts = shortcode_atts([
+            'strains' => '', // Comma-separated pre-selected strains
+            'max' => 5,
+        ], $atts);
+
+        // Get all strains for the selector
+        $response = $this->api_client->get_strains(1, 50);
+        $all_strains = [];
+        if ($response && isset($response['success']) && $response['success']) {
+            $all_strains = $response['data']['strains'] ?? [];
+        }
+
+        // Pre-selected strains
+        $preselected = array_filter(array_map('trim', explode(',', $atts['strains'])));
+
+        ob_start();
+        ?>
+        <div class="tripdar-compare" data-max="<?php echo esc_attr($atts['max']); ?>">
+            <div class="tripdar-compare__header">
+                <h3 class="tripdar-compare__title">Compare Strains</h3>
+                <p class="tripdar-compare__subtitle">Select 2-5 strains to compare side by side</p>
+            </div>
+
+            <div class="tripdar-compare__selector">
+                <div class="tripdar-compare__selected">
+                    <?php foreach ($preselected as $slug): ?>
+                    <span class="tripdar-compare__chip" data-slug="<?php echo esc_attr($slug); ?>">
+                        <?php echo esc_html(ucwords(str_replace('-', ' ', $slug))); ?>
+                        <button class="tripdar-compare__chip-remove">&times;</button>
+                    </span>
+                    <?php endforeach; ?>
+                </div>
+                <select class="tripdar-compare__dropdown">
+                    <option value="">Add a strain...</option>
+                    <?php foreach ($all_strains as $strain): ?>
+                    <option value="<?php echo esc_attr($strain['slug']); ?>"
+                            <?php echo in_array($strain['slug'], $preselected) ? 'disabled' : ''; ?>>
+                        <?php echo esc_html($strain['name']); ?>
+                    </option>
+                    <?php endforeach; ?>
+                </select>
+                <button class="tripdar-btn tripdar-btn--primary tripdar-compare__run" <?php echo count($preselected) < 2 ? 'disabled' : ''; ?>>
+                    Compare Selected
+                </button>
+            </div>
+
+            <div class="tripdar-compare__loading" style="display: none;">
+                <div class="tripdar-loading-spinner"></div>
+                <span>Comparing strains...</span>
+            </div>
+
+            <div class="tripdar-compare__results" style="display: none;">
+                <!-- Populated via JavaScript -->
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_recommendations] - Personalized strain recommendations
+     */
+    public function render_recommendations($atts) {
+        $atts = shortcode_atts([
+            'limit' => 5,
+            'title' => 'Recommended For You',
+        ], $atts);
+
+        ob_start();
+        ?>
+        <div class="tripdar-recommendations" data-limit="<?php echo esc_attr($atts['limit']); ?>">
+            <div class="tripdar-recommendations__header">
+                <h3 class="tripdar-recommendations__title"><?php echo esc_html($atts['title']); ?></h3>
+                <p class="tripdar-recommendations__subtitle">Based on strains you've tried and rated</p>
+            </div>
+
+            <div class="tripdar-recommendations__content">
+                <div class="tripdar-recommendations__loading">
+                    <div class="tripdar-loading-spinner"></div>
+                    <span>Finding your recommendations...</span>
+                </div>
+
+                <div class="tripdar-recommendations__list" style="display: none;">
+                    <!-- Populated via JavaScript -->
+                </div>
+
+                <div class="tripdar-recommendations__empty" style="display: none;">
+                    <div class="tripdar-recommendations__empty-icon">
+                        <svg viewBox="0 0 60 60" width="60" height="60">
+                            <circle cx="30" cy="30" r="25" fill="none" stroke="currentColor" stroke-width="2" opacity="0.5"/>
+                            <path d="M30 20 L30 35 M30 40 L30 42" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </div>
+                    <p class="tripdar-recommendations__empty-text">
+                        Mark some strains as "I've tried this" to get personalized recommendations!
+                    </p>
+                </div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_similar slug="..."] - Similar strains widget
+     */
+    public function render_similar($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'limit' => 4,
+            'title' => 'Similar Strains',
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_similar($atts['slug'], intval($atts['limit']));
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return ''; // Silently fail - similar strains are optional
+        }
+
+        $similar = $response['data']['similar'] ?? [];
+
+        if (empty($similar)) {
+            return ''; // No similar strains found
+        }
+
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+
+        ob_start();
+        ?>
+        <div class="tripdar-similar">
+            <h4 class="tripdar-similar__title"><?php echo esc_html($atts['title']); ?></h4>
+            <p class="tripdar-similar__subtitle">If you like <?php echo esc_html($strain_name); ?>, you might also enjoy:</p>
+
+            <div class="tripdar-similar__grid">
+                <?php foreach ($similar as $strain): ?>
+                <div class="tripdar-similar__card" data-slug="<?php echo esc_attr($strain['slug']); ?>">
+                    <div class="tripdar-similar__card-content">
+                        <h5 class="tripdar-similar__card-name"><?php echo esc_html($strain['name']); ?></h5>
+                        <div class="tripdar-similar__card-meta">
+                            <span class="tripdar-similar__score" title="Similarity Score">
+                                <?php echo round($strain['score'] * 100); ?>% match
+                            </span>
+                            <?php if (!empty($strain['reason'])): ?>
+                            <span class="tripdar-similar__reason"><?php echo esc_html($strain['reason']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <button class="tripdar-btn tripdar-btn--ghost tripdar-similar__explore">View</button>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_dosage_curve slug="..."] - Dosage curve visualization
+     */
+    public function render_dosage_curve($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'show_legend' => 'true',
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_dosage_curve($atts['slug']);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return ''; // Silently fail if no data
+        }
+
+        $curve = $response['data'] ?? [];
+        $data_points = $curve['dataPoints'] ?? [];
+        $show_legend = filter_var($atts['show_legend'], FILTER_VALIDATE_BOOLEAN);
+
+        if (empty($data_points)) {
+            return ''; // No dosage data available
+        }
+
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+
+        // Dose category display names
+        $dose_labels = [
+            'MICRODOSE' => 'Microdose',
+            'LOW' => 'Low',
+            'MODERATE' => 'Moderate',
+            'HIGH' => 'High',
+            'HEROIC' => 'Heroic',
+        ];
+
+        ob_start();
+        ?>
+        <div class="tripdar-dosage-curve">
+            <h4 class="tripdar-dosage-curve__title">Intensity by Dose</h4>
+            <p class="tripdar-dosage-curve__subtitle">
+                Community-reported peak intensity for <?php echo esc_html($strain_name); ?>
+            </p>
+
+            <div class="tripdar-dosage-curve__chart">
+                <?php foreach ($data_points as $point):
+                    $category = $point['doseCategory'];
+                    $avg = $point['avgPeakIntensity'] ?? 0;
+                    $min = $point['minPeakIntensity'] ?? 0;
+                    $max = $point['maxPeakIntensity'] ?? 0;
+                    $count = $point['reportCount'] ?? 0;
+                    $height_pct = ($avg / 10) * 100;
+                    $range_bottom = ($min / 10) * 100;
+                    $range_top = ($max / 10) * 100;
+                ?>
+                <div class="tripdar-dosage-curve__bar-group">
+                    <div class="tripdar-dosage-curve__bar-wrapper">
+                        <div class="tripdar-dosage-curve__range"
+                             style="bottom: <?php echo $range_bottom; ?>%; height: <?php echo ($range_top - $range_bottom); ?>%;">
+                        </div>
+                        <div class="tripdar-dosage-curve__bar tripdar-dosage-curve__bar--<?php echo esc_attr(strtolower($category)); ?>"
+                             style="height: <?php echo $height_pct; ?>%;"
+                             title="Avg: <?php echo number_format($avg, 1); ?>/10 (<?php echo $count; ?> reports)">
+                        </div>
+                    </div>
+                    <span class="tripdar-dosage-curve__label">
+                        <?php echo esc_html($dose_labels[$category] ?? $category); ?>
+                    </span>
+                    <span class="tripdar-dosage-curve__value"><?php echo number_format($avg, 1); ?></span>
+                </div>
+                <?php endforeach; ?>
+            </div>
+
+            <?php if ($show_legend): ?>
+            <div class="tripdar-dosage-curve__legend">
+                <span class="tripdar-dosage-curve__legend-item">
+                    <span class="tripdar-dosage-curve__legend-bar"></span>
+                    Average intensity
+                </span>
+                <span class="tripdar-dosage-curve__legend-item">
+                    <span class="tripdar-dosage-curve__legend-range"></span>
+                    Range (min-max)
+                </span>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_lineage_tree] - Full interactive lineage tree
+     */
+    public function render_lineage_tree($atts) {
+        $atts = shortcode_atts([
+            'highlight' => '', // Strain to highlight in tree
+        ], $atts);
+
+        $response = $this->api_client->get_lineage_tree();
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return $this->render_error('Could not load lineage tree.');
+        }
+
+        $tree = $response['data'] ?? [];
+        $roots = $tree['roots'] ?? [];
+        $all_nodes = $tree['nodes'] ?? [];
+        $highlight = $atts['highlight'];
+
+        ob_start();
+        ?>
+        <div class="tripdar-lineage-tree" data-highlight="<?php echo esc_attr($highlight); ?>">
+            <div class="tripdar-lineage-tree__header">
+                <h3 class="tripdar-lineage-tree__title">Strain Family Tree</h3>
+                <p class="tripdar-lineage-tree__subtitle">Explore genetic relationships between strains</p>
+            </div>
+
+            <div class="tripdar-lineage-tree__controls">
+                <input type="text"
+                       class="tripdar-lineage-tree__search"
+                       placeholder="Search strains..."
+                       autocomplete="off">
+                <div class="tripdar-lineage-tree__legend">
+                    <span class="tripdar-lineage-tree__legend-item tripdar-lineage-tree__legend-item--gen0">Wild Type</span>
+                    <span class="tripdar-lineage-tree__legend-item tripdar-lineage-tree__legend-item--gen1">1st Gen</span>
+                    <span class="tripdar-lineage-tree__legend-item tripdar-lineage-tree__legend-item--gen2">2nd Gen</span>
+                </div>
+            </div>
+
+            <div class="tripdar-lineage-tree__container">
+                <?php foreach ($roots as $rootId):
+                    $root = $all_nodes[$rootId] ?? null;
+                    if ($root):
+                        $this->render_tree_node($root, $all_nodes, 0, $highlight);
+                    endif;
+                endforeach; ?>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Recursively render tree node
+     */
+    private function render_tree_node($node, $all_nodes, $depth, $highlight = '') {
+        $is_highlighted = ($node['id'] === $highlight);
+        $gen_class = 'gen' . ($node['generation'] ?? 0);
+        ?>
+        <div class="tripdar-tree-node tripdar-tree-node--<?php echo esc_attr($gen_class); ?> <?php echo $is_highlighted ? 'tripdar-tree-node--highlighted' : ''; ?>"
+             data-strain="<?php echo esc_attr($node['id']); ?>">
+            <div class="tripdar-tree-node__content">
+                <span class="tripdar-tree-node__name"><?php echo esc_html($node['name']); ?></span>
+                <span class="tripdar-tree-node__potency tripdar-potency--<?php echo esc_attr($this->get_potency_class($node['potency'] ?? 'Moderate')); ?>">
+                    <?php echo esc_html($node['potency'] ?? ''); ?>
+                </span>
+            </div>
+            <?php if (!empty($node['children'])): ?>
+            <div class="tripdar-tree-node__children">
+                <?php foreach ($node['children'] as $childId):
+                    $child = $all_nodes[$childId] ?? null;
+                    if ($child):
+                        $this->render_tree_node($child, $all_nodes, $depth + 1, $highlight);
+                    endif;
+                endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Render confidence badge
+     */
+    public function render_confidence_badge($slug) {
+        $response = $this->api_client->get_confidence($slug);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return ''; // No confidence data
+        }
+
+        $data = $response['data'] ?? [];
+        $tier = $data['verifiedTier'] ?? 'emerging';
+        $score = $data['computedConfidence'] ?? 0;
+        $tried = $data['triedCount'] ?? 0;
+        $ratings = $data['ratingCount'] ?? 0;
+        $reports = $data['reportCount'] ?? 0;
+
+        $tier_labels = [
+            'verified' => 'Verified',
+            'established' => 'Established',
+            'developing' => 'Developing',
+            'emerging' => 'Emerging',
+        ];
+
+        $tier_icons = [
+            'verified' => '✓✓',
+            'established' => '✓',
+            'developing' => '◐',
+            'emerging' => '○',
+        ];
+
+        ob_start();
+        ?>
+        <div class="tripdar-confidence tripdar-confidence--<?php echo esc_attr($tier); ?>"
+             title="Confidence: <?php echo $score; ?>% | <?php echo $tried; ?> tried, <?php echo $ratings; ?> ratings, <?php echo $reports; ?> reports">
+            <span class="tripdar-confidence__icon"><?php echo $tier_icons[$tier] ?? '○'; ?></span>
+            <span class="tripdar-confidence__label"><?php echo esc_html($tier_labels[$tier] ?? 'Unknown'); ?></span>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     /**
