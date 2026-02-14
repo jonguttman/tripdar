@@ -78,28 +78,38 @@ export function StrainExplorer() {
 
         if (data.success && data.images) {
           // Match images to strains by name
+          // Prioritize exact matches to avoid partial match collisions (e.g., "Penis Envy" matching "Albino Penis Envy")
           const strainsWithImages = STRAIN_DATA.map((strain) => {
             const normalizedStrainName = normalizeName(strain.name);
 
-            const matchingImage = data.images.find((img: BlobImage) => {
+            // First, try to find an exact match
+            let matchingImage = data.images.find((img: BlobImage) => {
               if (!img.strainName) return false;
               const normalizedImgName = normalizeName(img.strainName);
-
-              // Exact match
-              if (normalizedImgName === normalizedStrainName) return true;
-
-              // Partial matches (Thai Pink Buffalo → Pink Buffalo)
-              if (normalizedImgName.includes(normalizedStrainName)) return true;
-              if (normalizedStrainName.includes(normalizedImgName)) return true;
-
-              // Word-based matching for cases like "Ghost TAT" matching "Ghost"
-              const imgWords = normalizedImgName.split(" ");
-              const strainWords = normalizedStrainName.split(" ");
-              const matchingWords = strainWords.filter(w => imgWords.includes(w));
-              if (matchingWords.length >= 1 && matchingWords.length === strainWords.length) return true;
-
-              return false;
+              return normalizedImgName === normalizedStrainName;
             });
+
+            // Only fall back to partial matching if no exact match found
+            if (!matchingImage) {
+              matchingImage = data.images.find((img: BlobImage) => {
+                if (!img.strainName) return false;
+                const normalizedImgName = normalizeName(img.strainName);
+
+                // Partial matches (Thai Pink Buffalo → Pink Buffalo)
+                // But avoid matching shorter strain names to longer image names
+                // e.g., don't let "Penis Envy" match "Albino Penis Envy"
+                if (normalizedStrainName.includes(normalizedImgName)) return true;
+
+                // Word-based matching for cases like "Ghost TAT" matching "Ghost"
+                const imgWords = normalizedImgName.split(" ");
+                const strainWords = normalizedStrainName.split(" ");
+                const matchingWords = strainWords.filter(w => imgWords.includes(w));
+                if (matchingWords.length >= 1 && matchingWords.length === strainWords.length) return true;
+
+                return false;
+              });
+            }
+
             return {
               ...strain,
               image: matchingImage?.url,
