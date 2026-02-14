@@ -40,19 +40,19 @@ export async function aggregatePeriod(
     counts[e.eventType] = e._count.id;
   }
 
-  // Upsert overall summary
+  // Upsert overall summary (empty string = overall, not strain-specific)
   await prisma.analyticsSummary.upsert({
     where: {
       period_periodStart_strainSlug: {
         period,
         periodStart,
-        strainSlug: null,
+        strainSlug: "",
       },
     },
     create: {
       period,
       periodStart,
-      strainSlug: null,
+      strainSlug: "",
       views: counts.page_view || 0,
       searches: counts.search || 0,
       quizCompletions: counts.quiz_complete || 0,

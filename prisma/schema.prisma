@@ -139,7 +139,7 @@ model AnalyticsSummary {
   id              String   @id @default(cuid())
   period          String   // daily, weekly, monthly
   periodStart     DateTime
-  strainSlug      String?  // null for overall summary
+  strainSlug      String   @default("") // empty string for overall summary
   views           Int      @default(0)
   searches        Int      @default(0)
   quizCompletions Int      @default(0)
