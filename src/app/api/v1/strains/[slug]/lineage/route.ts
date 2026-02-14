@@ -15,77 +15,16 @@ import {
   recordSignal,
   createMeta,
   ApiSuccessResponse,
+  ApiErrorResponse,
 } from "@/domain/partner";
-import { loadStrainData } from "@/domain/strain/blob-store";
-import { InternalStrain, StrainLineageNode } from "@/domain/strain/types";
+import { getStrainLineage, getDescendants, getAncestors, LineageNode } from "@/domain/lineage";
+import { getStrainBySlug } from "@/domain/strain/data";
 
 export interface LineageResponse {
-  lineage: StrainLineageNode;
+  lineage: LineageNode;
+  descendants: string[];
+  ancestors: string[];
   meta: ReturnType<typeof createMeta>;
-}
-
-/**
- * Build a lineage tree node from a strain
- */
-function buildLineageNode(
-  strain: InternalStrain,
-  allStrains: InternalStrain[],
-  depth: number = 0,
-  maxDepth: number = 5,
-  visited: Set<string> = new Set()
-): StrainLineageNode {
-  // Prevent infinite loops
-  if (visited.has(strain.id)) {
-    return {
-      id: strain.id,
-      name: strain.name,
-      potency: strain.potency,
-      beginner: strain.beginner,
-      parents: [],
-      children: [],
-      lineageNotes: strain.lineageNotes,
-      generation: strain.generation,
-    };
-  }
-
-  visited.add(strain.id);
-
-  // Get parent nodes recursively (up to maxDepth)
-  const parents: StrainLineageNode[] = [];
-  if (depth < maxDepth && strain.parentStrains && strain.parentStrains.length > 0) {
-    for (const parentId of strain.parentStrains) {
-      const parentStrain = allStrains.find(s => s.id === parentId);
-      if (parentStrain) {
-        parents.push(buildLineageNode(parentStrain, allStrains, depth + 1, maxDepth, visited));
-      }
-    }
-  }
-
-  // Find children (strains that list this strain as a parent)
-  const children = allStrains
-    .filter(s => s.parentStrains?.includes(strain.id))
-    .map(s => s.id);
-
-  return {
-    id: strain.id,
-    name: strain.name,
-    potency: strain.potency,
-    beginner: strain.beginner,
-    parents,
-    children,
-    lineageNotes: strain.lineageNotes,
-    generation: strain.generation,
-  };
-}
-
-/**
- * Generate URL-safe slug from strain name
- */
-function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
 }
 
 export async function GET(
@@ -102,29 +41,31 @@ export async function GET(
   const { slug } = await params;
 
   return withLogging(context, `/api/v1/strains/${slug}/lineage`, async () => {
-    const strains = await loadStrainData();
-
-    // Find the strain
-    const strain = strains.find(s => {
-      const strainSlug = generateSlug(s.name);
-      return strainSlug === slug || s.id === slug;
-    });
-
+    // Check strain exists
+    const strain = getStrainBySlug(slug);
     if (!strain) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            code: "STRAIN_NOT_FOUND",
-            message: `Strain "${slug}" not found`,
-          },
-        },
-        { status: 404 }
+      return addPartnerHeaders(
+        NextResponse.json<ApiErrorResponse>(
+          { success: false, error: { code: "NOT_FOUND", message: "Strain not found" } },
+          { status: 404 }
+        ),
+        partner,
+        context
       );
     }
 
-    // Build lineage tree
-    const lineage = buildLineageNode(strain, strains);
+    // Get lineage data using the new service
+    const lineageNode = getStrainLineage(slug);
+    if (!lineageNode) {
+      return addPartnerHeaders(
+        NextResponse.json<ApiErrorResponse>(
+          { success: false, error: { code: "NOT_FOUND", message: "Lineage data not available" } },
+          { status: 404 }
+        ),
+        partner,
+        context
+      );
+    }
 
     // Record signal
     recordSignal(partner.id, "lineage_view", sessionHash, [slug]);
@@ -132,7 +73,9 @@ export async function GET(
     const response = NextResponse.json<ApiSuccessResponse<LineageResponse>>({
       success: true,
       data: {
-        lineage,
+        lineage: lineageNode,
+        descendants: getDescendants(slug),
+        ancestors: getAncestors(slug),
         meta: createMeta(),
       },
     });
