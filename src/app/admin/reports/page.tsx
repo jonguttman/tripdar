@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
 
 interface TripReport {
   id: string;
@@ -25,7 +24,6 @@ interface TripReport {
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
 export default function ReportsAdminPage() {
-  const { data: session, status } = useSession();
   const [reports, setReports] = useState<TripReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +32,6 @@ export default function ReportsAdminPage() {
   const [expandedReport, setExpandedReport] = useState<string | null>(null);
   const [moderating, setModerating] = useState<string | null>(null);
 
-  // Load reports
   const loadReports = useCallback(async () => {
     try {
       setLoading(true);
@@ -47,7 +44,7 @@ export default function ReportsAdminPage() {
       } else {
         setError(data.error?.message || "Failed to load reports");
       }
-    } catch (err) {
+    } catch {
       setError("Network error loading reports");
     } finally {
       setLoading(false);
@@ -55,12 +52,9 @@ export default function ReportsAdminPage() {
   }, [statusFilter]);
 
   useEffect(() => {
-    if (session) {
-      loadReports();
-    }
-  }, [session, loadReports]);
+    loadReports();
+  }, [loadReports]);
 
-  // Clear messages after 5 seconds
   useEffect(() => {
     if (success) {
       const timer = setTimeout(() => setSuccess(null), 5000);
@@ -75,7 +69,6 @@ export default function ReportsAdminPage() {
     }
   }, [error]);
 
-  // Moderate report
   const handleModerate = async (reportId: string, newStatus: "approved" | "rejected") => {
     setModerating(reportId);
     try {
@@ -89,7 +82,6 @@ export default function ReportsAdminPage() {
 
       if (data.success) {
         setSuccess(`Report ${newStatus}`);
-        // Update in list
         setReports((prev) =>
           prev.map((r) =>
             r.id === reportId
@@ -100,37 +92,13 @@ export default function ReportsAdminPage() {
       } else {
         setError(data.error?.message || "Failed to moderate report");
       }
-    } catch (err) {
+    } catch {
       setError("Network error");
     } finally {
       setModerating(null);
     }
   };
 
-  // Show sign-in prompt if not authenticated
-  if (status === "loading") {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loading}>Loading...</div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>Trip Reports Moderation</h1>
-          <p style={styles.subtitle}>Sign in with GitHub to manage trip reports.</p>
-          <button onClick={() => signIn("github")} style={styles.primaryButton}>
-            Sign in with GitHub
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Format date
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("en-US", {
@@ -142,7 +110,6 @@ export default function ReportsAdminPage() {
     });
   };
 
-  // Get dose category color
   const getDoseCategoryStyle = (category: string) => {
     const colors: Record<string, { bg: string; color: string }> = {
       MICRODOSE: { bg: "#dbeafe", color: "#1e40af" },
@@ -154,7 +121,6 @@ export default function ReportsAdminPage() {
     return colors[category] || { bg: "#e5e7eb", color: "#374151" };
   };
 
-  // Get status badge style
   const getStatusStyle = (reportStatus: string) => {
     switch (reportStatus) {
       case "pending":
@@ -170,24 +136,13 @@ export default function ReportsAdminPage() {
 
   return (
     <div style={styles.container}>
-      {/* Header */}
       <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Trip Reports Moderation</h1>
-          <p style={styles.subtitle}>
-            Signed in as {session.user?.email} &bull;{" "}
-            <button onClick={() => signOut()} style={styles.linkButton}>
-              Sign out
-            </button>
-          </p>
-        </div>
+        <h1 style={styles.title}>Trip Reports</h1>
       </div>
 
-      {/* Messages */}
       {error && <div style={styles.errorMessage}>{error}</div>}
       {success && <div style={styles.successMessage}>{success}</div>}
 
-      {/* Status Filter */}
       <div style={styles.filterBar}>
         <span style={styles.filterLabel}>Filter by status:</span>
         {(["all", "pending", "approved", "rejected"] as StatusFilter[]).map((s) => (
@@ -204,7 +159,6 @@ export default function ReportsAdminPage() {
         ))}
       </div>
 
-      {/* Reports List */}
       {loading ? (
         <div style={styles.loading}>Loading trip reports...</div>
       ) : reports.length === 0 ? (
@@ -218,20 +172,10 @@ export default function ReportsAdminPage() {
               <div style={styles.reportHeader}>
                 <div style={styles.reportMeta}>
                   <span style={styles.strainSlug}>{report.strainSlug}</span>
-                  <span
-                    style={{
-                      ...styles.doseBadge,
-                      ...getDoseCategoryStyle(report.doseCategory),
-                    }}
-                  >
+                  <span style={{ ...styles.doseBadge, ...getDoseCategoryStyle(report.doseCategory) }}>
                     {report.doseCategory} ({report.doseAmount})
                   </span>
-                  <span
-                    style={{
-                      ...styles.statusBadge,
-                      ...getStatusStyle(report.status),
-                    }}
-                  >
+                  <span style={{ ...styles.statusBadge, ...getStatusStyle(report.status) }}>
                     {report.status}
                   </span>
                 </div>
@@ -265,9 +209,7 @@ export default function ReportsAdminPage() {
               <p
                 style={{
                   ...styles.reportBody,
-                  ...(expandedReport === report.id
-                    ? {}
-                    : { maxHeight: "6em", overflow: "hidden" }),
+                  ...(expandedReport === report.id ? {} : { maxHeight: "6em", overflow: "hidden" }),
                 }}
               >
                 {report.body}
@@ -275,9 +217,7 @@ export default function ReportsAdminPage() {
 
               {report.body.length > 300 && (
                 <button
-                  onClick={() =>
-                    setExpandedReport(expandedReport === report.id ? null : report.id)
-                  }
+                  onClick={() => setExpandedReport(expandedReport === report.id ? null : report.id)}
                   style={styles.linkButton}
                 >
                   {expandedReport === report.id ? "Show less" : "Show more"}
@@ -290,8 +230,7 @@ export default function ReportsAdminPage() {
                   {report.moderatedAt && (
                     <>
                       <span style={styles.infoDivider}>•</span>
-                      <span style={styles.infoLabel}>Moderated:</span>{" "}
-                      {formatDate(report.moderatedAt)} by {report.moderatedBy}
+                      <span style={styles.infoLabel}>Moderated:</span> {formatDate(report.moderatedAt)} by {report.moderatedBy}
                     </>
                   )}
                 </div>
@@ -325,38 +264,16 @@ export default function ReportsAdminPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    maxWidth: "1000px",
-    margin: "0 auto",
     padding: "2rem",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   },
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
     marginBottom: "1.5rem",
-    paddingBottom: "1rem",
-    borderBottom: "1px solid #e5e7eb",
   },
   title: {
-    fontSize: "1.75rem",
+    fontSize: "1.5rem",
     fontWeight: 600,
     margin: 0,
     color: "#111827",
-  },
-  subtitle: {
-    fontSize: "0.875rem",
-    color: "#6b7280",
-    margin: "0.25rem 0 0",
-  },
-  card: {
-    background: "white",
-    borderRadius: "12px",
-    padding: "2rem",
-    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-    textAlign: "center" as const,
-    maxWidth: "400px",
-    margin: "4rem auto",
   },
   linkButton: {
     background: "none",
@@ -366,17 +283,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "inherit",
     padding: 0,
     textDecoration: "underline",
-  },
-  primaryButton: {
-    background: "#6d28d9",
-    color: "white",
-    border: "none",
-    padding: "0.75rem 1.5rem",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    fontWeight: 500,
-    cursor: "pointer",
-    marginTop: "1rem",
   },
   errorMessage: {
     background: "#fee2e2",
@@ -430,7 +336,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "3rem",
     color: "#9ca3af",
     fontStyle: "italic",
-    background: "#f9fafb",
+    background: "white",
     borderRadius: "12px",
     border: "2px dashed #e5e7eb",
   },

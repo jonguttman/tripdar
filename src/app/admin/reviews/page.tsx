@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
 
 interface Review {
   id: string;
@@ -20,7 +19,6 @@ interface Review {
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
 
 export default function ReviewsAdminPage() {
-  const { data: session, status } = useSession();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +27,6 @@ export default function ReviewsAdminPage() {
   const [expandedReview, setExpandedReview] = useState<string | null>(null);
   const [moderating, setModerating] = useState<string | null>(null);
 
-  // Load reviews
   const loadReviews = useCallback(async () => {
     try {
       setLoading(true);
@@ -42,7 +39,7 @@ export default function ReviewsAdminPage() {
       } else {
         setError(data.error?.message || "Failed to load reviews");
       }
-    } catch (err) {
+    } catch {
       setError("Network error loading reviews");
     } finally {
       setLoading(false);
@@ -50,12 +47,9 @@ export default function ReviewsAdminPage() {
   }, [statusFilter]);
 
   useEffect(() => {
-    if (session) {
-      loadReviews();
-    }
-  }, [session, loadReviews]);
+    loadReviews();
+  }, [loadReviews]);
 
-  // Clear messages after 5 seconds
   useEffect(() => {
     if (success) {
       const timer = setTimeout(() => setSuccess(null), 5000);
@@ -70,7 +64,6 @@ export default function ReviewsAdminPage() {
     }
   }, [error]);
 
-  // Moderate review
   const handleModerate = async (reviewId: string, newStatus: "approved" | "rejected") => {
     setModerating(reviewId);
     try {
@@ -84,7 +77,6 @@ export default function ReviewsAdminPage() {
 
       if (data.success) {
         setSuccess(`Review ${newStatus}`);
-        // Update in list
         setReviews((prev) =>
           prev.map((r) =>
             r.id === reviewId
@@ -95,37 +87,13 @@ export default function ReviewsAdminPage() {
       } else {
         setError(data.error?.message || "Failed to moderate review");
       }
-    } catch (err) {
+    } catch {
       setError("Network error");
     } finally {
       setModerating(null);
     }
   };
 
-  // Show sign-in prompt if not authenticated
-  if (status === "loading") {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loading}>Loading...</div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>Reviews Moderation</h1>
-          <p style={styles.subtitle}>Sign in with GitHub to manage reviews.</p>
-          <button onClick={() => signIn("github")} style={styles.primaryButton}>
-            Sign in with GitHub
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Format date
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("en-US", {
@@ -137,12 +105,10 @@ export default function ReviewsAdminPage() {
     });
   };
 
-  // Render stars
   const renderStars = (rating: number) => {
     return "★".repeat(rating) + "☆".repeat(5 - rating);
   };
 
-  // Get status badge style
   const getStatusStyle = (reviewStatus: string) => {
     switch (reviewStatus) {
       case "pending":
@@ -158,24 +124,13 @@ export default function ReviewsAdminPage() {
 
   return (
     <div style={styles.container}>
-      {/* Header */}
       <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Reviews Moderation</h1>
-          <p style={styles.subtitle}>
-            Signed in as {session.user?.email} &bull;{" "}
-            <button onClick={() => signOut()} style={styles.linkButton}>
-              Sign out
-            </button>
-          </p>
-        </div>
+        <h1 style={styles.title}>Reviews</h1>
       </div>
 
-      {/* Messages */}
       {error && <div style={styles.errorMessage}>{error}</div>}
       {success && <div style={styles.successMessage}>{success}</div>}
 
-      {/* Status Filter */}
       <div style={styles.filterBar}>
         <span style={styles.filterLabel}>Filter by status:</span>
         {(["all", "pending", "approved", "rejected"] as StatusFilter[]).map((s) => (
@@ -192,7 +147,6 @@ export default function ReviewsAdminPage() {
         ))}
       </div>
 
-      {/* Reviews List */}
       {loading ? (
         <div style={styles.loading}>Loading reviews...</div>
       ) : reviews.length === 0 ? (
@@ -207,12 +161,7 @@ export default function ReviewsAdminPage() {
                 <div style={styles.reviewMeta}>
                   <span style={styles.strainSlug}>{review.strainSlug}</span>
                   <span style={styles.stars}>{renderStars(review.rating)}</span>
-                  <span
-                    style={{
-                      ...styles.statusBadge,
-                      ...getStatusStyle(review.status),
-                    }}
-                  >
+                  <span style={{ ...styles.statusBadge, ...getStatusStyle(review.status) }}>
                     {review.status}
                   </span>
                 </div>
@@ -224,9 +173,7 @@ export default function ReviewsAdminPage() {
               <p
                 style={{
                   ...styles.reviewBody,
-                  ...(expandedReview === review.id
-                    ? {}
-                    : { maxHeight: "4.5em", overflow: "hidden" }),
+                  ...(expandedReview === review.id ? {} : { maxHeight: "4.5em", overflow: "hidden" }),
                 }}
               >
                 {review.body}
@@ -234,9 +181,7 @@ export default function ReviewsAdminPage() {
 
               {review.body.length > 200 && (
                 <button
-                  onClick={() =>
-                    setExpandedReview(expandedReview === review.id ? null : review.id)
-                  }
+                  onClick={() => setExpandedReview(expandedReview === review.id ? null : review.id)}
                   style={styles.linkButton}
                 >
                   {expandedReview === review.id ? "Show less" : "Show more"}
@@ -249,8 +194,7 @@ export default function ReviewsAdminPage() {
                   {review.moderatedAt && (
                     <>
                       <span style={styles.infoDivider}>•</span>
-                      <span style={styles.infoLabel}>Moderated:</span>{" "}
-                      {formatDate(review.moderatedAt)} by {review.moderatedBy}
+                      <span style={styles.infoLabel}>Moderated:</span> {formatDate(review.moderatedAt)} by {review.moderatedBy}
                     </>
                   )}
                 </div>
@@ -284,38 +228,16 @@ export default function ReviewsAdminPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    maxWidth: "1000px",
-    margin: "0 auto",
     padding: "2rem",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   },
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
     marginBottom: "1.5rem",
-    paddingBottom: "1rem",
-    borderBottom: "1px solid #e5e7eb",
   },
   title: {
-    fontSize: "1.75rem",
+    fontSize: "1.5rem",
     fontWeight: 600,
     margin: 0,
     color: "#111827",
-  },
-  subtitle: {
-    fontSize: "0.875rem",
-    color: "#6b7280",
-    margin: "0.25rem 0 0",
-  },
-  card: {
-    background: "white",
-    borderRadius: "12px",
-    padding: "2rem",
-    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-    textAlign: "center" as const,
-    maxWidth: "400px",
-    margin: "4rem auto",
   },
   linkButton: {
     background: "none",
@@ -325,17 +247,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "inherit",
     padding: 0,
     textDecoration: "underline",
-  },
-  primaryButton: {
-    background: "#6d28d9",
-    color: "white",
-    border: "none",
-    padding: "0.75rem 1.5rem",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    fontWeight: 500,
-    cursor: "pointer",
-    marginTop: "1rem",
   },
   errorMessage: {
     background: "#fee2e2",
@@ -389,7 +300,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "3rem",
     color: "#9ca3af",
     fontStyle: "italic",
-    background: "#f9fafb",
+    background: "white",
     borderRadius: "12px",
     border: "2px dashed #e5e7eb",
   },

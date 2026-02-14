@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
 import {
   POTENCY_OPTIONS,
   STABILITY_OPTIONS,
@@ -41,7 +40,6 @@ const emptyStrain: Omit<Strain, "id" | "createdAt" | "updatedAt"> = {
 };
 
 export default function StrainsAdminPage() {
-  const { data: session, status } = useSession();
   const [strains, setStrains] = useState<Strain[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,30 +80,20 @@ export default function StrainsAdminPage() {
   // Load visualization URLs
   const loadVisualizationUrls = useCallback(async () => {
     try {
-      const res = await fetch("/api/v1/strains?pageSize=100", {
-        headers: { "X-API-Key": "internal" },
-      });
+      const res = await fetch("/api/admin/strains/visualizations");
       const data = await res.json();
       if (data.success) {
-        const urls: Record<string, string> = {};
-        for (const strain of data.data.strains) {
-          if (strain.visualizationRef) {
-            urls[strain.id] = strain.visualizationRef;
-          }
-        }
-        setVisualizationUrls(urls);
+        setVisualizationUrls(data.data.visualizations);
       }
-    } catch (err) {
+    } catch {
       console.error("Failed to load visualization URLs");
     }
   }, []);
 
   useEffect(() => {
-    if (session) {
-      loadStrains();
-      loadVisualizationUrls();
-    }
-  }, [session, loadStrains, loadVisualizationUrls]);
+    loadStrains();
+    loadVisualizationUrls();
+  }, [loadStrains, loadVisualizationUrls]);
 
   // Clear messages after 5 seconds
   useEffect(() => {
@@ -299,32 +287,6 @@ export default function StrainsAdminPage() {
       setLoading(false);
     }
   };
-
-  // Auth loading state
-  if (status === "loading") {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <p style={styles.loading}>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Not authenticated
-  if (!session) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>Strain Admin</h1>
-          <p style={styles.subtitle}>Sign in with GitHub to continue</p>
-          <button onClick={() => signIn("github")} style={styles.button}>
-            Sign in with GitHub
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   // Modal content
   const renderModal = () => {
@@ -530,10 +492,7 @@ export default function StrainsAdminPage() {
       {/* Header */}
       <div style={styles.header}>
         <div>
-          <h1 style={styles.title}>Strain Admin</h1>
-          <p style={styles.subtitle}>
-            Signed in as {session.user?.email}
-          </p>
+          <h1 style={styles.title}>Strains</h1>
         </div>
         <div style={styles.headerActions}>
           <button onClick={openCreate} style={styles.button}>
@@ -541,9 +500,6 @@ export default function StrainsAdminPage() {
           </button>
           <button onClick={initializeStorage} style={styles.secondaryButton}>
             Initialize Storage
-          </button>
-          <button onClick={() => signOut()} style={styles.logoutButton}>
-            Sign Out
           </button>
         </div>
       </div>
