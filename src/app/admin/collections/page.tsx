@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
 
 interface Collection {
   id: string;
@@ -32,20 +31,17 @@ const emptyCollection: Omit<Collection, "id" | "slug" | "createdAt" | "updatedAt
 };
 
 export default function CollectionsAdminPage() {
-  const { data: session, status } = useSession();
   const [collections, setCollections] = useState<Collection[]>([]);
   const [strains, setStrains] = useState<Strain[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  // Modal state
   const [editingCollection, setEditingCollection] = useState<Collection | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState(emptyCollection);
   const [tagsInput, setTagsInput] = useState("");
 
-  // Load collections
   const loadCollections = useCallback(async () => {
     try {
       setLoading(true);
@@ -57,14 +53,13 @@ export default function CollectionsAdminPage() {
       } else {
         setError(data.error?.message || "Failed to load collections");
       }
-    } catch (err) {
+    } catch {
       setError("Network error loading collections");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Load strains for selection
   const loadStrains = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/strains");
@@ -72,19 +67,16 @@ export default function CollectionsAdminPage() {
       if (data.success) {
         setStrains(data.data.strains);
       }
-    } catch (err) {
+    } catch {
       console.error("Failed to load strains");
     }
   }, []);
 
   useEffect(() => {
-    if (session) {
-      loadCollections();
-      loadStrains();
-    }
-  }, [session, loadCollections, loadStrains]);
+    loadCollections();
+    loadStrains();
+  }, [loadCollections, loadStrains]);
 
-  // Clear messages after 5 seconds
   useEffect(() => {
     if (success) {
       const timer = setTimeout(() => setSuccess(null), 5000);
@@ -99,7 +91,6 @@ export default function CollectionsAdminPage() {
     }
   }, [error]);
 
-  // Form handlers
   const openCreate = () => {
     setFormData(emptyCollection);
     setTagsInput("");
@@ -134,16 +125,8 @@ export default function CollectionsAdminPage() {
       setLoading(true);
       setError(null);
 
-      // Parse tags from input
-      const tags = tagsInput
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
-
-      const payload = {
-        ...formData,
-        tags,
-      };
+      const tags = tagsInput.split(",").map((t) => t.trim()).filter(Boolean);
+      const payload = { ...formData, tags };
 
       let res;
       if (isCreating) {
@@ -169,7 +152,7 @@ export default function CollectionsAdminPage() {
       } else {
         setError(data?.error?.message || "Operation failed");
       }
-    } catch (err) {
+    } catch {
       setError("Network error");
     } finally {
       setLoading(false);
@@ -194,40 +177,13 @@ export default function CollectionsAdminPage() {
       } else {
         setError(data.error?.message || "Delete failed");
       }
-    } catch (err) {
+    } catch {
       setError("Network error");
     } finally {
       setLoading(false);
     }
   };
 
-  // Auth loading state
-  if (status === "loading") {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <p style={styles.loading}>Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Not authenticated
-  if (!session) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>Collections Admin</h1>
-          <p style={styles.subtitle}>Sign in with GitHub to continue</p>
-          <button onClick={() => signIn("github")} style={styles.button}>
-            Sign in with GitHub
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Modal content
   const renderModal = () => {
     if (!isCreating && !editingCollection) return null;
 
@@ -272,14 +228,10 @@ export default function CollectionsAdminPage() {
               style={{ ...styles.select, height: "200px" }}
             >
               {strains.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
+                <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <small style={styles.helpText}>
-              Hold Ctrl/Cmd to select multiple. Selected: {formData.strains.length}
-            </small>
+            <small style={styles.helpText}>Hold Ctrl/Cmd to select multiple. Selected: {formData.strains.length}</small>
           </div>
 
           <div style={styles.formGrid}>
@@ -317,9 +269,7 @@ export default function CollectionsAdminPage() {
           </div>
 
           <div style={styles.modalActions}>
-            <button onClick={closeModal} style={styles.cancelButton}>
-              Cancel
-            </button>
+            <button onClick={closeModal} style={styles.cancelButton}>Cancel</button>
             <button
               onClick={handleSubmit}
               disabled={loading || !formData.name || !formData.description}
@@ -335,32 +285,14 @@ export default function CollectionsAdminPage() {
 
   return (
     <div style={styles.container}>
-      {/* Header */}
       <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Collections Admin</h1>
-          <p style={styles.subtitle}>
-            Signed in as {session.user?.email}
-          </p>
-        </div>
-        <div style={styles.headerActions}>
-          <button onClick={openCreate} style={styles.button}>
-            + Add Collection
-          </button>
-          <a href="/admin/strains" style={styles.secondaryButton}>
-            Manage Strains
-          </a>
-          <button onClick={() => signOut()} style={styles.logoutButton}>
-            Sign Out
-          </button>
-        </div>
+        <h1 style={styles.title}>Collections</h1>
+        <button onClick={openCreate} style={styles.button}>+ Add Collection</button>
       </div>
 
-      {/* Messages */}
       {error && <div style={styles.errorBox}>{error}</div>}
       {success && <div style={styles.successBox}>{success}</div>}
 
-      {/* Collection List */}
       <div style={styles.collectionList}>
         {loading && collections.length === 0 ? (
           <p style={styles.loading}>Loading collections...</p>
@@ -372,9 +304,7 @@ export default function CollectionsAdminPage() {
               <div style={styles.collectionInfo}>
                 <div style={styles.collectionHeader}>
                   <h3 style={styles.collectionName}>{collection.name}</h3>
-                  {collection.featured && (
-                    <span style={styles.featuredBadge}>Featured</span>
-                  )}
+                  {collection.featured && <span style={styles.featuredBadge}>Featured</span>}
                 </div>
                 <p style={styles.collectionDesc}>{collection.description}</p>
                 <div style={styles.collectionMeta}>
@@ -386,19 +316,14 @@ export default function CollectionsAdminPage() {
                 </div>
               </div>
               <div style={styles.collectionActions}>
-                <button onClick={() => openEdit(collection)} style={styles.editButton}>
-                  Edit
-                </button>
-                <button onClick={() => handleDelete(collection)} style={styles.deleteButton}>
-                  Delete
-                </button>
+                <button onClick={() => openEdit(collection)} style={styles.editButton}>Edit</button>
+                <button onClick={() => handleDelete(collection)} style={styles.deleteButton}>Delete</button>
               </div>
             </div>
           ))
         )}
       </div>
 
-      {/* Modal */}
       {renderModal()}
     </div>
   );
@@ -406,44 +331,19 @@ export default function CollectionsAdminPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    minHeight: "100vh",
-    backgroundColor: "#f5f5f5",
-    padding: "20px",
-    fontFamily: "system-ui, sans-serif",
+    padding: "2rem",
   },
   header: {
     display: "flex",
     justifyContent: "space-between",
     alignItems: "center",
-    maxWidth: "1000px",
-    margin: "0 auto 24px",
-    padding: "20px 24px",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-  },
-  headerActions: {
-    display: "flex",
-    gap: "12px",
-  },
-  card: {
-    maxWidth: "400px",
-    margin: "100px auto",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    padding: "32px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-    textAlign: "center" as const,
+    marginBottom: "1.5rem",
   },
   title: {
-    margin: "0 0 4px",
-    fontSize: "24px",
-    fontWeight: "600",
-  },
-  subtitle: {
+    fontSize: "1.5rem",
+    fontWeight: 600,
     margin: 0,
-    color: "#666",
-    fontSize: "14px",
+    color: "#111827",
   },
   button: {
     padding: "10px 20px",
@@ -454,27 +354,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     borderRadius: "8px",
     cursor: "pointer",
-    textDecoration: "none",
-  },
-  secondaryButton: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "500",
-    backgroundColor: "white",
-    color: "#666",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    cursor: "pointer",
-    textDecoration: "none",
-  },
-  logoutButton: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "500",
-    backgroundColor: "transparent",
-    color: "#666",
-    border: "none",
-    cursor: "pointer",
   },
   loading: {
     textAlign: "center" as const,
@@ -482,26 +361,22 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "40px",
   },
   errorBox: {
-    maxWidth: "1000px",
-    margin: "0 auto 16px",
     padding: "12px 20px",
     backgroundColor: "#fef2f2",
     border: "1px solid #fecaca",
     borderRadius: "8px",
     color: "#dc2626",
+    marginBottom: "1rem",
   },
   successBox: {
-    maxWidth: "1000px",
-    margin: "0 auto 16px",
     padding: "12px 20px",
     backgroundColor: "#f0fdf4",
     border: "1px solid #bbf7d0",
     borderRadius: "8px",
     color: "#16a34a",
+    marginBottom: "1rem",
   },
   collectionList: {
-    maxWidth: "1000px",
-    margin: "0 auto",
     display: "flex",
     flexDirection: "column" as const,
     gap: "16px",
@@ -513,7 +388,8 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: "white",
     borderRadius: "12px",
     padding: "20px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+    border: "1px solid #e5e7eb",
   },
   collectionInfo: {
     flex: 1,
@@ -573,8 +449,10 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center" as const,
     color: "#999",
     padding: "60px 20px",
+    background: "white",
+    borderRadius: "12px",
+    border: "2px dashed #e5e7eb",
   },
-  // Modal styles
   modalOverlay: {
     position: "fixed" as const,
     top: 0,
