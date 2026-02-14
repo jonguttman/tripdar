@@ -125,6 +125,10 @@ class Tripdar_Strain_Explorer {
         // AJAX handlers - Trip Reports
         add_action('wp_ajax_tripdar_submit_report', [$this, 'handle_submit_report']);
         add_action('wp_ajax_nopriv_tripdar_submit_report', [$this, 'handle_submit_report']);
+
+        // AJAX handlers - Analytics Events
+        add_action('wp_ajax_tripdar_track_event', [$this, 'handle_track_event']);
+        add_action('wp_ajax_nopriv_tripdar_track_event', [$this, 'handle_track_event']);
     }
 
     /**
@@ -518,6 +522,36 @@ class Tripdar_Strain_Explorer {
         } else {
             $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to submit report';
             wp_send_json_error($error_msg);
+        }
+    }
+
+    /**
+     * AJAX handler for analytics event tracking
+     */
+    public function handle_track_event() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $event_type = isset($_POST['event_type']) ? sanitize_text_field($_POST['event_type']) : '';
+        $entity_slug = isset($_POST['entity_slug']) ? sanitize_text_field($_POST['entity_slug']) : '';
+
+        $allowed_types = ['strain_view', 'strain_tried'];
+        if (!in_array($event_type, $allowed_types, true)) {
+            wp_send_json_error('Invalid event type');
+            return;
+        }
+
+        if (empty($entity_slug)) {
+            wp_send_json_error('Missing entity slug');
+            return;
+        }
+
+        $result = $this->api->record_event($event_type, $entity_slug);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success(['recorded' => true]);
+        } else {
+            // Silently succeed for tracking - don't break UX over analytics
+            wp_send_json_success(['recorded' => false]);
         }
     }
 

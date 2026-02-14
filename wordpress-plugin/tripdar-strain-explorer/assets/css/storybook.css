@@ -2103,3 +2103,129 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* =============================================================================
+   Visual Scales
+   ============================================================================= */
+
+.tripdar-visual-scales {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--tripdar-space-md);
+    margin-top: var(--tripdar-space-lg);
+}
+
+.tripdar-scale {
+    background: var(--tripdar-parchment-dark);
+    border-radius: var(--tripdar-border-radius);
+    padding: var(--tripdar-space-md);
+}
+
+.tripdar-scale__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-scale__label {
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--tripdar-ink-muted);
+    font-weight: 600;
+}
+
+.tripdar-scale__value {
+    font-family: var(--tripdar-font-body);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--tripdar-ink);
+}
+
+.tripdar-scale__track {
+    height: 6px;
+    background: rgba(44, 24, 16, 0.1);
+    border-radius: 9999px;
+    overflow: hidden;
+}
+
+.tripdar-scale__fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.3s ease;
+}
+
+.tripdar-scale__fill--low {
+    background: linear-gradient(to right, var(--tripdar-moss-light), var(--tripdar-moss));
+}
+
+.tripdar-scale__fill--medium {
+    background: linear-gradient(to right, var(--tripdar-gold-light), var(--tripdar-gold));
+}
+
+.tripdar-scale__fill--high {
+    background: linear-gradient(to right, var(--tripdar-potency-intense), #d95a4a);
+}
+
+.tripdar-scale__fill--variable {
+    background: repeating-linear-gradient(
+        90deg,
+        var(--tripdar-gold) 0%,
+        var(--tripdar-gold) 20%,
+        transparent 20%,
+        transparent 25%
+    );
+    opacity: 0.7;
+}
+
+@media (max-width: 480px) {
+    .tripdar-visual-scales {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =============================================================================
+   I've Tried This Button
+   ============================================================================= */
+
+.tripdar-tried-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--tripdar-ink-muted);
+    background: transparent;
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: 9999px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: var(--tripdar-space-sm);
+}
+
+.tripdar-tried-btn:hover {
+    color: var(--tripdar-violet);
+    border-color: var(--tripdar-violet-light);
+    background: rgba(139, 92, 246, 0.05);
+}
+
+.tripdar-tried-btn.active {
+    color: var(--tripdar-violet);
+    border-color: var(--tripdar-violet);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+.tripdar-tried-btn__icon {
+    font-size: 0.875rem;
+    line-height: 1;
+}
+
+.tripdar-tried-btn__count {
+    font-size: 0.7rem;
+    color: var(--tripdar-ink-muted);
+    margin-left: 0.125rem;
+}

@@ -8,7 +8,9 @@ export type EventType =
   | "search"
   | "rating"
   | "review"
-  | "report";
+  | "report"
+  | "strain_tried"
+  | "strain_view";
 
 export type Period = "daily" | "weekly" | "monthly";
 
