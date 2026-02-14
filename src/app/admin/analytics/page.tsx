@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { signIn, signOut, useSession } from "next-auth/react";
 
 interface OverviewStats {
   period: string;
@@ -42,7 +41,6 @@ interface TrendDataPoint {
 type PeriodFilter = "7d" | "30d" | "90d";
 
 export default function AnalyticsDashboardPage() {
-  const { data: session, status } = useSession();
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [topStrains, setTopStrains] = useState<StrainStats[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([]);
@@ -51,7 +49,6 @@ export default function AnalyticsDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<PeriodFilter>("7d");
 
-  // Load analytics data
   const loadAnalytics = useCallback(async () => {
     try {
       setLoading(true);
@@ -84,35 +81,9 @@ export default function AnalyticsDashboardPage() {
   }, [period]);
 
   useEffect(() => {
-    if (session) {
-      loadAnalytics();
-    }
-  }, [session, loadAnalytics]);
+    loadAnalytics();
+  }, [loadAnalytics]);
 
-  // Show sign-in prompt if not authenticated
-  if (status === "loading") {
-    return (
-      <div style={styles.container}>
-        <div style={styles.loading}>Loading...</div>
-      </div>
-    );
-  }
-
-  if (!session) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.card}>
-          <h1 style={styles.title}>Analytics Dashboard</h1>
-          <p style={styles.subtitle}>Sign in with GitHub to view analytics.</p>
-          <button onClick={() => signIn("github")} style={styles.primaryButton}>
-            Sign in with GitHub
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Format date
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return date.toLocaleDateString("en-US", {
@@ -123,7 +94,6 @@ export default function AnalyticsDashboardPage() {
     });
   };
 
-  // Get trend arrow and color
   const getTrendDisplay = (trend: number) => {
     if (trend > 0) {
       return { arrow: "↑", color: "#10b981", label: `+${trend}%` };
@@ -133,7 +103,6 @@ export default function AnalyticsDashboardPage() {
     return { arrow: "→", color: "#6b7280", label: "0%" };
   };
 
-  // Get event type display
   const getEventTypeDisplay = (eventType: string) => {
     const displays: Record<string, { label: string; color: string }> = {
       page_view: { label: "View", color: "#3b82f6" },
@@ -146,22 +115,12 @@ export default function AnalyticsDashboardPage() {
     return displays[eventType] || { label: eventType, color: "#6b7280" };
   };
 
-  // Calculate max for chart scaling
   const maxViews = Math.max(...trendData.map((d) => d.views), 1);
 
   return (
     <div style={styles.container}>
-      {/* Header */}
       <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Analytics Dashboard</h1>
-          <p style={styles.subtitle}>
-            Signed in as {session.user?.email} &bull;{" "}
-            <button onClick={() => signOut()} style={styles.linkButton}>
-              Sign out
-            </button>
-          </p>
-        </div>
+        <h1 style={styles.title}>Analytics</h1>
       </div>
 
       {/* Period Filter */}
@@ -181,28 +140,19 @@ export default function AnalyticsDashboardPage() {
         ))}
       </div>
 
-      {/* Error */}
       {error && <div style={styles.errorMessage}>{error}</div>}
 
-      {/* Loading */}
       {loading ? (
         <div style={styles.loading}>Loading analytics...</div>
       ) : (
         <>
-          {/* Stats Cards */}
           {stats && (
             <div style={styles.statsGrid}>
               <div style={styles.statCard}>
                 <div style={styles.statLabel}>Total Views</div>
                 <div style={styles.statValue}>{stats.totalViews.toLocaleString()}</div>
-                <div
-                  style={{
-                    ...styles.statTrend,
-                    color: getTrendDisplay(stats.viewsTrend).color,
-                  }}
-                >
-                  {getTrendDisplay(stats.viewsTrend).arrow}{" "}
-                  {getTrendDisplay(stats.viewsTrend).label} vs prev
+                <div style={{ ...styles.statTrend, color: getTrendDisplay(stats.viewsTrend).color }}>
+                  {getTrendDisplay(stats.viewsTrend).arrow} {getTrendDisplay(stats.viewsTrend).label} vs prev
                 </div>
               </div>
 
@@ -219,14 +169,8 @@ export default function AnalyticsDashboardPage() {
               <div style={styles.statCard}>
                 <div style={styles.statLabel}>Ratings</div>
                 <div style={styles.statValue}>{stats.totalRatings.toLocaleString()}</div>
-                <div
-                  style={{
-                    ...styles.statTrend,
-                    color: getTrendDisplay(stats.ratingsTrend).color,
-                  }}
-                >
-                  {getTrendDisplay(stats.ratingsTrend).arrow}{" "}
-                  {getTrendDisplay(stats.ratingsTrend).label} vs prev
+                <div style={{ ...styles.statTrend, color: getTrendDisplay(stats.ratingsTrend).color }}>
+                  {getTrendDisplay(stats.ratingsTrend).arrow} {getTrendDisplay(stats.ratingsTrend).label} vs prev
                 </div>
               </div>
 
@@ -251,7 +195,6 @@ export default function AnalyticsDashboardPage() {
             </div>
           )}
 
-          {/* Trend Chart */}
           {trendData.length > 0 && (
             <div style={styles.chartSection}>
               <h2 style={styles.sectionTitle}>Views Trend</h2>
@@ -276,9 +219,7 @@ export default function AnalyticsDashboardPage() {
             </div>
           )}
 
-          {/* Two Column Layout */}
           <div style={styles.twoColumn}>
-            {/* Top Strains */}
             <div style={styles.sectionCard}>
               <h2 style={styles.sectionTitle}>Top Strains</h2>
               {topStrains.length === 0 ? (
@@ -302,7 +243,6 @@ export default function AnalyticsDashboardPage() {
               )}
             </div>
 
-            {/* Recent Activity */}
             <div style={styles.sectionCard}>
               <h2 style={styles.sectionTitle}>Recent Activity</h2>
               {recentActivity.length === 0 ? (
@@ -313,20 +253,11 @@ export default function AnalyticsDashboardPage() {
                     const display = getEventTypeDisplay(activity.eventType);
                     return (
                       <div key={i} style={styles.activityItem}>
-                        <span
-                          style={{
-                            ...styles.activityBadge,
-                            background: display.color,
-                          }}
-                        >
+                        <span style={{ ...styles.activityBadge, background: display.color }}>
                           {display.label}
                         </span>
-                        <span style={styles.activityEntity}>
-                          {activity.entitySlug || "—"}
-                        </span>
-                        <span style={styles.activityTime}>
-                          {formatDate(activity.createdAt)}
-                        </span>
+                        <span style={styles.activityEntity}>{activity.entitySlug || "—"}</span>
+                        <span style={styles.activityTime}>{formatDate(activity.createdAt)}</span>
                       </div>
                     );
                   })}
@@ -342,58 +273,16 @@ export default function AnalyticsDashboardPage() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    maxWidth: "1200px",
-    margin: "0 auto",
     padding: "2rem",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
   },
   header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
     marginBottom: "1.5rem",
-    paddingBottom: "1rem",
-    borderBottom: "1px solid #e5e7eb",
   },
   title: {
-    fontSize: "1.75rem",
+    fontSize: "1.5rem",
     fontWeight: 600,
     margin: 0,
     color: "#111827",
-  },
-  subtitle: {
-    fontSize: "0.875rem",
-    color: "#6b7280",
-    margin: "0.25rem 0 0",
-  },
-  card: {
-    background: "white",
-    borderRadius: "12px",
-    padding: "2rem",
-    boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
-    textAlign: "center" as const,
-    maxWidth: "400px",
-    margin: "4rem auto",
-  },
-  linkButton: {
-    background: "none",
-    border: "none",
-    color: "#6d28d9",
-    cursor: "pointer",
-    fontSize: "inherit",
-    padding: 0,
-    textDecoration: "underline",
-  },
-  primaryButton: {
-    background: "#6d28d9",
-    color: "white",
-    border: "none",
-    padding: "0.75rem 1.5rem",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    fontWeight: 500,
-    cursor: "pointer",
-    marginTop: "1rem",
   },
   errorMessage: {
     background: "#fee2e2",
