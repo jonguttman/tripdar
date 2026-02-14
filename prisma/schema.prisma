@@ -47,3 +47,107 @@ model Signal {
   // Creation timestamp (set by application at insert-time; no additional timestamps are stored)
   createdAt DateTime
 }
+
+// ============================================================================
+// Community Ratings & Reviews
+// ============================================================================
+
+model StrainRating {
+  id          String   @id @default(cuid())
+  strainSlug  String
+  rating      Int      // 1-5 stars
+  sessionHash String   // Anonymous session identifier
+  partnerId   String   // Partner who facilitated this rating
+  createdAt   DateTime @default(now())
+
+  @@index([strainSlug])
+  @@index([partnerId])
+}
+
+model StrainReview {
+  id          String    @id @default(cuid())
+  strainSlug  String
+  rating      Int       // 1-5 stars
+  title       String?
+  body        String
+  sessionHash String    // Anonymous session identifier
+  partnerId   String    // Partner who facilitated this review
+  status      String    @default("pending") // pending, approved, rejected
+  createdAt   DateTime  @default(now())
+  moderatedAt DateTime?
+  moderatedBy String?
+
+  @@index([strainSlug, status])
+  @@index([partnerId])
+  @@index([status])
+}
+
+// ============================================================================
+// Trip Reports
+// ============================================================================
+
+model TripReport {
+  id            String    @id @default(cuid())
+  strainSlug    String
+  sessionHash   String    // Anonymous session identifier
+  partnerId     String    // Partner who facilitated this report
+
+  // Dosing info
+  doseAmount    String    // e.g., "2.5g", "1 stem"
+  doseCategory  String    // MICRODOSE, LOW, MODERATE, HIGH, HEROIC
+
+  // Experience context
+  setting       String    // e.g., "nature", "home", "ceremony"
+  intention     String?   // What they hoped to achieve
+
+  // The report itself
+  title         String
+  body          String    // Full trip narrative
+  duration      String?   // e.g., "4-6 hours"
+  peakIntensity Int?      // 1-10 scale
+
+  // Moderation
+  status        String    @default("pending") // pending, approved, rejected
+  createdAt     DateTime  @default(now())
+  moderatedAt   DateTime?
+  moderatedBy   String?
+
+  @@index([strainSlug, status])
+  @@index([partnerId])
+  @@index([status])
+}
+
+// ============================================================================
+// Analytics
+// ============================================================================
+
+model AnalyticsEvent {
+  id          String   @id @default(cuid())
+  eventType   String   // page_view, quiz_complete, search, rating, report
+  entitySlug  String?  // Strain slug or other entity reference
+  partnerId   String   // Partner who generated this event
+  sessionHash String   // Anonymous session identifier
+  metadata    String?  // JSON string for additional event data
+  createdAt   DateTime @default(now())
+
+  @@index([eventType, createdAt])
+  @@index([partnerId, createdAt])
+  @@index([entitySlug, createdAt])
+}
+
+model AnalyticsSummary {
+  id              String   @id @default(cuid())
+  period          String   // daily, weekly, monthly
+  periodStart     DateTime
+  strainSlug      String   @default("") // empty string for overall summary
+  views           Int      @default(0)
+  searches        Int      @default(0)
+  quizCompletions Int      @default(0)
+  ratings         Int      @default(0)
+  reviews         Int      @default(0)
+  reports         Int      @default(0)
+  avgRating       Float?
+
+  @@unique([period, periodStart, strainSlug])
+  @@index([period, periodStart])
+}

@@ -133,7 +133,8 @@ export type ExplorationEventType =
   | "search"
   | "filter_apply"
   | "compare_strains"
-  | "visualization_request";
+  | "visualization_request"
+  | "lineage_view";
 
 /**
  * Anonymous exploration signal

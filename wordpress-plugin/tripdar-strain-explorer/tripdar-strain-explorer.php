@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.0.5
+ * Version: 1.2.0
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.0.5');
+define('TRIPDAR_VERSION', '1.2.0');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
@@ -113,6 +113,18 @@ class Tripdar_Strain_Explorer {
         add_action('wp_ajax_nopriv_tripdar_load_strains', [$this, 'handle_load_strains']);
         add_action('wp_ajax_tripdar_get_strain', [$this, 'handle_get_strain']);
         add_action('wp_ajax_nopriv_tripdar_get_strain', [$this, 'handle_get_strain']);
+
+        // AJAX handlers - Search
+        add_action('wp_ajax_tripdar_search_strains', [$this, 'handle_search_strains']);
+        add_action('wp_ajax_nopriv_tripdar_search_strains', [$this, 'handle_search_strains']);
+
+        // AJAX handlers - Ratings
+        add_action('wp_ajax_tripdar_submit_rating', [$this, 'handle_submit_rating']);
+        add_action('wp_ajax_nopriv_tripdar_submit_rating', [$this, 'handle_submit_rating']);
+
+        // AJAX handlers - Trip Reports
+        add_action('wp_ajax_tripdar_submit_report', [$this, 'handle_submit_report']);
+        add_action('wp_ajax_nopriv_tripdar_submit_report', [$this, 'handle_submit_report']);
     }
 
     /**
@@ -208,6 +220,33 @@ class Tripdar_Strain_Explorer {
             true
         );
 
+        // Autocomplete search script
+        wp_enqueue_script(
+            'tripdar-autocomplete',
+            TRIPDAR_PLUGIN_URL . 'assets/js/autocomplete.js',
+            ['tripdar-explorer'],
+            TRIPDAR_VERSION,
+            true
+        );
+
+        // Ratings script
+        wp_enqueue_script(
+            'tripdar-ratings',
+            TRIPDAR_PLUGIN_URL . 'assets/js/ratings.js',
+            ['tripdar-explorer'],
+            TRIPDAR_VERSION,
+            true
+        );
+
+        // Trip report form script
+        wp_enqueue_script(
+            'tripdar-reports',
+            TRIPDAR_PLUGIN_URL . 'assets/js/report-form.js',
+            ['tripdar-explorer'],
+            TRIPDAR_VERSION,
+            true
+        );
+
         // Localize scripts with AJAX settings
         $ajax_settings = [
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -217,6 +256,8 @@ class Tripdar_Strain_Explorer {
         wp_localize_script('tripdar-explorer', 'tripdarExplorer', $ajax_settings);
         wp_localize_script('tripdar-quiz', 'tripdarQuiz', $ajax_settings);
         wp_localize_script('tripdar-feedback', 'tripdarFeedback', $ajax_settings);
+        wp_localize_script('tripdar-ratings', 'tripdarAjax', $ajax_settings);
+        wp_localize_script('tripdar-reports', 'tripdarReports', $ajax_settings);
     }
 
     /**
@@ -380,6 +421,103 @@ class Tripdar_Strain_Explorer {
             wp_send_json_success(['html' => $html]);
         } else {
             wp_send_json_error($result['error'] ?? ['message' => 'Failed to load strain']);
+        }
+    }
+
+    /**
+     * Handle strain search via AJAX
+     */
+    public function handle_search_strains() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $query = isset($_POST['query']) ? sanitize_text_field($_POST['query']) : '';
+        $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 10;
+
+        if (strlen($query) < 2) {
+            wp_send_json_success(['results' => []]);
+            return;
+        }
+
+        $result = $this->api->search_strains($query, $limit);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            wp_send_json_error($result['error'] ?? ['message' => 'Search failed']);
+        }
+    }
+
+    /**
+     * AJAX handler for rating submission
+     */
+    public function handle_submit_rating() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $slug = isset($_POST['slug']) ? sanitize_text_field($_POST['slug']) : '';
+        $rating = isset($_POST['rating']) ? intval($_POST['rating']) : 0;
+
+        if (empty($slug)) {
+            wp_send_json_error('Missing strain slug');
+            return;
+        }
+
+        if ($rating < 1 || $rating > 5) {
+            wp_send_json_error('Rating must be between 1 and 5');
+            return;
+        }
+
+        $result = $this->api->submit_rating($slug, $rating);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to submit rating';
+            wp_send_json_error($error_msg);
+        }
+    }
+
+    /**
+     * AJAX handler for trip report submission
+     */
+    public function handle_submit_report() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $data_json = isset($_POST['data']) ? stripslashes($_POST['data']) : '';
+
+        if (empty($data_json)) {
+            wp_send_json_error('Missing report data');
+            return;
+        }
+
+        $data = json_decode($data_json, true);
+
+        if (!$data || !isset($data['strainSlug'])) {
+            wp_send_json_error('Invalid report data');
+            return;
+        }
+
+        // Validate required fields
+        $required = ['doseCategory', 'doseAmount', 'setting', 'title', 'body'];
+        foreach ($required as $field) {
+            if (empty($data[$field])) {
+                wp_send_json_error("Missing required field: {$field}");
+                return;
+            }
+        }
+
+        // Validate body length
+        if (strlen($data['body']) < 50) {
+            wp_send_json_error('Report body must be at least 50 characters');
+            return;
+        }
+
+        $result = $this->api->submit_trip_report($data);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to submit report';
+            wp_send_json_error($error_msg);
         }
     }
 

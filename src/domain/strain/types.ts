@@ -20,6 +20,25 @@ export interface InternalStrain {
   origin?: string;
   createdAt?: string;
   updatedAt?: string;
+
+  // Lineage fields
+  parentStrains?: string[];    // IDs of parent strains (e.g., ["penis-envy", "b-plus"])
+  lineageNotes?: string;       // Breeding/cross notes (e.g., "Cross of PE × B+")
+  generation?: number;         // Distance from wild type (0 = wild, 1 = F1, etc.)
+}
+
+/**
+ * Lineage tree node for API response
+ */
+export interface StrainLineageNode {
+  id: string;
+  name: string;
+  potency: string;
+  beginner: string;
+  parents: StrainLineageNode[];
+  children: string[];          // Just IDs for children to avoid circular refs
+  lineageNotes?: string;
+  generation?: number;
 }
 
 /**

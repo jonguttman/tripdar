@@ -22,6 +22,9 @@ interface Strain {
   origin?: string;
   createdAt?: string;
   updatedAt?: string;
+  parentStrains?: string[];
+  lineageNotes?: string;
+  generation?: number;
 }
 
 const emptyStrain: Omit<Strain, "id" | "createdAt" | "updatedAt"> = {
@@ -33,6 +36,8 @@ const emptyStrain: Omit<Strain, "id" | "createdAt" | "updatedAt"> = {
   vibe: [],
   confidence: 50,
   description: "",
+  parentStrains: [],
+  lineageNotes: "",
 };
 
 export default function StrainsAdminPage() {
@@ -135,6 +140,8 @@ export default function StrainsAdminPage() {
       vibe: strain.vibe,
       confidence: strain.confidence,
       description: strain.description,
+      parentStrains: strain.parentStrains || [],
+      lineageNotes: strain.lineageNotes || "",
     });
     setVibeInput(strain.vibe.join(", "));
     setEditingStrain(strain);
@@ -427,6 +434,43 @@ export default function StrainsAdminPage() {
               rows={4}
               placeholder="A brief description of the strain's characteristics and experience..."
             />
+          </div>
+
+          {/* Lineage Section */}
+          <div style={styles.lineageSection}>
+            <h4 style={styles.lineageTitle}>Lineage</h4>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Parent Strains</label>
+              <select
+                multiple
+                value={formData.parentStrains || []}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, opt => opt.value);
+                  setFormData({ ...formData, parentStrains: selected });
+                }}
+                style={{ ...styles.select, height: "120px" }}
+              >
+                {strains
+                  .filter(s => s.id !== editingStrain?.id)
+                  .map(s => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))
+                }
+              </select>
+              <small style={styles.helpText}>Hold Ctrl/Cmd to select multiple</small>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Lineage Notes</label>
+              <input
+                type="text"
+                value={formData.lineageNotes || ""}
+                onChange={(e) => setFormData({ ...formData, lineageNotes: e.target.value })}
+                style={styles.input}
+                placeholder="e.g., Cross of PE × B+"
+              />
+            </div>
           </div>
 
           {/* Image upload for editing */}
@@ -877,5 +921,24 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid #ddd",
     borderRadius: "8px",
     cursor: "pointer",
+  },
+  lineageSection: {
+    marginTop: "24px",
+    paddingTop: "20px",
+    borderTop: "1px solid #eee",
+  },
+  lineageTitle: {
+    margin: "0 0 16px",
+    fontSize: "14px",
+    fontWeight: "600",
+    color: "#666",
+    textTransform: "uppercase" as const,
+    letterSpacing: "0.5px",
+  },
+  helpText: {
+    display: "block",
+    marginTop: "4px",
+    fontSize: "12px",
+    color: "#999",
   },
 };

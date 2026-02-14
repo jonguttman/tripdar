@@ -25,6 +25,581 @@ class Tripdar_Shortcodes {
         add_shortcode('tripdar_library', [$this, 'render_library']);
         add_shortcode('tripdar_quiz', [$this, 'render_quiz']);
         add_shortcode('tripdar_strain', [$this, 'render_single_strain']);
+        add_shortcode('tripdar_search', [$this, 'render_search']);
+        add_shortcode('tripdar_lineage', [$this, 'render_lineage']);
+        add_shortcode('tripdar_collection', [$this, 'render_collection']);
+        add_shortcode('tripdar_collections', [$this, 'render_collections_list']);
+        add_shortcode('tripdar_reviews', [$this, 'render_reviews']);
+        add_shortcode('tripdar_reports', [$this, 'render_trip_reports']);
+        add_shortcode('tripdar_report_form', [$this, 'render_report_form']);
+    }
+
+    /**
+     * [tripdar_search] - Strain search with autocomplete
+     */
+    public function render_search($atts) {
+        $atts = shortcode_atts([
+            'placeholder' => 'Search strains...',
+            'limit' => 10,
+            'show_details' => 'true',
+        ], $atts);
+
+        $show_details = filter_var($atts['show_details'], FILTER_VALIDATE_BOOLEAN);
+
+        ob_start();
+        ?>
+        <div class="tripdar-search" data-limit="<?php echo esc_attr($atts['limit']); ?>">
+            <div class="tripdar-search__input-wrapper">
+                <input type="text"
+                       class="tripdar-search__input"
+                       placeholder="<?php echo esc_attr($atts['placeholder']); ?>"
+                       autocomplete="off"
+                       data-tripdar-search>
+                <span class="tripdar-search__icon">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <path d="M21 21l-4.35-4.35"></path>
+                    </svg>
+                </span>
+                <span class="tripdar-search__loading" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" class="tripdar-spinner">
+                        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" fill="none" stroke-dasharray="31.4" stroke-linecap="round">
+                            <animateTransform attributeName="transform" type="rotate" dur="1s" values="0 12 12;360 12 12" repeatCount="indefinite"/>
+                        </circle>
+                    </svg>
+                </span>
+            </div>
+            <div class="tripdar-search__results" style="display: none;">
+                <!-- Results populated by JS -->
+            </div>
+            <?php if ($show_details): ?>
+            <div class="tripdar-search__detail" style="display: none;">
+                <!-- Selected strain detail populated by JS -->
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_lineage] - Display strain family tree
+     */
+    public function render_lineage($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'show_children' => 'true',
+            'max_depth' => 3,
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_lineage($atts['slug']);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load strain lineage.</p>';
+        }
+
+        $lineage = $response['data']['lineage'];
+        $show_children = filter_var($atts['show_children'], FILTER_VALIDATE_BOOLEAN);
+
+        ob_start();
+        ?>
+        <div class="tripdar-lineage">
+            <h3 class="tripdar-lineage__title">
+                Family Tree: <?php echo esc_html($lineage['name']); ?>
+            </h3>
+
+            <?php if (!empty($lineage['lineageNotes'])): ?>
+            <p class="tripdar-lineage__notes">
+                <?php echo esc_html($lineage['lineageNotes']); ?>
+            </p>
+            <?php endif; ?>
+
+            <div class="tripdar-lineage__tree">
+                <?php $this->render_lineage_node($lineage, 0, intval($atts['max_depth'])); ?>
+            </div>
+
+            <?php if ($show_children && !empty($lineage['children'])): ?>
+            <div class="tripdar-lineage__children">
+                <h4 class="tripdar-lineage__children-title">Derived Strains</h4>
+                <ul class="tripdar-lineage__children-list">
+                    <?php foreach ($lineage['children'] as $childId): ?>
+                    <li><?php echo esc_html(ucwords(str_replace('-', ' ', $childId))); ?></li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Recursively render a lineage node
+     */
+    private function render_lineage_node($node, $depth, $maxDepth) {
+        if ($depth > $maxDepth) return;
+
+        $indent = str_repeat('  ', $depth);
+        $potency_class = $this->get_potency_class($node['potency']);
+        ?>
+        <div class="tripdar-lineage__node tripdar-lineage__node--depth-<?php echo $depth; ?>">
+            <div class="tripdar-lineage__node-content">
+                <span class="tripdar-lineage__node-name"><?php echo esc_html($node['name']); ?></span>
+                <span class="tripdar-lineage__node-meta">
+                    <span class="tripdar-lineage__potency tripdar-lineage__potency--<?php echo esc_attr($potency_class); ?>">
+                        <?php echo esc_html($node['potency']); ?>
+                    </span>
+                </span>
+            </div>
+            <?php if (!empty($node['parents'])): ?>
+            <div class="tripdar-lineage__parents">
+                <?php foreach ($node['parents'] as $parent): ?>
+                    <?php $this->render_lineage_node($parent, $depth + 1, $maxDepth); ?>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Get CSS class for potency level
+     */
+    private function get_potency_class($potency) {
+        $potency_lower = strtolower($potency);
+        if (strpos($potency_lower, 'very high') !== false || strpos($potency_lower, 'high') !== false) {
+            return 'intense';
+        } elseif (strpos($potency_lower, 'low') !== false) {
+            return 'gentle';
+        }
+        return 'moderate';
+    }
+
+    /**
+     * [tripdar_collection slug="..."] - Display a single curated collection
+     */
+    public function render_collection($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'columns' => 3,
+            'show_description' => 'true',
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a collection slug.</p>';
+        }
+
+        $response = $this->api_client->get_collection($atts['slug']);
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load collection.</p>';
+        }
+
+        $collection = $response['data']['collection'];
+        $strains = $response['data']['strains'] ?? [];
+        $show_description = filter_var($atts['show_description'], FILTER_VALIDATE_BOOLEAN);
+
+        ob_start();
+        ?>
+        <div class="tripdar-collection">
+            <div class="tripdar-collection__header">
+                <?php if (!empty($collection['coverImage'])): ?>
+                <div class="tripdar-collection__cover">
+                    <img src="<?php echo esc_url($collection['coverImage']); ?>"
+                         alt="<?php echo esc_attr($collection['name']); ?>">
+                </div>
+                <?php endif; ?>
+                <div class="tripdar-collection__info">
+                    <h2 class="tripdar-collection__title"><?php echo esc_html($collection['name']); ?></h2>
+                    <?php if ($show_description && !empty($collection['description'])): ?>
+                    <p class="tripdar-collection__description"><?php echo esc_html($collection['description']); ?></p>
+                    <?php endif; ?>
+                    <div class="tripdar-collection__meta">
+                        <span class="tripdar-collection__count"><?php echo count($strains); ?> strains</span>
+                        <?php if (!empty($collection['tags'])): ?>
+                        <div class="tripdar-collection__tags">
+                            <?php foreach ($collection['tags'] as $tag): ?>
+                            <span class="tripdar-tag"><?php echo esc_html($tag); ?></span>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <?php if (!empty($strains)): ?>
+            <div class="tripdar-collection__grid tripdar-collection__grid--cols-<?php echo esc_attr($atts['columns']); ?>">
+                <?php foreach ($strains as $strain): ?>
+                    <?php echo $this->render_strain_card($this->normalize_strain($strain)); ?>
+                <?php endforeach; ?>
+            </div>
+            <?php else: ?>
+            <p class="tripdar-collection__empty">This collection is empty.</p>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_collections] - Display a list of all collections
+     */
+    public function render_collections_list($atts) {
+        $atts = shortcode_atts([
+            'featured_only' => 'false',
+            'columns' => 3,
+        ], $atts);
+
+        $response = $this->api_client->get_collections();
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load collections.</p>';
+        }
+
+        $collections = $response['data']['collections'] ?? [];
+        $featured_only = filter_var($atts['featured_only'], FILTER_VALIDATE_BOOLEAN);
+
+        // Filter to featured only if requested
+        if ($featured_only) {
+            $collections = array_filter($collections, function($c) {
+                return !empty($c['featured']);
+            });
+        }
+
+        if (empty($collections)) {
+            return '<p class="tripdar-collection__empty">No collections available.</p>';
+        }
+
+        ob_start();
+        ?>
+        <div class="tripdar-collections-list tripdar-collections-list--cols-<?php echo esc_attr($atts['columns']); ?>">
+            <?php foreach ($collections as $collection): ?>
+            <a href="?collection=<?php echo esc_attr($collection['slug']); ?>" class="tripdar-collection-card">
+                <?php if (!empty($collection['coverImage'])): ?>
+                <div class="tripdar-collection-card__image">
+                    <img src="<?php echo esc_url($collection['coverImage']); ?>"
+                         alt="<?php echo esc_attr($collection['name']); ?>">
+                </div>
+                <?php else: ?>
+                <div class="tripdar-collection-card__placeholder">
+                    <svg viewBox="0 0 60 60" class="tripdar-placeholder-icon">
+                        <rect x="10" y="10" width="40" height="40" rx="4" fill="currentColor" opacity="0.3"/>
+                        <rect x="18" y="18" width="10" height="10" rx="2" fill="currentColor"/>
+                        <rect x="32" y="18" width="10" height="10" rx="2" fill="currentColor"/>
+                        <rect x="18" y="32" width="10" height="10" rx="2" fill="currentColor"/>
+                        <rect x="32" y="32" width="10" height="10" rx="2" fill="currentColor"/>
+                    </svg>
+                </div>
+                <?php endif; ?>
+                <div class="tripdar-collection-card__content">
+                    <h3 class="tripdar-collection-card__title"><?php echo esc_html($collection['name']); ?></h3>
+                    <?php if (!empty($collection['description'])): ?>
+                    <p class="tripdar-collection-card__description">
+                        <?php echo esc_html(wp_trim_words($collection['description'], 15)); ?>
+                    </p>
+                    <?php endif; ?>
+                    <span class="tripdar-collection-card__count">
+                        <?php echo count($collection['strains'] ?? []); ?> strains
+                    </span>
+                    <?php if (!empty($collection['featured'])): ?>
+                    <span class="tripdar-collection-card__featured">Featured</span>
+                    <?php endif; ?>
+                </div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_reviews slug="..."] - Display ratings and reviews for a strain
+     */
+    public function render_reviews($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'show_form' => 'true',
+            'per_page' => 10,
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_ratings($atts['slug']);
+        $show_form = filter_var($atts['show_form'], FILTER_VALIDATE_BOOLEAN);
+
+        $aggregation = null;
+        $reviews = [];
+        if ($response && isset($response['success']) && $response['success']) {
+            $aggregation = $response['data']['aggregation'] ?? null;
+            $reviews = $response['data']['recentReviews'] ?? [];
+        }
+
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+
+        ob_start();
+        ?>
+        <div class="tripdar-reviews" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
+            <!-- Ratings Summary -->
+            <div class="tripdar-reviews__summary">
+                <h3 class="tripdar-reviews__title">Community Ratings</h3>
+                <?php if ($aggregation && $aggregation['totalRatings'] > 0): ?>
+                <div class="tripdar-reviews__stats">
+                    <div class="tripdar-reviews__average">
+                        <span class="tripdar-reviews__score"><?php echo number_format($aggregation['averageRating'], 1); ?></span>
+                        <span class="tripdar-reviews__stars"><?php echo $this->render_stars($aggregation['averageRating']); ?></span>
+                    </div>
+                    <span class="tripdar-reviews__count"><?php echo $aggregation['totalRatings']; ?> ratings</span>
+                    <div class="tripdar-reviews__distribution">
+                        <?php for ($i = 5; $i >= 1; $i--):
+                            $count = $aggregation['distribution'][$i] ?? 0;
+                            $percent = $aggregation['totalRatings'] > 0 ? ($count / $aggregation['totalRatings']) * 100 : 0;
+                        ?>
+                        <div class="tripdar-reviews__bar-row">
+                            <span class="tripdar-reviews__bar-label"><?php echo $i; ?> star</span>
+                            <div class="tripdar-reviews__bar">
+                                <div class="tripdar-reviews__bar-fill" style="width: <?php echo $percent; ?>%"></div>
+                            </div>
+                            <span class="tripdar-reviews__bar-count"><?php echo $count; ?></span>
+                        </div>
+                        <?php endfor; ?>
+                    </div>
+                </div>
+                <?php else: ?>
+                <p class="tripdar-reviews__no-ratings">No ratings yet. Be the first to rate <?php echo esc_html($strain_name); ?>!</p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($show_form): ?>
+            <!-- Rating Form -->
+            <div class="tripdar-reviews__form">
+                <h4 class="tripdar-reviews__form-title">Rate this strain</h4>
+                <div class="tripdar-reviews__star-input" data-rating="0">
+                    <?php for ($i = 1; $i <= 5; $i++): ?>
+                    <button type="button" class="tripdar-reviews__star" data-value="<?php echo $i; ?>">
+                        <svg viewBox="0 0 24 24" width="32" height="32">
+                            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </button>
+                    <?php endfor; ?>
+                </div>
+                <button class="tripdar-btn tripdar-btn--primary tripdar-reviews__submit-rating" disabled>
+                    Submit Rating
+                </button>
+                <div class="tripdar-reviews__form-message" style="display: none;"></div>
+            </div>
+            <?php endif; ?>
+
+            <!-- Reviews List -->
+            <?php if (!empty($reviews)): ?>
+            <div class="tripdar-reviews__list">
+                <h4 class="tripdar-reviews__list-title">Recent Reviews</h4>
+                <?php foreach ($reviews as $review): ?>
+                <div class="tripdar-reviews__review">
+                    <div class="tripdar-reviews__review-header">
+                        <span class="tripdar-reviews__review-stars"><?php echo $this->render_stars($review['rating']); ?></span>
+                        <span class="tripdar-reviews__review-date">
+                            <?php echo date('M j, Y', strtotime($review['createdAt'])); ?>
+                        </span>
+                    </div>
+                    <?php if (!empty($review['title'])): ?>
+                    <h5 class="tripdar-reviews__review-title"><?php echo esc_html($review['title']); ?></h5>
+                    <?php endif; ?>
+                    <p class="tripdar-reviews__review-body"><?php echo esc_html($review['body']); ?></p>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render star rating display
+     */
+    private function render_stars($rating) {
+        $full = floor($rating);
+        $half = ($rating - $full) >= 0.5 ? 1 : 0;
+        $empty = 5 - $full - $half;
+
+        $output = str_repeat('★', $full);
+        if ($half) {
+            $output .= '½';
+        }
+        $output .= str_repeat('☆', $empty);
+
+        return $output;
+    }
+
+    /**
+     * [tripdar_reports slug="..."] - Display approved trip reports for a strain
+     */
+    public function render_trip_reports($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+            'per_page' => 5,
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $response = $this->api_client->get_trip_reports($atts['slug'], 1, intval($atts['per_page']));
+
+        if (!$response || !isset($response['success']) || !$response['success']) {
+            return '<p class="tripdar-error">Could not load trip reports.</p>';
+        }
+
+        $reports = $response['data']['reports'] ?? [];
+        $total = $response['data']['total'] ?? 0;
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+
+        ob_start();
+        ?>
+        <div class="tripdar-trip-reports" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
+            <h3 class="tripdar-trip-reports__title">Trip Reports for <?php echo esc_html($strain_name); ?></h3>
+
+            <?php if (empty($reports)): ?>
+            <p class="tripdar-trip-reports__empty">
+                No trip reports yet. Be the first to share your experience!
+            </p>
+            <?php else: ?>
+            <p class="tripdar-trip-reports__count"><?php echo $total; ?> experience<?php echo $total === 1 ? '' : 's'; ?> shared</p>
+
+            <div class="tripdar-trip-reports__list">
+                <?php foreach ($reports as $report): ?>
+                <article class="tripdar-trip-report">
+                    <header class="tripdar-trip-report__header">
+                        <h4 class="tripdar-trip-report__title"><?php echo esc_html($report['title']); ?></h4>
+                        <div class="tripdar-trip-report__meta">
+                            <span class="tripdar-trip-report__dose tripdar-trip-report__dose--<?php echo esc_attr(strtolower($report['doseCategory'])); ?>">
+                                <?php echo esc_html($report['doseCategory']); ?> (<?php echo esc_html($report['doseAmount']); ?>)
+                            </span>
+                            <span class="tripdar-trip-report__setting"><?php echo esc_html(ucfirst($report['setting'])); ?></span>
+                            <?php if (!empty($report['peakIntensity'])): ?>
+                            <span class="tripdar-trip-report__intensity">Peak: <?php echo $report['peakIntensity']; ?>/10</span>
+                            <?php endif; ?>
+                            <?php if (!empty($report['duration'])): ?>
+                            <span class="tripdar-trip-report__duration"><?php echo esc_html($report['duration']); ?></span>
+                            <?php endif; ?>
+                        </div>
+                    </header>
+
+                    <?php if (!empty($report['intention'])): ?>
+                    <p class="tripdar-trip-report__intention">
+                        <strong>Intention:</strong> <?php echo esc_html($report['intention']); ?>
+                    </p>
+                    <?php endif; ?>
+
+                    <div class="tripdar-trip-report__body">
+                        <?php echo nl2br(esc_html($report['body'])); ?>
+                    </div>
+
+                    <footer class="tripdar-trip-report__footer">
+                        <span class="tripdar-trip-report__date">
+                            <?php echo date('M j, Y', strtotime($report['createdAt'])); ?>
+                        </span>
+                    </footer>
+                </article>
+                <?php endforeach; ?>
+            </div>
+            <?php endif; ?>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * [tripdar_report_form slug="..."] - Trip report submission form
+     */
+    public function render_report_form($atts) {
+        $atts = shortcode_atts([
+            'slug' => '',
+        ], $atts);
+
+        if (empty($atts['slug'])) {
+            return '<p class="tripdar-error">Please specify a strain slug.</p>';
+        }
+
+        $strain_name = ucwords(str_replace('-', ' ', $atts['slug']));
+        $dose_categories = ['MICRODOSE', 'LOW', 'MODERATE', 'HIGH', 'HEROIC'];
+        $settings = ['nature', 'home', 'ceremony', 'social', 'solo', 'therapeutic', 'creative', 'other'];
+
+        ob_start();
+        ?>
+        <div class="tripdar-report-form" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
+            <h3 class="tripdar-report-form__title">Share Your Experience with <?php echo esc_html($strain_name); ?></h3>
+            <p class="tripdar-report-form__intro">Help others by sharing your trip report. All submissions are reviewed before publishing.</p>
+
+            <form class="tripdar-report-form__form">
+                <div class="tripdar-report-form__row">
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Dose Category *</label>
+                        <select name="doseCategory" class="tripdar-report-form__select" required>
+                            <option value="">Select...</option>
+                            <?php foreach ($dose_categories as $cat): ?>
+                            <option value="<?php echo esc_attr($cat); ?>"><?php echo esc_html(ucfirst(strtolower($cat))); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Dose Amount *</label>
+                        <input type="text" name="doseAmount" class="tripdar-report-form__input" placeholder="e.g., 2.5g" required>
+                    </div>
+                </div>
+
+                <div class="tripdar-report-form__row">
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Setting *</label>
+                        <select name="setting" class="tripdar-report-form__select" required>
+                            <option value="">Select...</option>
+                            <?php foreach ($settings as $setting): ?>
+                            <option value="<?php echo esc_attr($setting); ?>"><?php echo esc_html(ucfirst($setting)); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="tripdar-report-form__field">
+                        <label class="tripdar-report-form__label">Duration</label>
+                        <input type="text" name="duration" class="tripdar-report-form__input" placeholder="e.g., 4-6 hours">
+                    </div>
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Peak Intensity (1-10)</label>
+                    <input type="number" name="peakIntensity" class="tripdar-report-form__input" min="1" max="10" placeholder="5">
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Intention (optional)</label>
+                    <input type="text" name="intention" class="tripdar-report-form__input" placeholder="What were you hoping to achieve?">
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Title *</label>
+                    <input type="text" name="title" class="tripdar-report-form__input" placeholder="Give your experience a title" required>
+                </div>
+
+                <div class="tripdar-report-form__field">
+                    <label class="tripdar-report-form__label">Your Experience * (min 50 characters)</label>
+                    <textarea name="body" class="tripdar-report-form__textarea" rows="8" placeholder="Describe your experience in detail..." required></textarea>
+                    <span class="tripdar-report-form__charcount">0 / 50 minimum</span>
+                </div>
+
+                <button type="submit" class="tripdar-btn tripdar-btn--primary tripdar-report-form__submit">
+                    Submit Trip Report
+                </button>
+
+                <div class="tripdar-report-form__message" style="display: none;"></div>
+            </form>
+        </div>
+        <?php
+        return ob_get_clean();
     }
 
     /**
