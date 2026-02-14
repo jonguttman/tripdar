@@ -216,6 +216,8 @@ async function getEventCounts(
     rating: 0,
     review: 0,
     report: 0,
+    strain_tried: 0,
+    strain_view: 0,
   };
 
   for (const count of counts) {
