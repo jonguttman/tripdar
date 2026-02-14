@@ -6,6 +6,12 @@ import {
   STABILITY_OPTIONS,
   BEGINNER_OPTIONS,
   VISUAL_OPTIONS,
+  ONSET_TIME_OPTIONS,
+  DURATION_OPTIONS,
+  BODY_HEAD_OPTIONS,
+  EMOTIONAL_CHARACTER_OPTIONS,
+  COME_UP_OPTIONS,
+  PEAK_CHARACTER_OPTIONS,
 } from "@/domain/strain/types";
 
 interface Strain {
@@ -24,6 +30,13 @@ interface Strain {
   parentStrains?: string[];
   lineageNotes?: string;
   generation?: number;
+  // Experiential attributes (Feature 6)
+  onsetTime?: string;
+  typicalDuration?: string;
+  bodyHeadBalance?: string;
+  emotionalCharacter?: string[];
+  comeUpIntensity?: string;
+  peakCharacter?: string;
 }
 
 const emptyStrain: Omit<Strain, "id" | "createdAt" | "updatedAt"> = {
@@ -37,6 +50,13 @@ const emptyStrain: Omit<Strain, "id" | "createdAt" | "updatedAt"> = {
   description: "",
   parentStrains: [],
   lineageNotes: "",
+  // Experiential attributes
+  onsetTime: "",
+  typicalDuration: "",
+  bodyHeadBalance: "",
+  emotionalCharacter: [],
+  comeUpIntensity: "",
+  peakCharacter: "",
 };
 
 export default function StrainsAdminPage() {
@@ -131,6 +151,13 @@ export default function StrainsAdminPage() {
       description: strain.description,
       parentStrains: strain.parentStrains || [],
       lineageNotes: strain.lineageNotes || "",
+      // Experiential attributes
+      onsetTime: strain.onsetTime || "",
+      typicalDuration: strain.typicalDuration || "",
+      bodyHeadBalance: strain.bodyHeadBalance || "",
+      emotionalCharacter: strain.emotionalCharacter || [],
+      comeUpIntensity: strain.comeUpIntensity || "",
+      peakCharacter: strain.peakCharacter || "",
     });
     setVibeInput(strain.vibe.join(", "));
     setEditingStrain(strain);
@@ -442,6 +469,101 @@ export default function StrainsAdminPage() {
                 style={styles.input}
                 placeholder="e.g., Cross of PE × B+"
               />
+            </div>
+          </div>
+
+          {/* Experiential Attributes Section */}
+          <div style={styles.lineageSection}>
+            <h4 style={styles.lineageTitle}>Experience Profile</h4>
+
+            <div style={styles.formGrid}>
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Onset Time</label>
+                <select
+                  value={formData.onsetTime || ""}
+                  onChange={(e) => setFormData({ ...formData, onsetTime: e.target.value })}
+                  style={styles.select}
+                >
+                  <option value="">Not specified</option>
+                  {ONSET_TIME_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Typical Duration</label>
+                <select
+                  value={formData.typicalDuration || ""}
+                  onChange={(e) => setFormData({ ...formData, typicalDuration: e.target.value })}
+                  style={styles.select}
+                >
+                  <option value="">Not specified</option>
+                  {DURATION_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Body/Head Balance</label>
+                <select
+                  value={formData.bodyHeadBalance || ""}
+                  onChange={(e) => setFormData({ ...formData, bodyHeadBalance: e.target.value })}
+                  style={styles.select}
+                >
+                  <option value="">Not specified</option>
+                  {BODY_HEAD_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Come-Up Intensity</label>
+                <select
+                  value={formData.comeUpIntensity || ""}
+                  onChange={(e) => setFormData({ ...formData, comeUpIntensity: e.target.value })}
+                  style={styles.select}
+                >
+                  <option value="">Not specified</option>
+                  {COME_UP_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.formGroup}>
+                <label style={styles.label}>Peak Character</label>
+                <select
+                  value={formData.peakCharacter || ""}
+                  onChange={(e) => setFormData({ ...formData, peakCharacter: e.target.value })}
+                  style={styles.select}
+                >
+                  <option value="">Not specified</option>
+                  {PEAK_CHARACTER_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Emotional Character</label>
+              <select
+                multiple
+                value={formData.emotionalCharacter || []}
+                onChange={(e) => {
+                  const selected = Array.from(e.target.selectedOptions, opt => opt.value);
+                  setFormData({ ...formData, emotionalCharacter: selected });
+                }}
+                style={{ ...styles.select, height: "120px" }}
+              >
+                {EMOTIONAL_CHARACTER_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+              <small style={styles.helpText}>Hold Ctrl/Cmd to select multiple</small>
             </div>
           </div>
 

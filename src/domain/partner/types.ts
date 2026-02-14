@@ -43,6 +43,21 @@ export interface StrainPublicView {
   confidenceTier: "emerging" | "developing" | "established" | "high-confidence";
   /** Reference to visualization asset (short-lived URL) */
   visualizationRef?: string;
+  /** Experiential profile (Feature 6) */
+  experienceProfile?: {
+    onsetTime: string | null;
+    typicalDuration: string | null;
+    bodyHeadBalance: "body-heavy" | "body-leaning" | "balanced" | "head-leaning" | "head-heavy" | null;
+    emotionalCharacter: string[];
+    comeUpIntensity: string | null;
+    peakCharacter: string | null;
+  };
+  /** Lineage information */
+  lineage?: {
+    parentStrains: string[];
+    lineageNotes: string | null;
+    generation: number | null;
+  };
   /** Data attribution */
   attribution: {
     source: "tripdar";

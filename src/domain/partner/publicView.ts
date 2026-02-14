@@ -28,6 +28,17 @@ interface InternalStrain {
   vibe: string[];
   confidence: number;
   description: string;
+  // Lineage fields
+  parentStrains?: string[];
+  lineageNotes?: string;
+  generation?: number;
+  // Experiential attributes (Feature 6)
+  onsetTime?: string;
+  typicalDuration?: string;
+  bodyHeadBalance?: string;
+  emotionalCharacter?: string[];
+  comeUpIntensity?: string;
+  peakCharacter?: string;
   // Future internal fields that should NEVER be exposed:
   // rawScores?: Record<string, number>;
   // modelVersion?: string;
@@ -132,6 +143,19 @@ function sanitizeVibes(vibes: string[]): string[] {
 // =============================================================================
 
 /**
+ * Map body/head balance to typed value
+ */
+function mapBodyHeadBalance(balance?: string): "body-heavy" | "body-leaning" | "balanced" | "head-leaning" | "head-heavy" | null {
+  if (!balance) return null;
+  const b = balance.toLowerCase().replace(/[^a-z]/g, "");
+  if (b.includes("bodyheavy")) return "body-heavy";
+  if (b.includes("bodyleaning")) return "body-leaning";
+  if (b.includes("headheavy")) return "head-heavy";
+  if (b.includes("headleaning")) return "head-leaning";
+  return "balanced";
+}
+
+/**
  * Transform an internal strain record to a public view.
  * This is the ONLY function that should create StrainPublicView objects.
  */
@@ -155,6 +179,21 @@ export function toPublicView(
     vibes: sanitizeVibes(internal.vibe),
     confidenceTier: mapConfidenceTier(internal.confidence),
     visualizationRef,
+    // Experiential profile (Feature 6)
+    experienceProfile: {
+      onsetTime: internal.onsetTime || null,
+      typicalDuration: internal.typicalDuration || null,
+      bodyHeadBalance: mapBodyHeadBalance(internal.bodyHeadBalance),
+      emotionalCharacter: internal.emotionalCharacter || [],
+      comeUpIntensity: internal.comeUpIntensity || null,
+      peakCharacter: internal.peakCharacter || null,
+    },
+    // Lineage information
+    lineage: (internal.parentStrains || internal.lineageNotes || internal.generation !== undefined) ? {
+      parentStrains: internal.parentStrains || [],
+      lineageNotes: internal.lineageNotes || null,
+      generation: internal.generation ?? null,
+    } : undefined,
     attribution: {
       source: "tripdar",
       version: API_VERSION,
