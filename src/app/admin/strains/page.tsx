@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   POTENCY_OPTIONS,
   STABILITY_OPTIONS,
@@ -54,6 +54,7 @@ export default function StrainsAdminPage() {
   // Image upload state
   const [uploadingImage, setUploadingImage] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Visualization URLs
   const [visualizationUrls, setVisualizationUrls] = useState<Record<string, string>>({});
@@ -216,7 +217,7 @@ export default function StrainsAdminPage() {
   };
 
   // Image upload handlers
-  const handleImageUpload = async (file: File, strainName: string) => {
+  const handleImageUpload = async (file: File, strainName: string, strainId?: string) => {
     try {
       setUploadingImage(true);
       setError(null);
@@ -234,6 +235,11 @@ export default function StrainsAdminPage() {
 
       if (data.success) {
         setSuccess("Image uploaded!");
+        // Immediately update the local state with the new URL
+        if (strainId && data.data?.url) {
+          setVisualizationUrls(prev => ({ ...prev, [strainId]: data.data.url }));
+        }
+        // Also refresh from server for consistency
         loadVisualizationUrls();
       } else {
         setError(data.error?.message || "Upload failed");
@@ -242,25 +248,29 @@ export default function StrainsAdminPage() {
       setError("Network error uploading image");
     } finally {
       setUploadingImage(false);
+      // Reset file input so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
     }
   };
 
-  const handleDrop = (e: React.DragEvent, strainName: string) => {
+  const handleDrop = (e: React.DragEvent, strainName: string, strainId?: string) => {
     e.preventDefault();
     setDragOver(false);
 
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith("image/")) {
-      handleImageUpload(file, strainName);
+      handleImageUpload(file, strainName, strainId);
     } else {
       setError("Please drop an image file");
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, strainName: string) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, strainName: string, strainId?: string) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleImageUpload(file, strainName);
+      handleImageUpload(file, strainName, strainId);
     }
   };
 
@@ -447,23 +457,31 @@ export default function StrainsAdminPage() {
                 }}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => handleDrop(e, editingStrain.name)}
+                onDrop={(e) => handleDrop(e, editingStrain.name, editingStrain.id)}
               >
-                {visualizationUrls[editingStrain.id] ? (
-                  <img
-                    src={visualizationUrls[editingStrain.id]}
-                    alt={editingStrain.name}
-                    style={styles.previewImage}
-                  />
+                {uploadingImage ? (
+                  <p style={styles.dropText}>Uploading...</p>
+                ) : visualizationUrls[editingStrain.id] ? (
+                  <div style={{ position: "relative" }}>
+                    <img
+                      src={visualizationUrls[editingStrain.id]}
+                      alt={editingStrain.name}
+                      style={styles.previewImage}
+                    />
+                    <div style={styles.imageOverlay}>
+                      Click or drag to replace image
+                    </div>
+                  </div>
                 ) : (
                   <p style={styles.dropText}>
-                    {uploadingImage ? "Uploading..." : "Drag & drop image or click to select"}
+                    Drag &amp; drop image or click to select
                   </p>
                 )}
                 <input
+                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={(e) => handleFileSelect(e, editingStrain.name)}
+                  onChange={(e) => handleFileSelect(e, editingStrain.name, editingStrain.id)}
                   style={styles.fileInput}
                 />
               </div>
@@ -850,6 +868,19 @@ const styles: Record<string, React.CSSProperties> = {
     maxWidth: "100%",
     maxHeight: "200px",
     borderRadius: "4px",
+    display: "block",
+  },
+  imageOverlay: {
+    position: "absolute" as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: "8px",
+    background: "rgba(0,0,0,0.5)",
+    color: "white",
+    fontSize: "12px",
+    textAlign: "center" as const,
+    borderRadius: "0 0 4px 4px",
   },
   fileInput: {
     position: "absolute" as const,
@@ -859,6 +890,7 @@ const styles: Record<string, React.CSSProperties> = {
     height: "100%",
     opacity: 0,
     cursor: "pointer",
+    zIndex: 10,
   },
   modalActions: {
     display: "flex",

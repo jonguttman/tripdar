@@ -72,19 +72,25 @@ export async function GET(
         /\.(png|jpg|jpeg|webp|gif)$/i.test(blob.pathname)
       );
 
-      // Find matching image
+      // Find matching image - prioritize exact matches to avoid collisions
+      // (e.g., "Penis Envy" incorrectly matching "Albino Penis Envy")
       const normalizedStrainName = strain.name.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-      const matchingBlob = imageBlobs.find(blob => {
+      // First, try exact match
+      let matchingBlob = imageBlobs.find(blob => {
         const filename = blob.pathname.replace("Strain_Graphics/", "").replace(/\.(png|jpg|jpeg|webp|gif)$/i, "");
         const normalizedFilename = filename.toLowerCase().replace(/[^a-z0-9]/g, "");
-
-        return (
-          normalizedFilename === normalizedStrainName ||
-          normalizedFilename.includes(normalizedStrainName) ||
-          normalizedStrainName.includes(normalizedFilename)
-        );
+        return normalizedFilename === normalizedStrainName;
       });
+
+      // Fall back to partial matching only if no exact match
+      if (!matchingBlob) {
+        matchingBlob = imageBlobs.find(blob => {
+          const filename = blob.pathname.replace("Strain_Graphics/", "").replace(/\.(png|jpg|jpeg|webp|gif)$/i, "");
+          const normalizedFilename = filename.toLowerCase().replace(/[^a-z0-9]/g, "");
+          return normalizedStrainName.includes(normalizedFilename);
+        });
+      }
 
       if (!matchingBlob) {
         const response = NextResponse.json<ApiErrorResponse>(
