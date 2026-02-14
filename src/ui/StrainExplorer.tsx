@@ -408,7 +408,7 @@ function StrainCard({ strain, view, onClick }: { strain: Strain; view: "grid" | 
             <div style={{ color: "white", fontSize: "0.75rem", marginTop: "0.125rem", fontWeight: "500" }}>{strain.potency}</div>
           </div>
           <div>
-            <div style={{ color: "#a78bfa", fontSize: "0.75rem" }}>Stability</div>
+            <div style={{ color: "#a78bfa", fontSize: "0.75rem" }}>Consistency</div>
             <div style={{ color: "white", fontSize: "0.75rem", marginTop: "0.125rem", fontWeight: "500" }}>{strain.stability}</div>
           </div>
           <div>
@@ -416,6 +416,56 @@ function StrainCard({ strain, view, onClick }: { strain: Strain; view: "grid" | 
             <div style={{ color: "white", fontSize: "0.75rem", marginTop: "0.125rem", fontWeight: "500" }}>{strain.visual}</div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function getScaleLevel(value: string): number {
+  const v = value.toLowerCase().replace(/[^a-z]/g, "");
+  if (v.includes("veryhigh")) return 5;
+  if (v.includes("high")) return 4;
+  if (v.includes("mediumhigh")) return 3.5;
+  if (v.includes("medium")) return 3;
+  if (v.includes("lowmedium")) return 2.5;
+  if (v.includes("low")) return 2;
+  if (v.includes("variable")) return -1; // special case
+  return 3;
+}
+
+function getScaleColor(level: number): string {
+  if (level === -1) return "#facc15"; // variable = yellow
+  if (level >= 4) return "#f87171";
+  if (level >= 3) return "#fb923c";
+  return "#4ade80";
+}
+
+function VisualScale({ label, value }: { label: string; value: string }) {
+  const level = getScaleLevel(value);
+  const isVariable = level === -1;
+  const fillPercent = isVariable ? 50 : (level / 5) * 100;
+  const color = getScaleColor(level);
+
+  return (
+    <div style={{ background: "rgba(0,0,0,0.15)", borderRadius: "0.75rem", padding: "0.75rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+        <span style={{ color: "#a78bfa", fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</span>
+        <span style={{ color: "white", fontSize: "0.75rem", fontWeight: "600" }}>{value}</span>
+      </div>
+      <div style={{ height: "0.5rem", background: "rgba(88,28,135,0.5)", borderRadius: "9999px", overflow: "hidden", position: "relative" }}>
+        {isVariable ? (
+          <div style={{
+            position: "absolute", inset: 0,
+            background: `repeating-linear-gradient(90deg, ${color} 0%, ${color} 20%, transparent 20%, transparent 25%)`,
+            borderRadius: "9999px", opacity: 0.7,
+          }} />
+        ) : (
+          <div style={{
+            height: "100%", width: `${fillPercent}%`,
+            background: `linear-gradient(to right, ${color}cc, ${color})`,
+            borderRadius: "9999px", transition: "width 0.3s ease",
+          }} />
+        )}
       </div>
     </div>
   );
@@ -487,7 +537,7 @@ function StrainDetail({ strain, onBack }: { strain: Strain; onBack: () => void }
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.75rem", marginTop: "2rem" }}>
                 {[
                   { label: "Potency", value: strain.potency },
-                  { label: "Stability", value: strain.stability },
+                  { label: "Trip Consistency", value: strain.stability },
                   { label: "Visuals", value: strain.visual },
                   { label: "Beginner", value: strain.beginner, color: strain.beginner === "Yes" ? "#4ade80" : strain.beginner === "No" ? "#f87171" : "#facc15" },
                 ].map((stat) => (
@@ -496,6 +546,12 @@ function StrainDetail({ strain, onBack }: { strain: Strain; onBack: () => void }
                     <div style={{ fontSize: "0.875rem", fontWeight: "600", marginTop: "0.25rem", color: stat.color || "white" }}>{stat.value}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Visual Scales */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "1rem", marginTop: "1.25rem" }}>
+                <VisualScale label="Trip Consistency" value={strain.stability} />
+                <VisualScale label="Visual Intensity" value={strain.visual} />
               </div>
             </div>
           </div>

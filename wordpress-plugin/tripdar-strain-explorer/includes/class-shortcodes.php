@@ -1004,9 +1004,14 @@ class Tripdar_Shortcodes {
                         <span class="tripdar-attribute__value"><?php echo esc_html($strain['visual']); ?></span>
                     </div>
                     <div class="tripdar-attribute">
-                        <span class="tripdar-attribute__label">Stability</span>
+                        <span class="tripdar-attribute__label">Trip Consistency</span>
                         <span class="tripdar-attribute__value"><?php echo esc_html($strain['stability']); ?></span>
                     </div>
+                </div>
+
+                <div class="tripdar-visual-scales">
+                    <?php echo $this->render_visual_scale('Trip Consistency', $strain['stability']); ?>
+                    <?php echo $this->render_visual_scale('Visual Intensity', $strain['visual']); ?>
                 </div>
             </div>
 
@@ -1065,9 +1070,15 @@ class Tripdar_Shortcodes {
                     <?php echo esc_html(wp_trim_words($strain['description'], 15)); ?>
                 </p>
                 <?php endif; ?>
-                <button class="tripdar-btn tripdar-btn--ghost tripdar-strain-card__explore">
-                    Explore
-                </button>
+                <div class="tripdar-strain-card__actions">
+                    <button class="tripdar-btn tripdar-btn--ghost tripdar-strain-card__explore">
+                        Explore
+                    </button>
+                    <button class="tripdar-tried-btn" data-slug="<?php echo esc_attr($strain['slug']); ?>">
+                        <span class="tripdar-tried-btn__icon">&#10003;</span>
+                        <span class="tripdar-tried-btn__text">I've tried this</span>
+                    </button>
+                </div>
             </div>
         </div>
         <?php
@@ -1127,6 +1138,55 @@ class Tripdar_Shortcodes {
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    /**
+     * Render a visual scale bar for a given attribute
+     */
+    private function render_visual_scale($label, $value) {
+        $level = $this->get_scale_level($value);
+        $is_variable = ($level === -1);
+        $fill_percent = $is_variable ? 50 : ($level / 5) * 100;
+
+        if ($is_variable) {
+            $color_class = 'variable';
+        } elseif ($level >= 4) {
+            $color_class = 'high';
+        } elseif ($level >= 3) {
+            $color_class = 'medium';
+        } else {
+            $color_class = 'low';
+        }
+
+        ob_start();
+        ?>
+        <div class="tripdar-scale">
+            <div class="tripdar-scale__header">
+                <span class="tripdar-scale__label"><?php echo esc_html($label); ?></span>
+                <span class="tripdar-scale__value"><?php echo esc_html($value); ?></span>
+            </div>
+            <div class="tripdar-scale__track">
+                <div class="tripdar-scale__fill tripdar-scale__fill--<?php echo esc_attr($color_class); ?>"
+                     style="width: <?php echo $fill_percent; ?>%"></div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Get numeric scale level from text value
+     */
+    private function get_scale_level($value) {
+        $v = strtolower(preg_replace('/[^a-z]/i', '', $value));
+        if (strpos($v, 'veryhigh') !== false) return 5;
+        if (strpos($v, 'high') !== false) return 4;
+        if (strpos($v, 'mediumhigh') !== false) return 3.5;
+        if (strpos($v, 'medium') !== false) return 3;
+        if (strpos($v, 'lowmedium') !== false) return 2.5;
+        if (strpos($v, 'low') !== false) return 2;
+        if (strpos($v, 'variable') !== false) return -1;
+        return 3;
     }
 
     /**

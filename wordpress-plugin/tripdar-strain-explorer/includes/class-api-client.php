@@ -436,6 +436,22 @@ class Tripdar_API_Client {
     }
 
     /**
+     * Record an analytics event
+     */
+    public function record_event($event_type, $entity_slug, $metadata = null) {
+        $body = [
+            'eventType' => $event_type,
+            'entitySlug' => $entity_slug,
+        ];
+
+        if ($metadata) {
+            $body['metadata'] = $metadata;
+        }
+
+        return $this->request('/events', 'POST', $body);
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {

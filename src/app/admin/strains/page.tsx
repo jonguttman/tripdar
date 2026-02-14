@@ -335,7 +335,7 @@ export default function StrainsAdminPage() {
             </div>
 
             <div style={styles.formGroup}>
-              <label style={styles.label}>Stability</label>
+              <label style={styles.label}>Trip Consistency</label>
               <select
                 value={formData.stability}
                 onChange={(e) => setFormData({ ...formData, stability: e.target.value })}
