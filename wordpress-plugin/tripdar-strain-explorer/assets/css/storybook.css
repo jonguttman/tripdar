@@ -1100,3 +1100,1006 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* =============================================================================
+   Search Component
+   ============================================================================= */
+
+.tripdar-search {
+    position: relative;
+    max-width: 500px;
+    font-family: var(--tripdar-font-body);
+}
+
+.tripdar-search__input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.tripdar-search__input {
+    width: 100%;
+    padding: var(--tripdar-space-md) var(--tripdar-space-lg);
+    padding-right: 3rem;
+    font-family: var(--tripdar-font-body);
+    font-size: 1rem;
+    color: var(--tripdar-ink);
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tripdar-search__input:focus {
+    outline: none;
+    border-color: var(--tripdar-violet-light);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+.tripdar-search__input::placeholder {
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-search__icon,
+.tripdar-search__loading {
+    position: absolute;
+    right: var(--tripdar-space-md);
+    color: var(--tripdar-ink-muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+}
+
+.tripdar-search__loading {
+    color: var(--tripdar-violet);
+}
+
+.tripdar-search__results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: var(--tripdar-space-xs);
+    background: var(--tripdar-parchment);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    box-shadow: var(--tripdar-shadow-md);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 1000;
+}
+
+.tripdar-search__result {
+    padding: var(--tripdar-space-md);
+    cursor: pointer;
+    border-bottom: 1px solid var(--tripdar-border-color);
+    transition: background-color 0.15s ease;
+}
+
+.tripdar-search__result:last-child {
+    border-bottom: none;
+}
+
+.tripdar-search__result:hover,
+.tripdar-search__result--selected {
+    background: var(--tripdar-parchment-dark);
+}
+
+.tripdar-search__result-name {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--tripdar-ink);
+    margin-bottom: var(--tripdar-space-xs);
+}
+
+.tripdar-search__result-meta {
+    display: flex;
+    gap: var(--tripdar-space-sm);
+    flex-wrap: wrap;
+    font-size: 0.75rem;
+}
+
+.tripdar-search__result-potency,
+.tripdar-search__result-beginner,
+.tripdar-search__result-match {
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: rgba(44, 24, 16, 0.08);
+    color: var(--tripdar-ink-light);
+}
+
+.tripdar-search__result-match {
+    color: var(--tripdar-violet);
+    background: rgba(139, 92, 246, 0.1);
+    font-style: italic;
+}
+
+.tripdar-search__no-results,
+.tripdar-search__error {
+    padding: var(--tripdar-space-lg);
+    text-align: center;
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+}
+
+.tripdar-search__error {
+    color: var(--tripdar-potency-intense);
+}
+
+.tripdar-search__detail {
+    margin-top: var(--tripdar-space-lg);
+    padding: var(--tripdar-space-lg);
+    background: var(--tripdar-parchment);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+}
+
+.tripdar-search__detail-loading,
+.tripdar-search__detail-error {
+    text-align: center;
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+}
+
+/* =============================================================================
+   Lineage Component
+   ============================================================================= */
+
+.tripdar-lineage {
+    font-family: var(--tripdar-font-body);
+    background: var(--tripdar-parchment);
+    padding: var(--tripdar-space-lg);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-lineage__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.5rem;
+    font-weight: 500;
+    color: var(--tripdar-ink);
+    margin: 0 0 var(--tripdar-space-md);
+}
+
+.tripdar-lineage__notes {
+    font-style: italic;
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-lg);
+    padding-left: var(--tripdar-space-md);
+    border-left: 3px solid var(--tripdar-violet-light);
+}
+
+.tripdar-lineage__tree {
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-lineage__node {
+    position: relative;
+    margin-left: var(--tripdar-space-lg);
+    padding: var(--tripdar-space-sm) 0;
+}
+
+.tripdar-lineage__node--depth-0 {
+    margin-left: 0;
+}
+
+.tripdar-lineage__node::before {
+    content: '';
+    position: absolute;
+    left: calc(-1 * var(--tripdar-space-md));
+    top: 50%;
+    width: var(--tripdar-space-sm);
+    height: 1px;
+    background: var(--tripdar-border-color);
+}
+
+.tripdar-lineage__node--depth-0::before {
+    display: none;
+}
+
+.tripdar-lineage__node-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tripdar-space-sm);
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    background: white;
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+}
+
+.tripdar-lineage__node-name {
+    font-family: var(--tripdar-font-display);
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--tripdar-ink);
+}
+
+.tripdar-lineage__potency {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+}
+
+.tripdar-lineage__potency--gentle {
+    background: rgba(126, 176, 140, 0.2);
+    color: var(--tripdar-potency-gentle);
+}
+
+.tripdar-lineage__potency--moderate {
+    background: rgba(212, 165, 116, 0.2);
+    color: var(--tripdar-potency-moderate);
+}
+
+.tripdar-lineage__potency--intense {
+    background: rgba(196, 91, 74, 0.2);
+    color: var(--tripdar-potency-intense);
+}
+
+.tripdar-lineage__parents {
+    margin-left: var(--tripdar-space-lg);
+    padding-left: var(--tripdar-space-md);
+    border-left: 2px dashed var(--tripdar-border-color);
+}
+
+.tripdar-lineage__children {
+    margin-top: var(--tripdar-space-lg);
+    padding-top: var(--tripdar-space-lg);
+    border-top: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-lineage__children-title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--tripdar-ink);
+    margin: 0 0 var(--tripdar-space-md);
+}
+
+.tripdar-lineage__children-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-lineage__children-list li {
+    padding: var(--tripdar-space-xs) var(--tripdar-space-sm);
+    background: var(--tripdar-parchment-dark);
+    border-radius: 4px;
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-light);
+}
+
+/* =============================================================================
+   Collection Component
+   ============================================================================= */
+
+.tripdar-collection,
+.tripdar-collections-list {
+    font-family: var(--tripdar-font-body);
+    color: var(--tripdar-ink);
+    line-height: 1.6;
+}
+
+.tripdar-collection__header {
+    display: flex;
+    gap: var(--tripdar-space-xl);
+    margin-bottom: var(--tripdar-space-xl);
+    padding: var(--tripdar-space-lg);
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-collection__cover {
+    flex: 0 0 200px;
+    aspect-ratio: 16/9;
+    border-radius: var(--tripdar-border-radius);
+    overflow: hidden;
+    background: var(--tripdar-parchment-dark);
+}
+
+.tripdar-collection__cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.tripdar-collection__info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.tripdar-collection__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-sm);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-collection__description {
+    font-size: 1rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-md);
+    line-height: 1.6;
+}
+
+.tripdar-collection__meta {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-md);
+    flex-wrap: wrap;
+}
+
+.tripdar-collection__count {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-light);
+    padding: var(--tripdar-space-xs) var(--tripdar-space-sm);
+    background: var(--tripdar-parchment-dark);
+    border-radius: 4px;
+}
+
+.tripdar-collection__tags {
+    display: flex;
+    gap: var(--tripdar-space-xs);
+    flex-wrap: wrap;
+}
+
+.tripdar-collection__grid {
+    display: grid;
+    gap: var(--tripdar-space-lg);
+}
+
+.tripdar-collection__grid--cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.tripdar-collection__grid--cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.tripdar-collection__grid--cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.tripdar-collection__empty {
+    text-align: center;
+    padding: var(--tripdar-space-xxl);
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px dashed var(--tripdar-border-color);
+}
+
+/* Collections List */
+.tripdar-collections-list {
+    display: grid;
+    gap: var(--tripdar-space-lg);
+}
+
+.tripdar-collections-list--cols-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.tripdar-collections-list--cols-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.tripdar-collections-list--cols-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.tripdar-collection-card {
+    display: block;
+    text-decoration: none;
+    color: inherit;
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tripdar-collection-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--tripdar-shadow-lg);
+    text-decoration: none;
+    color: inherit;
+}
+
+.tripdar-collection-card__image {
+    aspect-ratio: 16/9;
+    overflow: hidden;
+    background: var(--tripdar-parchment);
+}
+
+.tripdar-collection-card__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.tripdar-collection-card:hover .tripdar-collection-card__image img {
+    transform: scale(1.05);
+}
+
+.tripdar-collection-card__placeholder {
+    aspect-ratio: 16/9;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--tripdar-parchment);
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-collection-card__content {
+    padding: var(--tripdar-space-md);
+    position: relative;
+}
+
+.tripdar-collection-card__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-xs);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-collection-card__description {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-sm);
+    line-height: 1.5;
+}
+
+.tripdar-collection-card__count {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-light);
+    display: inline-block;
+}
+
+.tripdar-collection-card__featured {
+    position: absolute;
+    top: var(--tripdar-space-sm);
+    right: var(--tripdar-space-sm);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    background: var(--tripdar-violet);
+    color: white;
+    border-radius: 4px;
+}
+
+/* Collection responsive */
+@media (max-width: 768px) {
+    .tripdar-collection__header {
+        flex-direction: column;
+    }
+
+    .tripdar-collection__cover {
+        flex: none;
+        width: 100%;
+        max-width: 300px;
+        margin: 0 auto;
+    }
+
+    .tripdar-collection__title {
+        font-size: 1.5rem;
+        text-align: center;
+    }
+
+    .tripdar-collection__description {
+        text-align: center;
+    }
+
+    .tripdar-collection__meta {
+        justify-content: center;
+    }
+
+    .tripdar-collection__grid--cols-3,
+    .tripdar-collection__grid--cols-4,
+    .tripdar-collections-list--cols-3,
+    .tripdar-collections-list--cols-4 {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .tripdar-collection__grid--cols-2,
+    .tripdar-collection__grid--cols-3,
+    .tripdar-collection__grid--cols-4,
+    .tripdar-collections-list--cols-2,
+    .tripdar-collections-list--cols-3,
+    .tripdar-collections-list--cols-4 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =============================================================================
+   Reviews Component
+   ============================================================================= */
+
+.tripdar-reviews {
+    font-family: var(--tripdar-font-body);
+    color: var(--tripdar-ink);
+    line-height: 1.6;
+}
+
+.tripdar-reviews__summary {
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-lg);
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-reviews__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-md);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-reviews__stats {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-md);
+}
+
+.tripdar-reviews__average {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-md);
+}
+
+.tripdar-reviews__score {
+    font-family: var(--tripdar-font-display);
+    font-size: 3rem;
+    font-weight: 600;
+    color: var(--tripdar-ink);
+    line-height: 1;
+}
+
+.tripdar-reviews__stars {
+    color: var(--tripdar-gold);
+    font-size: 1.5rem;
+    letter-spacing: 2px;
+}
+
+.tripdar-reviews__count {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-reviews__distribution {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-xs);
+    max-width: 300px;
+}
+
+.tripdar-reviews__bar-row {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-reviews__bar-label {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+    width: 50px;
+}
+
+.tripdar-reviews__bar {
+    flex: 1;
+    height: 8px;
+    background: var(--tripdar-parchment-dark);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.tripdar-reviews__bar-fill {
+    height: 100%;
+    background: var(--tripdar-gold);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+}
+
+.tripdar-reviews__bar-count {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+    width: 25px;
+    text-align: right;
+}
+
+.tripdar-reviews__no-ratings {
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+    margin: 0;
+}
+
+/* Rating Form */
+.tripdar-reviews__form {
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-lg);
+    margin-bottom: var(--tripdar-space-lg);
+    text-align: center;
+}
+
+.tripdar-reviews__form-title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin: 0 0 var(--tripdar-space-md);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-reviews__star-input {
+    display: flex;
+    justify-content: center;
+    gap: var(--tripdar-space-xs);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-reviews__star {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    color: var(--tripdar-parchment-dark);
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.tripdar-reviews__star:hover {
+    transform: scale(1.1);
+}
+
+.tripdar-reviews__star.active,
+.tripdar-reviews__star.hover {
+    color: var(--tripdar-gold);
+}
+
+.tripdar-reviews__star.active svg polygon {
+    fill: currentColor;
+}
+
+.tripdar-reviews__submit-rating {
+    min-width: 150px;
+}
+
+.tripdar-reviews__submit-rating:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.tripdar-reviews__form-message {
+    margin-top: var(--tripdar-space-md);
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    border-radius: var(--tripdar-border-radius);
+    font-size: 0.875rem;
+}
+
+.tripdar-reviews__form-message.success {
+    background: rgba(77, 124, 90, 0.1);
+    color: var(--tripdar-moss);
+}
+
+.tripdar-reviews__form-message.error {
+    background: rgba(196, 91, 74, 0.1);
+    color: var(--tripdar-potency-intense);
+}
+
+/* Reviews List */
+.tripdar-reviews__list {
+    margin-top: var(--tripdar-space-lg);
+}
+
+.tripdar-reviews__list-title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-weight: 500;
+    margin: 0 0 var(--tripdar-space-md);
+    color: var(--tripdar-ink);
+    padding-bottom: var(--tripdar-space-sm);
+    border-bottom: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-reviews__review {
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-reviews__review:last-child {
+    margin-bottom: 0;
+}
+
+.tripdar-reviews__review-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-reviews__review-stars {
+    color: var(--tripdar-gold);
+    font-size: 1rem;
+    letter-spacing: 2px;
+}
+
+.tripdar-reviews__review-date {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-reviews__review-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-xs);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-reviews__review-body {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-light);
+    margin: 0;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* Reviews responsive */
+@media (max-width: 480px) {
+    .tripdar-reviews__average {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .tripdar-reviews__distribution {
+        max-width: 100%;
+    }
+}
+
+/* =============================================================================
+   Trip Reports Component
+   ============================================================================= */
+
+.tripdar-trip-reports,
+.tripdar-report-form {
+    font-family: var(--tripdar-font-body);
+    color: var(--tripdar-ink);
+    line-height: 1.6;
+}
+
+.tripdar-trip-reports__title,
+.tripdar-report-form__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-sm);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-report-form__intro {
+    color: var(--tripdar-ink-muted);
+    margin: 0 0 var(--tripdar-space-lg);
+}
+
+.tripdar-trip-reports__count {
+    color: var(--tripdar-ink-muted);
+    font-size: 0.875rem;
+    margin: 0 0 var(--tripdar-space-lg);
+}
+
+.tripdar-trip-reports__empty {
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+    padding: var(--tripdar-space-xl);
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    text-align: center;
+}
+
+.tripdar-trip-reports__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-lg);
+}
+
+/* Individual Trip Report */
+.tripdar-trip-report {
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-lg);
+}
+
+.tripdar-trip-report__header {
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-trip-report__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-sm);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-trip-report__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-trip-report__dose,
+.tripdar-trip-report__setting,
+.tripdar-trip-report__intensity,
+.tripdar-trip-report__duration {
+    font-size: 0.75rem;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--tripdar-parchment-dark);
+    color: var(--tripdar-ink-light);
+}
+
+.tripdar-trip-report__dose {
+    font-weight: 500;
+}
+
+.tripdar-trip-report__dose--microdose {
+    background: rgba(59, 130, 246, 0.15);
+    color: #1e40af;
+}
+
+.tripdar-trip-report__dose--low {
+    background: rgba(77, 124, 90, 0.15);
+    color: var(--tripdar-moss);
+}
+
+.tripdar-trip-report__dose--moderate {
+    background: rgba(212, 165, 116, 0.2);
+    color: #92400e;
+}
+
+.tripdar-trip-report__dose--high {
+    background: rgba(249, 115, 22, 0.15);
+    color: #9a3412;
+}
+
+.tripdar-trip-report__dose--heroic {
+    background: rgba(196, 91, 74, 0.15);
+    color: var(--tripdar-potency-intense);
+}
+
+.tripdar-trip-report__intention {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+    margin: 0 0 var(--tripdar-space-md);
+    padding-left: var(--tripdar-space-md);
+    border-left: 3px solid var(--tripdar-violet-light);
+}
+
+.tripdar-trip-report__body {
+    font-size: 0.95rem;
+    color: var(--tripdar-ink-light);
+    line-height: 1.7;
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-trip-report__footer {
+    padding-top: var(--tripdar-space-sm);
+    border-top: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-trip-report__date {
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+}
+
+/* Report Form */
+.tripdar-report-form__form {
+    background: var(--tripdar-parchment);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+    padding: var(--tripdar-space-lg);
+}
+
+.tripdar-report-form__row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-report-form__field {
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-report-form__label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--tripdar-ink);
+    margin-bottom: var(--tripdar-space-xs);
+}
+
+.tripdar-report-form__input,
+.tripdar-report-form__select,
+.tripdar-report-form__textarea {
+    width: 100%;
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    font-family: var(--tripdar-font-body);
+    font-size: 0.875rem;
+    color: var(--tripdar-ink);
+    background: white;
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    transition: border-color 0.2s ease;
+}
+
+.tripdar-report-form__input:focus,
+.tripdar-report-form__select:focus,
+.tripdar-report-form__textarea:focus {
+    outline: none;
+    border-color: var(--tripdar-violet-light);
+}
+
+.tripdar-report-form__textarea {
+    resize: vertical;
+    min-height: 150px;
+}
+
+.tripdar-report-form__charcount {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+    margin-top: var(--tripdar-space-xs);
+    text-align: right;
+}
+
+.tripdar-report-form__submit {
+    width: 100%;
+    margin-top: var(--tripdar-space-md);
+}
+
+.tripdar-report-form__message {
+    margin-top: var(--tripdar-space-md);
+    padding: var(--tripdar-space-md);
+    border-radius: var(--tripdar-border-radius);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+.tripdar-report-form__message.success {
+    background: rgba(77, 124, 90, 0.1);
+    color: var(--tripdar-moss);
+}
+
+.tripdar-report-form__message.error {
+    background: rgba(196, 91, 74, 0.1);
+    color: var(--tripdar-potency-intense);
+}
+
+/* Trip reports responsive */
+@media (max-width: 768px) {
+    .tripdar-report-form__row {
+        grid-template-columns: 1fr;
+    }
+}

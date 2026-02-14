@@ -238,6 +238,204 @@ class Tripdar_API_Client {
     }
 
     /**
+     * Search strains with fuzzy matching
+     */
+    public function search_strains($query, $limit = 10) {
+        if (empty($query) || strlen($query) < 2) {
+            return [
+                'success' => true,
+                'data' => ['results' => [], 'query' => $query]
+            ];
+        }
+
+        $cache_key = 'tripdar_search_' . md5($query . '_' . $limit);
+
+        // Short cache for search results (1 minute)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $query_string = http_build_query([
+            'q' => $query,
+            'limit' => min(20, max(1, intval($limit))),
+        ]);
+
+        $response = $this->request("/strains/search?{$query_string}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 60); // 1 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Get strain lineage (family tree)
+     */
+    public function get_lineage($slug) {
+        $cache_key = 'tripdar_lineage_' . sanitize_key($slug);
+
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request("/strains/{$slug}/lineage");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 300); // 5 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Get all collections
+     */
+    public function get_collections() {
+        $cache_key = 'tripdar_collections';
+
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request('/collections');
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 300); // 5 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Get a single collection by slug
+     */
+    public function get_collection($slug) {
+        $cache_key = 'tripdar_collection_' . sanitize_key($slug);
+
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request("/collections/{$slug}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 300); // 5 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Get strain ratings and reviews summary
+     */
+    public function get_ratings($slug) {
+        $cache_key = 'tripdar_ratings_' . sanitize_key($slug);
+
+        // Short cache for ratings (2 minutes)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $response = $this->request("/strains/{$slug}/ratings");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 120); // 2 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Submit a rating for a strain
+     */
+    public function submit_rating($slug, $rating) {
+        return $this->request("/strains/{$slug}/ratings", 'POST', [
+            'rating' => intval($rating),
+        ]);
+    }
+
+    /**
+     * Get approved reviews for a strain
+     */
+    public function get_reviews($slug, $page = 1, $per_page = 10) {
+        $cache_key = 'tripdar_reviews_' . sanitize_key($slug) . '_' . $page . '_' . $per_page;
+
+        // Short cache for reviews (2 minutes)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $query = http_build_query([
+            'page' => $page,
+            'pageSize' => $per_page,
+        ]);
+
+        $response = $this->request("/strains/{$slug}/reviews?{$query}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 120); // 2 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Submit a review for a strain
+     */
+    public function submit_review($slug, $rating, $body, $title = null) {
+        $data = [
+            'rating' => intval($rating),
+            'body' => $body,
+        ];
+
+        if ($title) {
+            $data['title'] = $title;
+        }
+
+        return $this->request("/strains/{$slug}/reviews", 'POST', $data);
+    }
+
+    /**
+     * Get approved trip reports for a strain
+     */
+    public function get_trip_reports($slug, $page = 1, $per_page = 10) {
+        $cache_key = 'tripdar_reports_' . sanitize_key($slug) . '_' . $page . '_' . $per_page;
+
+        // Short cache for reports (2 minutes)
+        $cached = get_transient($cache_key);
+        if ($cached !== false) {
+            return $cached;
+        }
+
+        $query = http_build_query([
+            'page' => $page,
+            'pageSize' => $per_page,
+        ]);
+
+        $response = $this->request("/strains/{$slug}/reports?{$query}");
+
+        if ($response && isset($response['success']) && $response['success']) {
+            set_transient($cache_key, $response, 120); // 2 minute cache
+        }
+
+        return $response;
+    }
+
+    /**
+     * Submit a trip report
+     */
+    public function submit_trip_report($data) {
+        return $this->request('/reports', 'POST', $data);
+    }
+
+    /**
      * Test API connection
      */
     public function test_connection() {
