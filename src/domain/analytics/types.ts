@@ -34,7 +34,7 @@ export interface AnalyticsSummary {
   id: string;
   period: Period;
   periodStart: Date;
-  strainSlug: string | null;
+  strainSlug: string; // empty string for overall summary
   views: number;
   searches: number;
   quizCompletions: number;
