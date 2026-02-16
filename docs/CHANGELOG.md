@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.7] - 2026-02-16
+
+### Fixed
+- Confidence badges now display correctly using existing strain data instead of calling non-existent API endpoint
+- Only show "Established" and "High Confidence" badges (hide "Emerging" and "Developing")
+
 ## [1.3.6] - 2026-02-16
 
 ### Changed

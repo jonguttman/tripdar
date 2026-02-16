@@ -1048,7 +1048,7 @@ class Tripdar_Shortcodes {
                         <?php endif; ?>
                         <?php echo $this->render_dose_sensitivity_tag($strain['doseSensitivity']); ?>
                     </div>
-                    <?php echo $this->render_confidence_badge($strain['slug']); ?>
+                    <?php echo $this->render_confidence_badge($strain['confidenceTier']); ?>
                 </div>
             </div>
 
@@ -1140,7 +1140,7 @@ class Tripdar_Shortcodes {
                     <span class="tripdar-strain-card__potency tripdar-potency--<?php echo esc_attr($strain['potencyTier']); ?>">
                         <?php echo esc_html($strain['potency']); ?>
                     </span>
-                    <?php echo $this->render_confidence_badge($strain['slug']); ?>
+                    <?php echo $this->render_confidence_badge($strain['confidenceTier']); ?>
                 </div>
             </div>
             <div class="tripdar-strain-card__content">
@@ -1627,34 +1627,34 @@ class Tripdar_Shortcodes {
     /**
      * Render confidence badge
      */
-    public function render_confidence_badge($slug) {
-        $response = $this->api_client->get_confidence($slug);
-
-        if (!$response || !isset($response['success']) || !$response['success']) {
-            return ''; // No confidence data
+    public function render_confidence_badge($slug_or_tier) {
+        // If a tier string is passed directly, use it; otherwise fetch from API
+        if (is_string($slug_or_tier) && in_array($slug_or_tier, ['high-confidence', 'established', 'developing', 'emerging'])) {
+            $tier = $slug_or_tier;
+        } else {
+            // Legacy: Try to fetch from API
+            $response = $this->api_client->get_confidence($slug_or_tier);
+            if (!$response || !isset($response['success']) || !$response['success']) {
+                return ''; // No confidence data
+            }
+            $data = $response['data'] ?? [];
+            $tier = $data['verifiedTier'] ?? 'emerging';
         }
 
-        $data = $response['data'] ?? [];
-        $tier = $data['verifiedTier'] ?? 'emerging';
-        $score = $data['computedConfidence'] ?? 0;
-        $tried = $data['triedCount'] ?? 0;
-        $ratings = $data['ratingCount'] ?? 0;
-        $reports = $data['reportCount'] ?? 0;
-
-        // Only show confidence badge if score is 65% or higher
-        if ($score < 65) {
+        // Only show badge for established or high-confidence (hide emerging and developing)
+        if ($tier === 'emerging' || $tier === 'developing') {
             return '';
         }
 
         $tier_labels = [
-            'verified' => 'Verified',
+            'high-confidence' => 'High Confidence',
             'established' => 'Established',
             'developing' => 'Developing',
             'emerging' => 'Emerging',
         ];
 
         $tier_icons = [
-            'verified' => '✓✓',
+            'high-confidence' => '✓✓',
             'established' => '✓',
             'developing' => '◐',
             'emerging' => '○',
@@ -1663,7 +1663,7 @@ class Tripdar_Shortcodes {
         ob_start();
         ?>
         <div class="tripdar-confidence tripdar-confidence--<?php echo esc_attr($tier); ?>"
-             title="Confidence: <?php echo $score; ?>% | <?php echo $tried; ?> tried, <?php echo $ratings; ?> ratings, <?php echo $reports; ?> reports">
+             title="Data quality: <?php echo esc_html($tier_labels[$tier] ?? 'Unknown'); ?>">
             <span class="tripdar-confidence__icon"><?php echo $tier_icons[$tier] ?? '○'; ?></span>
             <span class="tripdar-confidence__label"><?php echo esc_html($tier_labels[$tier] ?? 'Unknown'); ?></span>
         </div>
