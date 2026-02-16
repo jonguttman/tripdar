@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.3.8
+ * Version: 1.3.9
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.3.8');
+define('TRIPDAR_VERSION', '1.3.9');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
@@ -313,7 +313,11 @@ class Tripdar_Strain_Explorer {
         check_ajax_referer('tripdar_nonce', 'nonce');
 
         $strain_slug = isset($_POST['strain_slug']) ? sanitize_text_field($_POST['strain_slug']) : '';
-        $match_rating = isset($_POST['rating']) ? intval($_POST['rating']) : 3;
+        $slider_rating = isset($_POST['rating']) ? intval($_POST['rating']) : 3; // 1-5 from slider
+
+        // Normalize rating from 1-5 scale to 0-1 scale for API
+        // 1 → 0.0, 2 → 0.25, 3 → 0.5, 4 → 0.75, 5 → 1.0
+        $match_rating = ($slider_rating - 1) / 4;
 
         $result = $this->api->submit_feedback($strain_slug, $match_rating);
 
