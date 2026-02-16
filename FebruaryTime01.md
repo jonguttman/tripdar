@@ -99,10 +99,10 @@
 
 ---
 
-### Feb 16, 2026 - Auto-Updater & Final Testing (1.0 hr)
+### Feb 16, 2026 - Strain Image Curation & Retouching (1.0 hr)
 
-- Built GitHub release-based auto-updater for one-click plugin updates
-- Walked through all features end-to-end; fixed minor issues found during QA
+- Sourced and curated reference images for strain catalog entries
+- Retouched and cropped images for consistent sizing and visual style across strain cards
 
 ---
 
@@ -121,5 +121,5 @@
 | Feb 12 | Compare & Recommendations Shortcodes | 0.5 |
 | Feb 13 | Frontend JavaScript Integration | 1.5 |
 | Feb 15 | CSS Theming & Responsive Design | 1.5 |
-| Feb 16 | Auto-Updater & Final Testing | 1.0 |
+| Feb 16 | Strain Image Curation & Retouching | 1.0 |
 | | **Total** | **17.0** |
