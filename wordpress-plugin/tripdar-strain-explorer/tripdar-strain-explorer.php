@@ -129,6 +129,12 @@ class Tripdar_Strain_Explorer {
         // AJAX handlers - Analytics Events
         add_action('wp_ajax_tripdar_track_event', [$this, 'handle_track_event']);
         add_action('wp_ajax_nopriv_tripdar_track_event', [$this, 'handle_track_event']);
+
+        // AJAX handlers - Compare and Recommendations
+        add_action('wp_ajax_tripdar_compare_strains', [$this, 'handle_compare_strains']);
+        add_action('wp_ajax_nopriv_tripdar_compare_strains', [$this, 'handle_compare_strains']);
+        add_action('wp_ajax_tripdar_get_recommendations', [$this, 'handle_get_recommendations']);
+        add_action('wp_ajax_nopriv_tripdar_get_recommendations', [$this, 'handle_get_recommendations']);
     }
 
     /**
@@ -251,6 +257,15 @@ class Tripdar_Strain_Explorer {
             true
         );
 
+        // Data features script (compare, recommendations, etc.)
+        wp_enqueue_script(
+            'tripdar-data-features',
+            TRIPDAR_PLUGIN_URL . 'assets/js/data-features.js',
+            ['tripdar-explorer'],
+            TRIPDAR_VERSION,
+            true
+        );
+
         // Localize scripts with AJAX settings
         $ajax_settings = [
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -262,6 +277,7 @@ class Tripdar_Strain_Explorer {
         wp_localize_script('tripdar-feedback', 'tripdarFeedback', $ajax_settings);
         wp_localize_script('tripdar-ratings', 'tripdarAjax', $ajax_settings);
         wp_localize_script('tripdar-reports', 'tripdarReports', $ajax_settings);
+        wp_localize_script('tripdar-data-features', 'tripdarAjax', $ajax_settings);
     }
 
     /**
@@ -552,6 +568,49 @@ class Tripdar_Strain_Explorer {
         } else {
             // Silently succeed for tracking - don't break UX over analytics
             wp_send_json_success(['recorded' => false]);
+        }
+    }
+
+    /**
+     * AJAX handler for strain comparison
+     */
+    public function handle_compare_strains() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $strains_raw = isset($_POST['strains']) ? sanitize_text_field($_POST['strains']) : '';
+        $slugs = array_filter(array_map('trim', explode(',', $strains_raw)));
+
+        if (count($slugs) < 2 || count($slugs) > 5) {
+            wp_send_json_error('Please select 2-5 strains to compare');
+            return;
+        }
+
+        $result = $this->api->compare_strains($slugs);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to compare strains';
+            wp_send_json_error($error_msg);
+        }
+    }
+
+    /**
+     * AJAX handler for recommendations
+     */
+    public function handle_get_recommendations() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 5;
+        $limit = max(1, min(10, $limit));
+
+        $result = $this->api->get_recommendations($limit);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            wp_send_json_success($result['data']);
+        } else {
+            // Return empty array rather than error - no recommendations is normal
+            wp_send_json_success(['recommendations' => []]);
         }
     }
 
