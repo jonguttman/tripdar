@@ -44,11 +44,11 @@ export async function getOverviewStats(
   const currentCounts = await getEventCounts(periodStart, now);
   const previousCounts = await getEventCounts(previousPeriodStart, periodStart);
 
-  // Calculate trends
-  const viewsTrend = calculateTrend(
-    previousCounts.page_view,
-    currentCounts.page_view
-  );
+  // Calculate trends (combine page_view and strain_view for total views)
+  const currentViews = currentCounts.page_view + currentCounts.strain_view;
+  const previousViews = previousCounts.page_view + previousCounts.strain_view;
+
+  const viewsTrend = calculateTrend(previousViews, currentViews);
   const ratingsTrend = calculateTrend(
     previousCounts.rating,
     currentCounts.rating
@@ -59,7 +59,7 @@ export async function getOverviewStats(
 
   return {
     period: `${days}d`,
-    totalViews: currentCounts.page_view,
+    totalViews: currentViews,
     totalSearches: currentCounts.search,
     totalQuizCompletions: currentCounts.quiz_complete,
     totalRatings: currentCounts.rating,
@@ -82,11 +82,11 @@ export async function getTopStrains(
     Date.now() - days * 24 * 60 * 60 * 1000
   );
 
-  // Get strain view counts
+  // Get strain view counts (both page_view and strain_view)
   const strainViews = await prisma.analyticsEvent.groupBy({
     by: ["entitySlug"],
     where: {
-      eventType: "page_view",
+      eventType: { in: ["page_view", "strain_view"] },
       entitySlug: { not: null },
       createdAt: { gte: periodStart },
     },
@@ -164,7 +164,7 @@ export async function getTrendData(days: number = 7): Promise<TrendDataPoint[]> 
 
     dataPoints.push({
       date: dayStart.toISOString().split("T")[0],
-      views: counts.page_view,
+      views: counts.page_view + counts.strain_view,
       ratings: counts.rating,
       reviews: counts.review,
       reports: counts.report,
