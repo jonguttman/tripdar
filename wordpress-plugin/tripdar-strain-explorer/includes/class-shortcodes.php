@@ -1005,17 +1005,6 @@ class Tripdar_Shortcodes {
                     <p class="tripdar-strain-detail__description"><?php echo esc_html($strain['description']); ?></p>
                 </div>
 
-                <div class="tripdar-strain-detail__attributes">
-                    <div class="tripdar-attribute">
-                        <span class="tripdar-attribute__label">Visual Intensity</span>
-                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['visual']); ?></span>
-                    </div>
-                    <div class="tripdar-attribute">
-                        <span class="tripdar-attribute__label">Trip Consistency</span>
-                        <span class="tripdar-attribute__value"><?php echo esc_html($strain['stability']); ?></span>
-                    </div>
-                </div>
-
                 <div class="tripdar-visual-scales">
                     <?php echo $this->render_visual_scale('Trip Consistency', $strain['stability']); ?>
                     <?php echo $this->render_visual_scale('Visual Intensity', $strain['visual']); ?>
