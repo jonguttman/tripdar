@@ -49,6 +49,23 @@
                     return;
                 }
 
+                // Handle "View Lineage" link - open modal and switch to lineage tab
+                const lineageLink = e.target.closest('.tripdar-strain-card__lineage-link');
+                if (lineageLink) {
+                    e.stopPropagation();
+                    const card = lineageLink.closest('.tripdar-strain-card');
+                    if (card) {
+                        this.openStrainModal(card.dataset.slug).then(() => {
+                            const modal = document.querySelector('.tripdar-modal');
+                            if (modal) {
+                                const lineageTab = modal.querySelector('.tripdar-detail-tabs__tab[data-tab="lineage"]');
+                                if (lineageTab) lineageTab.click();
+                            }
+                        });
+                    }
+                    return;
+                }
+
                 const card = e.target.closest('.tripdar-strain-card');
                 if (card) {
                     const slug = card.dataset.slug;
@@ -214,6 +231,12 @@
                 if (data.success) {
                     modal.querySelector('.tripdar-modal__content').innerHTML = data.data.html;
 
+                    // Initialize tabs in modal
+                    this.initModalTabs(modal);
+
+                    // Initialize lineage parent links
+                    this.initLineageLinks(modal);
+
                     // Initialize feedback widget in modal
                     const feedbackContainer = modal.querySelector('.tripdar-feedback');
                     if (feedbackContainer && typeof TripdarFeedback !== 'undefined') {
@@ -278,6 +301,38 @@
                     entity_slug: entitySlug
                 })
             }).catch(() => {}); // Silently ignore errors
+        }
+
+        initModalTabs(modal) {
+            const tabs = modal.querySelectorAll('.tripdar-detail-tabs__tab');
+            const panels = modal.querySelectorAll('.tripdar-detail-tabs__panel');
+
+            tabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const target = tab.dataset.tab;
+
+                    // Update active tab
+                    tabs.forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+
+                    // Update active panel
+                    panels.forEach(p => {
+                        p.classList.toggle('active', p.dataset.panel === target);
+                    });
+                });
+            });
+        }
+
+        initLineageLinks(modal) {
+            modal.querySelectorAll('.tripdar-parent-tag').forEach(tag => {
+                tag.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const slug = tag.dataset.slug;
+                    if (slug) {
+                        this.openStrainModal(slug);
+                    }
+                });
+            });
         }
 
         closeModal() {

@@ -655,6 +655,28 @@ class Tripdar_Shortcodes {
         // Map beginner suitable
         $beginner = isset($chars['beginnerSuitable']) ? $chars['beginnerSuitable'] : 'maybe';
 
+        // Dose sensitivity
+        $dose_sensitivity = isset($chars['doseSensitivity']) ? $chars['doseSensitivity'] : '';
+
+        // Experience profile
+        $exp = isset($strain['experienceProfile']) ? $strain['experienceProfile'] : [];
+        $experience_profile = [
+            'onsetTime' => isset($exp['onsetTime']) ? $exp['onsetTime'] : null,
+            'typicalDuration' => isset($exp['typicalDuration']) ? $exp['typicalDuration'] : null,
+            'bodyHeadBalance' => isset($exp['bodyHeadBalance']) ? $exp['bodyHeadBalance'] : null,
+            'emotionalCharacter' => isset($exp['emotionalCharacter']) && is_array($exp['emotionalCharacter']) ? $exp['emotionalCharacter'] : [],
+            'comeUpIntensity' => isset($exp['comeUpIntensity']) ? $exp['comeUpIntensity'] : null,
+            'peakCharacter' => isset($exp['peakCharacter']) ? $exp['peakCharacter'] : null,
+        ];
+
+        // Lineage
+        $lin = isset($strain['lineage']) ? $strain['lineage'] : [];
+        $lineage = [
+            'parentStrains' => isset($lin['parentStrains']) && is_array($lin['parentStrains']) ? $lin['parentStrains'] : [],
+            'lineageNotes' => isset($lin['lineageNotes']) ? $lin['lineageNotes'] : null,
+            'generation' => isset($lin['generation']) ? $lin['generation'] : null,
+        ];
+
         return [
             'slug' => isset($strain['slug']) ? $strain['slug'] : '',
             'name' => isset($strain['name']) ? $strain['name'] : '',
@@ -665,6 +687,9 @@ class Tripdar_Shortcodes {
             'visual' => $visual,
             'stability' => $stability,
             'beginnerFriendly' => $beginner,
+            'doseSensitivity' => $dose_sensitivity,
+            'experienceProfile' => $experience_profile,
+            'lineage' => $lineage,
             'species' => isset($strain['species']) ? $strain['species'] : 'Psilocybe cubensis',
             'origin' => isset($strain['origin']) ? $strain['origin'] : '',
             'confidenceTier' => isset($strain['confidenceTier']) ? $strain['confidenceTier'] : '',
@@ -969,6 +994,9 @@ class Tripdar_Shortcodes {
      * Render strain detail HTML
      */
     private function render_strain_detail_html($strain, $image_url = '', $show_feedback = true) {
+        $has_experience = $this->has_experience_data($strain['experienceProfile']);
+        $has_lineage = $this->has_lineage_data($strain['lineage']);
+
         ob_start();
         ?>
         <div class="tripdar-strain-detail" data-strain-slug="<?php echo esc_attr($strain['slug']); ?>">
@@ -994,22 +1022,60 @@ class Tripdar_Shortcodes {
                         <?php if ($strain['beginnerFriendly'] === 'yes'): ?>
                         <span class="tripdar-tag tripdar-tag--beginner">Beginner Friendly</span>
                         <?php endif; ?>
+                        <?php echo $this->render_dose_sensitivity_tag($strain['doseSensitivity']); ?>
                     </div>
                     <?php echo $this->render_confidence_badge($strain['slug']); ?>
                 </div>
             </div>
 
-            <div class="tripdar-strain-detail__body">
-                <div class="tripdar-strain-detail__section">
-                    <h3 class="tripdar-section-title">The Journey</h3>
-                    <p class="tripdar-strain-detail__description"><?php echo esc_html($strain['description']); ?></p>
-                </div>
+            <!-- Tab Navigation -->
+            <div class="tripdar-detail-tabs">
+                <button class="tripdar-detail-tabs__tab active" data-tab="overview">Overview</button>
+                <button class="tripdar-detail-tabs__tab" data-tab="experience">Experience</button>
+                <?php if ($has_lineage): ?>
+                <button class="tripdar-detail-tabs__tab" data-tab="lineage">Lineage</button>
+                <?php endif; ?>
+            </div>
 
-                <div class="tripdar-visual-scales">
-                    <?php echo $this->render_visual_scale('Trip Consistency', $strain['stability']); ?>
-                    <?php echo $this->render_visual_scale('Visual Intensity', $strain['visual']); ?>
+            <!-- Tab: Overview -->
+            <div class="tripdar-detail-tabs__panel active" data-panel="overview">
+                <div class="tripdar-strain-detail__body">
+                    <div class="tripdar-strain-detail__section">
+                        <h3 class="tripdar-section-title">The Journey</h3>
+                        <p class="tripdar-strain-detail__description"><?php echo esc_html($strain['description']); ?></p>
+                    </div>
+
+                    <div class="tripdar-visual-scales">
+                        <?php echo $this->render_visual_scale('Trip Consistency', $strain['stability']); ?>
+                        <?php echo $this->render_visual_scale('Visual Intensity', $strain['visual']); ?>
+                        <?php if (!empty($strain['doseSensitivity'])): ?>
+                        <?php echo $this->render_visual_scale('Dose Sensitivity', ucfirst($strain['doseSensitivity'])); ?>
+                        <?php endif; ?>
+                    </div>
                 </div>
             </div>
+
+            <!-- Tab: Experience Profile -->
+            <div class="tripdar-detail-tabs__panel" data-panel="experience">
+                <div class="tripdar-strain-detail__body">
+                    <div class="tripdar-strain-detail__section">
+                        <h3 class="tripdar-section-title">Experience Profile</h3>
+                        <?php echo $this->render_experience_profile($strain['experienceProfile']); ?>
+                    </div>
+                </div>
+            </div>
+
+            <?php if ($has_lineage): ?>
+            <!-- Tab: Lineage -->
+            <div class="tripdar-detail-tabs__panel" data-panel="lineage">
+                <div class="tripdar-strain-detail__body">
+                    <div class="tripdar-strain-detail__section">
+                        <h3 class="tripdar-section-title">Lineage</h3>
+                        <?php echo $this->render_lineage_section($strain['lineage']); ?>
+                    </div>
+                </div>
+            </div>
+            <?php endif; ?>
 
             <?php if ($show_feedback): ?>
             <div class="tripdar-strain-detail__feedback">
@@ -1061,16 +1127,21 @@ class Tripdar_Shortcodes {
                         <span class="tripdar-vibe-tag"><?php echo esc_html($vibe); ?></span>
                         <?php endforeach; ?>
                     <?php endif; ?>
+                    <?php echo $this->render_dose_sensitivity_tag($strain['doseSensitivity']); ?>
                 </div>
                 <?php if ($variant !== 'compact'): ?>
-                <p class="tripdar-strain-card__excerpt">
-                    <?php echo esc_html(wp_trim_words($strain['description'], 15)); ?>
-                </p>
+                <div class="tripdar-strain-card__scales">
+                    <?php echo $this->render_mini_scale('Visual', $strain['visual']); ?>
+                    <?php echo $this->render_mini_scale('Consistency', $strain['stability']); ?>
+                </div>
                 <?php endif; ?>
                 <div class="tripdar-strain-card__actions">
                     <button class="tripdar-btn tripdar-btn--ghost tripdar-strain-card__explore">
                         Explore
                     </button>
+                    <?php if ($this->has_lineage_data($strain['lineage'])): ?>
+                    <span class="tripdar-strain-card__lineage-link">View Lineage</span>
+                    <?php endif; ?>
                     <button class="tripdar-tried-btn" data-slug="<?php echo esc_attr($strain['slug']); ?>">
                         <span class="tripdar-tried-btn__icon">&#10003;</span>
                         <span class="tripdar-tried-btn__text">I've tried this</span>
@@ -1566,6 +1637,223 @@ class Tripdar_Shortcodes {
              title="Confidence: <?php echo $score; ?>% | <?php echo $tried; ?> tried, <?php echo $ratings; ?> ratings, <?php echo $reports; ?> reports">
             <span class="tripdar-confidence__icon"><?php echo $tier_icons[$tier] ?? '○'; ?></span>
             <span class="tripdar-confidence__label"><?php echo esc_html($tier_labels[$tier] ?? 'Unknown'); ?></span>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render a compact mini-scale bar for strain cards
+     */
+    private function render_mini_scale($label, $value) {
+        $level = $this->get_scale_level($value);
+        $is_variable = ($level === -1);
+        $fill_percent = $is_variable ? 50 : ($level / 5) * 100;
+
+        if ($is_variable) {
+            $color_class = 'variable';
+        } elseif ($level >= 4) {
+            $color_class = 'high';
+        } elseif ($level >= 3) {
+            $color_class = 'medium';
+        } else {
+            $color_class = 'low';
+        }
+
+        ob_start();
+        ?>
+        <div class="tripdar-mini-scale" title="<?php echo esc_attr($label . ': ' . $value); ?>">
+            <span class="tripdar-mini-scale__label"><?php echo esc_html($label); ?></span>
+            <div class="tripdar-mini-scale__track">
+                <div class="tripdar-mini-scale__fill tripdar-scale__fill--<?php echo esc_attr($color_class); ?>"
+                     style="width: <?php echo $fill_percent; ?>%"></div>
+            </div>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render dose sensitivity tag for strain cards
+     */
+    private function render_dose_sensitivity_tag($value) {
+        if (empty($value)) return '';
+
+        $labels = [
+            'gentle' => 'Gentle Curve',
+            'moderate' => 'Moderate Curve',
+            'steep' => 'Steep Curve',
+        ];
+
+        $label = isset($labels[$value]) ? $labels[$value] : ucfirst($value);
+
+        ob_start();
+        ?>
+        <span class="tripdar-dose-tag tripdar-dose-tag--<?php echo esc_attr($value); ?>"><?php echo esc_html($label); ?></span>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Check if strain has experience profile data
+     */
+    private function has_experience_data($profile) {
+        if (empty($profile) || !is_array($profile)) return false;
+        return !empty($profile['onsetTime'])
+            || !empty($profile['typicalDuration'])
+            || !empty($profile['bodyHeadBalance'])
+            || !empty($profile['emotionalCharacter'])
+            || !empty($profile['comeUpIntensity'])
+            || !empty($profile['peakCharacter']);
+    }
+
+    /**
+     * Check if strain has lineage data
+     */
+    private function has_lineage_data($lineage) {
+        if (empty($lineage) || !is_array($lineage)) return false;
+        return !empty($lineage['parentStrains'])
+            || !empty($lineage['lineageNotes'])
+            || (!is_null($lineage['generation']) && $lineage['generation'] > 0);
+    }
+
+    /**
+     * Render experience profile tab content
+     */
+    private function render_experience_profile($profile) {
+        if (!$this->has_experience_data($profile)) {
+            ob_start();
+            ?>
+            <div class="tripdar-experience-empty">
+                <p>Experience data still being collected for this strain.</p>
+            </div>
+            <?php
+            return ob_get_clean();
+        }
+
+        $attributes = [];
+        if (!empty($profile['onsetTime'])) {
+            $attributes[] = ['label' => 'Onset Time', 'value' => $profile['onsetTime'], 'icon' => '&#9203;'];
+        }
+        if (!empty($profile['typicalDuration'])) {
+            $attributes[] = ['label' => 'Duration', 'value' => $profile['typicalDuration'], 'icon' => '&#9202;'];
+        }
+        if (!empty($profile['comeUpIntensity'])) {
+            $attributes[] = ['label' => 'Come-Up', 'value' => $profile['comeUpIntensity'], 'icon' => '&#9650;'];
+        }
+        if (!empty($profile['peakCharacter'])) {
+            $attributes[] = ['label' => 'Peak Character', 'value' => $profile['peakCharacter'], 'icon' => '&#9733;'];
+        }
+
+        ob_start();
+        ?>
+        <div class="tripdar-experience-grid">
+            <?php foreach ($attributes as $attr): ?>
+            <div class="tripdar-experience-card">
+                <span class="tripdar-experience-card__icon"><?php echo $attr['icon']; ?></span>
+                <span class="tripdar-experience-card__label"><?php echo esc_html($attr['label']); ?></span>
+                <span class="tripdar-experience-card__value"><?php echo esc_html($attr['value']); ?></span>
+            </div>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if (!empty($profile['bodyHeadBalance'])): ?>
+            <?php echo $this->render_balance_spectrum($profile['bodyHeadBalance']); ?>
+        <?php endif; ?>
+
+        <?php if (!empty($profile['emotionalCharacter'])): ?>
+        <div class="tripdar-experience-emotions">
+            <span class="tripdar-experience-emotions__label">Emotional Character</span>
+            <div class="tripdar-experience-emotions__tags">
+                <?php foreach ($profile['emotionalCharacter'] as $emotion): ?>
+                <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($emotion); ?></span>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render body/head balance spectrum bar
+     */
+    private function render_balance_spectrum($value) {
+        $positions = [
+            'body-heavy' => 10,
+            'body-leaning' => 25,
+            'balanced' => 50,
+            'head-leaning' => 75,
+            'head-heavy' => 85,
+            'head-dominant' => 95,
+        ];
+
+        $position = isset($positions[$value]) ? $positions[$value] : 50;
+        $display = ucwords(str_replace('-', ' ', $value));
+
+        ob_start();
+        ?>
+        <div class="tripdar-balance-spectrum">
+            <span class="tripdar-balance-spectrum__label">Body / Head Balance</span>
+            <div class="tripdar-balance-spectrum__bar">
+                <span class="tripdar-balance-spectrum__end">Body</span>
+                <div class="tripdar-balance-spectrum__track">
+                    <div class="tripdar-balance-spectrum__marker" style="left: <?php echo $position; ?>%"
+                         title="<?php echo esc_attr($display); ?>"></div>
+                </div>
+                <span class="tripdar-balance-spectrum__end">Head</span>
+            </div>
+            <span class="tripdar-balance-spectrum__value"><?php echo esc_html($display); ?></span>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    /**
+     * Render lineage section for detail modal
+     */
+    private function render_lineage_section($lineage) {
+        if (!$this->has_lineage_data($lineage)) {
+            return '';
+        }
+
+        ob_start();
+        ?>
+        <div class="tripdar-detail-lineage">
+            <?php if (!is_null($lineage['generation'])): ?>
+            <div class="tripdar-detail-lineage__generation">
+                <?php
+                $gen = intval($lineage['generation']);
+                if ($gen === 0) {
+                    $gen_label = 'Wild Type';
+                } else {
+                    $suffixes = [1 => 'st', 2 => 'nd', 3 => 'rd'];
+                    $suffix = isset($suffixes[$gen]) ? $suffixes[$gen] : 'th';
+                    $gen_label = $gen . $suffix . ' Generation';
+                }
+                ?>
+                <span class="tripdar-generation-badge"><?php echo esc_html($gen_label); ?></span>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($lineage['parentStrains'])): ?>
+            <div class="tripdar-detail-lineage__parents">
+                <span class="tripdar-detail-lineage__parents-label">Parent Strains</span>
+                <div class="tripdar-detail-lineage__parents-tags">
+                    <?php foreach ($lineage['parentStrains'] as $parent_slug): ?>
+                    <button class="tripdar-parent-tag" data-slug="<?php echo esc_attr($parent_slug); ?>">
+                        <?php echo esc_html(ucwords(str_replace('-', ' ', $parent_slug))); ?>
+                    </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if (!empty($lineage['lineageNotes'])): ?>
+            <blockquote class="tripdar-detail-lineage__notes">
+                <?php echo esc_html($lineage['lineageNotes']); ?>
+            </blockquote>
+            <?php endif; ?>
         </div>
         <?php
         return ob_get_clean();
