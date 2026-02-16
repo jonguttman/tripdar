@@ -4,6 +4,7 @@
 
 ### Added
 - New admin Ratings page (/admin/ratings) showing rating statistics by strain with count, average stars, and latest rating time
+- Ratings link added to admin navigation sidebar with award icon
 
 ### Fixed
 - Feedback rating submission now correctly normalizes 1-5 slider values to 0-1 scale expected by API (1→0.0, 5→1.0)
