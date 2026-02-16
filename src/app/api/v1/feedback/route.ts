@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Record the rating
-    const result = recordRating(
+    const result = await recordRating(
       partner.id,
       sessionHash,
       body.strainSlug,

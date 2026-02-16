@@ -7,6 +7,7 @@
 
 import { FeedbackRating, FeedbackSurvey, DEFAULT_SURVEY_QUESTIONS, SurveyQuestion } from "./quiz.types";
 import { randomBytes } from "crypto";
+import { prisma } from "@/lib/prisma";
 
 // =============================================================================
 // In-Memory Storage (Replace with database in production)
@@ -25,14 +26,28 @@ const BUFFER_FLUSH_SIZE = 50;
 /**
  * Record a match rating
  */
-export function recordRating(
+export async function recordRating(
   partnerId: string,
   sessionHash: string,
   strainSlug: string,
   matchRating: number
-): { id: string; needsSurvey: boolean } {
+): Promise<{ id: string; needsSurvey: boolean }> {
   // Validate rating is between 0 and 1
   const normalizedRating = Math.max(0, Math.min(1, matchRating));
+
+  // Convert 0-1 rating to 1-5 stars for database
+  // 0.0 → 1, 0.25 → 2, 0.5 → 3, 0.75 → 4, 1.0 → 5
+  const starRating = Math.round(normalizedRating * 4) + 1;
+
+  // Save to database
+  const dbRating = await prisma.strainRating.create({
+    data: {
+      strainSlug,
+      rating: starRating,
+      sessionHash,
+      partnerId,
+    },
+  });
 
   const rating: FeedbackRating = {
     partnerId,
@@ -53,7 +68,7 @@ export function recordRating(
   const needsSurvey = normalizedRating < 0.7;
 
   return {
-    id: randomBytes(8).toString("hex"),
+    id: dbRating.id,
     needsSurvey,
   };
 }
