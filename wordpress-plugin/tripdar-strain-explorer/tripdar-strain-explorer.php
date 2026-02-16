@@ -513,6 +513,7 @@ class Tripdar_Strain_Explorer {
         $data_json = isset($_POST['data']) ? stripslashes($_POST['data']) : '';
 
         if (empty($data_json)) {
+            error_log('Tripdar: Missing report data');
             wp_send_json_error('Missing report data');
             return;
         }
@@ -520,6 +521,7 @@ class Tripdar_Strain_Explorer {
         $data = json_decode($data_json, true);
 
         if (!$data || !isset($data['strainSlug'])) {
+            error_log('Tripdar: Invalid report data - ' . print_r($data, true));
             wp_send_json_error('Invalid report data');
             return;
         }
@@ -528,6 +530,7 @@ class Tripdar_Strain_Explorer {
         $required = ['doseCategory', 'doseAmount', 'setting', 'title', 'body'];
         foreach ($required as $field) {
             if (empty($data[$field])) {
+                error_log("Tripdar: Missing required field: {$field}");
                 wp_send_json_error("Missing required field: {$field}");
                 return;
             }
@@ -535,16 +538,20 @@ class Tripdar_Strain_Explorer {
 
         // Validate body length
         if (strlen($data['body']) < 50) {
+            error_log('Tripdar: Report body too short - ' . strlen($data['body']) . ' characters');
             wp_send_json_error('Report body must be at least 50 characters');
             return;
         }
 
+        error_log('Tripdar: Submitting report to API - ' . print_r($data, true));
         $result = $this->api->submit_trip_report($data);
+        error_log('Tripdar: API response - ' . print_r($result, true));
 
         if ($result && isset($result['success']) && $result['success']) {
             wp_send_json_success($result['data']);
         } else {
             $error_msg = isset($result['error']['message']) ? $result['error']['message'] : 'Failed to submit report';
+            error_log('Tripdar: Report submission failed - ' . $error_msg);
             wp_send_json_error($error_msg);
         }
     }
@@ -662,12 +669,21 @@ class Tripdar_Strain_Explorer {
                 $unique_vibes = array_diff($rec_vibes, $current_vibes);
                 $unique_vibe = !empty($unique_vibes) ? array_values($unique_vibes)[0] : null;
 
+                // Get visualization URL
+                $visualization_url = '';
+                if (isset($strain['visualizationRef'])) {
+                    $visualization_url = $strain['visualizationRef'];
+                } elseif (isset($strain['visualizationUrl'])) {
+                    $visualization_url = $strain['visualizationUrl'];
+                }
+
                 return [
                     'slug' => $strain['slug'],
                     'name' => $strain['name'],
                     'potency' => $strain['characteristics']['potencyTier'] ?? 'moderate',
                     'sharedVibes' => array_values($shared_vibes),
                     'uniqueVibe' => $unique_vibe,
+                    'visualizationUrl' => $visualization_url,
                     'score' => $strain['score'] ?? 0
                 ];
             }, $similar);

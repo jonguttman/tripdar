@@ -464,17 +464,21 @@
                 e.preventDefault();
 
                 const formData = new FormData(form);
+                const reportData = {
+                    strainSlug: this.strainSlug,
+                    doseAmount: formData.get('dose_amount'),
+                    doseCategory: formData.get('dose_category'),
+                    setting: formData.get('setting'),
+                    title: formData.get('title'),
+                    body: formData.get('body')
+                };
+
+                console.log('Submitting trip report:', reportData);
+
                 const body = new URLSearchParams({
                     action: 'tripdar_submit_report',
                     nonce: tripdarFeedback.nonce,
-                    data: JSON.stringify({
-                        strainSlug: this.strainSlug,
-                        doseAmount: formData.get('dose_amount'),
-                        doseCategory: formData.get('dose_category'),
-                        setting: formData.get('setting'),
-                        title: formData.get('title'),
-                        body: formData.get('body')
-                    })
+                    data: JSON.stringify(reportData)
                 });
 
                 try {
@@ -485,11 +489,14 @@
                     });
 
                     const data = await response.json();
+                    console.log('Trip report response:', data);
 
                     if (data.success) {
                         form.innerHTML = '<p class="tripdar-success">✓ Trip report submitted! Thank you for sharing.</p>';
                     } else {
-                        alert('Failed to submit report. Please try again.');
+                        const errorMsg = data.data || data.message || 'Failed to submit report';
+                        console.error('Trip report submission failed:', errorMsg);
+                        alert('Failed to submit report: ' + errorMsg);
                     }
                 } catch (error) {
                     console.error('Report submission error:', error);
@@ -542,32 +549,48 @@
             // Extract shared vibes and unique vibe
             const sharedVibes = rec.sharedVibes || [];
             const uniqueVibe = rec.uniqueVibe || null;
+            const imageUrl = rec.visualizationUrl || '';
 
             return `
                 <div class="tripdar-rec-card" data-slug="${this.escapeHtml(rec.slug)}">
-                    <div class="tripdar-rec-card__header">
-                        <h5>${this.escapeHtml(rec.name)}</h5>
-                        <span class="tripdar-rec-card__potency">${this.escapeHtml(rec.potency || 'Moderate')}</span>
-                    </div>
+                    ${imageUrl ? `
+                        <div class="tripdar-rec-card__image">
+                            <img src="${this.escapeHtml(imageUrl)}" alt="${this.escapeHtml(rec.name)}" loading="lazy">
+                        </div>
+                    ` : `
+                        <div class="tripdar-rec-card__placeholder">
+                            <svg viewBox="0 0 60 60" class="tripdar-placeholder-icon">
+                                <ellipse cx="30" cy="45" rx="6" ry="10" fill="currentColor" opacity="0.5"/>
+                                <ellipse cx="30" cy="28" rx="18" ry="14" fill="currentColor"/>
+                            </svg>
+                        </div>
+                    `}
 
-                    <div class="tripdar-rec-card__explanation">
-                        ${sharedVibes.length > 0 ? `
-                            <p>
-                                <strong>Like ${this.strainSlug}:</strong>
-                                ${sharedVibes.slice(0, 2).map(v => this.escapeHtml(v)).join(', ')}
-                            </p>
-                        ` : ''}
-                        ${uniqueVibe ? `
-                            <p>
-                                <strong>Plus:</strong> ${this.escapeHtml(uniqueVibe)} experience
-                                - worth exploring for variety
-                            </p>
-                        ` : ''}
-                    </div>
+                    <div class="tripdar-rec-card__content">
+                        <div class="tripdar-rec-card__header">
+                            <h5>${this.escapeHtml(rec.name)}</h5>
+                            <span class="tripdar-rec-card__potency">${this.escapeHtml(rec.potency || 'Moderate')}</span>
+                        </div>
 
-                    <button class="tripdar-btn tripdar-btn--secondary tripdar-rec-card__btn">
-                        View ${this.escapeHtml(rec.name)}
-                    </button>
+                        <div class="tripdar-rec-card__explanation">
+                            ${sharedVibes.length > 0 ? `
+                                <p>
+                                    <strong>Like ${this.strainSlug}:</strong>
+                                    ${sharedVibes.slice(0, 2).map(v => this.escapeHtml(v)).join(', ')}
+                                </p>
+                            ` : ''}
+                            ${uniqueVibe ? `
+                                <p>
+                                    <strong>Plus:</strong> ${this.escapeHtml(uniqueVibe)} experience
+                                    - worth exploring for variety
+                                </p>
+                            ` : ''}
+                        </div>
+
+                        <button class="tripdar-btn tripdar-btn--secondary tripdar-rec-card__btn">
+                            View ${this.escapeHtml(rec.name)}
+                        </button>
+                    </div>
                 </div>
             `;
         }
