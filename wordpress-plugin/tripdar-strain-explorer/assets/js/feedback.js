@@ -14,6 +14,8 @@
             this.currentRating = 3;
             this.surveyResponses = {};
             this.surveyQuestions = [];
+            this.ratedStrains = this.loadRatedStrains();
+            this.hasRated = this.hasUserRated();
 
             this.elements = {
                 ratingSlider: container.querySelector('.tripdar-rating-slider__input'),
@@ -30,6 +32,15 @@
         }
 
         init() {
+            // Check if user has already rated this strain
+            if (this.hasRated) {
+                this.showPostRatingView();
+            } else {
+                this.showRatingWidget();
+            }
+        }
+
+        showRatingWidget() {
             // Rating slider
             if (this.elements.ratingSlider) {
                 this.elements.ratingSlider.addEventListener('input', (e) => {
@@ -50,6 +61,29 @@
 
             if (this.elements.surveySkipBtn) {
                 this.elements.surveySkipBtn.addEventListener('click', () => this.skipSurvey());
+            }
+        }
+
+        loadRatedStrains() {
+            try {
+                const data = localStorage.getItem('tripdar_rated_strains');
+                return data ? JSON.parse(data) : {};
+            } catch (e) {
+                console.error('Failed to load rated strains from localStorage:', e);
+                return {};
+            }
+        }
+
+        hasUserRated() {
+            return this.strainSlug in this.ratedStrains;
+        }
+
+        saveRating(rating) {
+            try {
+                this.ratedStrains[this.strainSlug] = rating;
+                localStorage.setItem('tripdar_rated_strains', JSON.stringify(this.ratedStrains));
+            } catch (e) {
+                console.error('Failed to save rating to localStorage:', e);
             }
         }
 
@@ -94,17 +128,16 @@
         }
 
         onRatingSubmitted() {
+            // Save rating to localStorage
+            this.saveRating(this.currentRating);
+
             // Hide rating section
             if (this.elements.ratingSection) {
                 this.elements.ratingSection.style.display = 'none';
             }
 
-            // If rating is low (1-2), show survey prompt
-            if (this.currentRating <= 2) {
-                this.showSurveyPrompt();
-            } else {
-                this.showThanks();
-            }
+            // Show post-rating view
+            this.showPostRatingView();
         }
 
         showThanks() {
@@ -318,6 +351,241 @@
                 this.elements.submitBtn.disabled = false;
                 this.elements.submitBtn.textContent = 'Submit Feedback';
             }
+        }
+
+        async showPostRatingView() {
+            const strainName = this.strainSlug.split('-').map(word =>
+                word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ');
+
+            const html = `
+                <div class="tripdar-post-rating">
+                    <div class="tripdar-post-rating__message">
+                        <h4>Thanks for rating ${strainName}!</h4>
+                        <p>Share your experience to help others on their journey.</p>
+                    </div>
+
+                    <div class="tripdar-trip-report-prompt">
+                        ${this.renderTripReportForm()}
+                    </div>
+
+                    <div class="tripdar-recommendations">
+                        <h4>You might also like...</h4>
+                        <div class="tripdar-recommendations__loading">
+                            <div class="tripdar-loading-spinner"></div>
+                            <span>Loading suggestions...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Find the feedback body section and replace its content
+            const feedbackBody = this.container.querySelector('.tripdar-feedback__rating').parentElement;
+            if (feedbackBody) {
+                feedbackBody.innerHTML = html;
+
+                // Bind trip report form
+                this.bindTripReportForm();
+
+                // Load recommendations
+                await this.loadRecommendations();
+            }
+        }
+
+        renderTripReportForm() {
+            return `
+                <form class="tripdar-trip-report-inline">
+                    <div class="tripdar-form-row">
+                        <label>Dose Amount</label>
+                        <input type="text" name="dose_amount" placeholder="e.g., 2.5g" required>
+                    </div>
+
+                    <div class="tripdar-form-row">
+                        <label>Dose Category</label>
+                        <select name="dose_category" required>
+                            <option value="">Select...</option>
+                            <option value="MICRODOSE">Microdose</option>
+                            <option value="LOW">Low</option>
+                            <option value="MODERATE">Moderate</option>
+                            <option value="HIGH">High</option>
+                            <option value="HEROIC">Heroic</option>
+                        </select>
+                    </div>
+
+                    <div class="tripdar-form-row">
+                        <label>Setting</label>
+                        <select name="setting" required>
+                            <option value="">Select...</option>
+                            <option value="nature">Nature</option>
+                            <option value="home">Home</option>
+                            <option value="ceremony">Ceremony</option>
+                            <option value="social">Social</option>
+                            <option value="solo">Solo</option>
+                            <option value="therapeutic">Therapeutic</option>
+                            <option value="creative">Creative</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+
+                    <div class="tripdar-form-row">
+                        <label>Title</label>
+                        <input type="text" name="title" placeholder="Brief headline..." required>
+                    </div>
+
+                    <div class="tripdar-form-row">
+                        <label>Your Experience (min 50 characters)</label>
+                        <textarea name="body" rows="6" required minlength="50" placeholder="Describe your experience in detail..."></textarea>
+                        <span class="tripdar-char-count">0 characters</span>
+                    </div>
+
+                    <button type="submit" class="tripdar-btn tripdar-btn--primary">
+                        Submit Trip Report
+                    </button>
+                </form>
+            `;
+        }
+
+        bindTripReportForm() {
+            const form = this.container.querySelector('.tripdar-trip-report-inline');
+            if (!form) return;
+
+            const textarea = form.querySelector('textarea[name="body"]');
+            const charCount = form.querySelector('.tripdar-char-count');
+
+            // Character count
+            if (textarea && charCount) {
+                textarea.addEventListener('input', () => {
+                    charCount.textContent = `${textarea.value.length} characters`;
+                });
+            }
+
+            // Form submission
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const formData = new FormData(form);
+                const body = new URLSearchParams({
+                    action: 'tripdar_submit_report',
+                    nonce: tripdarFeedback.nonce,
+                    data: JSON.stringify({
+                        strainSlug: this.strainSlug,
+                        doseAmount: formData.get('dose_amount'),
+                        doseCategory: formData.get('dose_category'),
+                        setting: formData.get('setting'),
+                        title: formData.get('title'),
+                        body: formData.get('body')
+                    })
+                });
+
+                try {
+                    const response = await fetch(tripdarFeedback.ajaxUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        form.innerHTML = '<p class="tripdar-success">✓ Trip report submitted! Thank you for sharing.</p>';
+                    } else {
+                        alert('Failed to submit report. Please try again.');
+                    }
+                } catch (error) {
+                    console.error('Report submission error:', error);
+                    alert('Network error. Please try again.');
+                }
+            });
+        }
+
+        async loadRecommendations() {
+            const container = this.container.querySelector('.tripdar-recommendations');
+            if (!container) return;
+
+            try {
+                const response = await fetch(tripdarFeedback.ajaxUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        action: 'tripdar_get_similar',
+                        nonce: tripdarFeedback.nonce,
+                        strain_slug: this.strainSlug,
+                        limit: 3
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.data && data.data.length > 0) {
+                    const recs = data.data;
+                    const html = recs.map(rec => this.renderRecommendationCard(rec)).join('');
+                    container.innerHTML = `
+                        <h4>You might also like...</h4>
+                        <div class="tripdar-recommendations__grid">${html}</div>
+                    `;
+
+                    // Bind click handlers
+                    this.bindRecommendationCards();
+                } else {
+                    container.innerHTML = `
+                        <h4>Explore More</h4>
+                        <p class="tripdar-recommendations__empty">Check out our full strain collection to find your next journey!</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Failed to load recommendations:', error);
+                container.innerHTML = '<p class="tripdar-error">Unable to load suggestions</p>';
+            }
+        }
+
+        renderRecommendationCard(rec) {
+            // Extract shared vibes and unique vibe
+            const sharedVibes = rec.sharedVibes || [];
+            const uniqueVibe = rec.uniqueVibe || null;
+
+            return `
+                <div class="tripdar-rec-card" data-slug="${this.escapeHtml(rec.slug)}">
+                    <div class="tripdar-rec-card__header">
+                        <h5>${this.escapeHtml(rec.name)}</h5>
+                        <span class="tripdar-rec-card__potency">${this.escapeHtml(rec.potency || 'Moderate')}</span>
+                    </div>
+
+                    <div class="tripdar-rec-card__explanation">
+                        ${sharedVibes.length > 0 ? `
+                            <p>
+                                <strong>Like ${this.strainSlug}:</strong>
+                                ${sharedVibes.slice(0, 2).map(v => this.escapeHtml(v)).join(', ')}
+                            </p>
+                        ` : ''}
+                        ${uniqueVibe ? `
+                            <p>
+                                <strong>Plus:</strong> ${this.escapeHtml(uniqueVibe)} experience
+                                - worth exploring for variety
+                            </p>
+                        ` : ''}
+                    </div>
+
+                    <button class="tripdar-btn tripdar-btn--secondary tripdar-rec-card__btn">
+                        View ${this.escapeHtml(rec.name)}
+                    </button>
+                </div>
+            `;
+        }
+
+        bindRecommendationCards() {
+            const cards = this.container.querySelectorAll('.tripdar-rec-card__btn');
+
+            cards.forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    const card = e.target.closest('.tripdar-rec-card');
+                    const slug = card.dataset.slug;
+
+                    // Trigger strain modal open (emit custom event for explorer.js to handle)
+                    document.dispatchEvent(new CustomEvent('tripdar:view-strain', {
+                        detail: { slug }
+                    }));
+                });
+            });
         }
 
         escapeHtml(text) {
