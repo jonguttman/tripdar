@@ -173,7 +173,7 @@ export async function PATCH(request: NextRequest) {
 
       for (const field of expFields) {
         if (!strain[field] && defaults[field]) {
-          (strain as Record<string, unknown>)[field] = defaults[field];
+          (strain as unknown as Record<string, unknown>)[field] = defaults[field];
           changed = true;
         }
       }
