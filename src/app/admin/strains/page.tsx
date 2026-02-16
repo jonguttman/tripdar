@@ -669,11 +669,14 @@ export default function StrainsAdminPage() {
                 ) : (
                   <div style={styles.noImage}>No Image</div>
                 )}
+                {/* Strain name overlay */}
+                <div style={styles.strainNameOverlay}>
+                  {strain.name}
+                </div>
               </div>
 
               {/* Info */}
               <div style={styles.strainInfo}>
-                <h3 style={styles.strainName}>{strain.name}</h3>
                 <div style={styles.strainMeta}>
                   <span style={styles.badge}>{strain.potency}</span>
                   <span style={styles.badge}>{strain.beginner === "Yes" ? "Beginner OK" : strain.beginner === "No" ? "Experienced" : "Maybe"}</span>
@@ -817,11 +820,24 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
   },
   strainImage: {
+    position: "relative" as const,
     height: "160px",
     backgroundColor: "#f0f0f0",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+  },
+  strainNameOverlay: {
+    position: "absolute" as const,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: "12px 16px",
+    background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)",
+    color: "white",
+    fontSize: "16px",
+    fontWeight: "600",
+    textShadow: "0 1px 2px rgba(0,0,0,0.3)",
   },
   cardImage: {
     width: "100%",
