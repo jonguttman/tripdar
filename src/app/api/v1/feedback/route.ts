@@ -15,10 +15,10 @@ import {
   createMeta,
   recordRating,
   validateRating,
-  recordSignal,
   ApiSuccessResponse,
   ApiErrorResponse,
 } from "@/domain/partner";
+import { recordEvent } from "@/domain/analytics/service";
 
 interface FeedbackRequestBody {
   strainSlug: string;
@@ -92,13 +92,13 @@ export async function POST(request: NextRequest) {
     );
 
     // Record analytics event for rating
-    recordSignal(
-      partner.id,
-      "rating", // Rating event type for analytics
+    await recordEvent({
+      eventType: "rating",
+      entitySlug: body.strainSlug,
+      partnerId: partner.id,
       sessionHash,
-      [body.strainSlug],
-      { feedback_rating: body.matchRating.toFixed(2) }
-    );
+      metadata: { feedback_rating: body.matchRating.toFixed(2) },
+    });
 
     // Build response message
     let message: string;
