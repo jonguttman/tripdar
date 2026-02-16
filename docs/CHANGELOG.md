@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.8] - 2026-02-16
+
+### Fixed
+- Analytics event tracking now works correctly - edge middleware was blocking POST requests to `/api/v1/events` endpoint, causing 405 Method Not Allowed errors
+
 ## [1.3.7] - 2026-02-16
 
 ### Fixed
