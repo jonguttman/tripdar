@@ -724,9 +724,15 @@ class Tripdar_Shortcodes {
         $strains = $response['data']['strains'] ?? [];
         $pagination = $response['data']['pagination'] ?? [];
 
+        // Fetch ALL strains to count vibes across the entire catalog (not just first page)
+        $all_strains_response = $this->api_client->get_strains(1, 100, $filters);
+        $all_strains = ($all_strains_response && isset($all_strains_response['success']) && $all_strains_response['success'])
+            ? ($all_strains_response['data']['strains'] ?? [])
+            : $strains;
+
         // Extract all vibes and count frequency for filter dropdown
         $vibe_counts = [];
-        foreach ($strains as $strain) {
+        foreach ($all_strains as $strain) {
             $normalized = $this->normalize_strain($strain);
             if (!empty($normalized['vibes']) && is_array($normalized['vibes'])) {
                 foreach ($normalized['vibes'] as $vibe) {
