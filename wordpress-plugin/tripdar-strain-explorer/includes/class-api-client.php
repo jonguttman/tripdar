@@ -417,6 +417,13 @@ class Tripdar_API_Client {
     }
 
     /**
+     * Get similar strains with explanations (for progressive engagement)
+     */
+    public function get_similar_strains($slug, $limit = 3) {
+        return $this->get_similar($slug, $limit);
+    }
+
+    /**
      * Get personalized recommendations
      */
     public function get_recommendations($limit = 5) {

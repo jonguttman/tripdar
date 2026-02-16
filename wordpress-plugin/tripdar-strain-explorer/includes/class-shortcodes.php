@@ -1036,8 +1036,12 @@ class Tripdar_Shortcodes {
 
                     <div class="tripdar-strain-detail__tags">
                         <?php if (!empty($strain['vibes']) && is_array($strain['vibes'])): ?>
-                            <?php foreach ($strain['vibes'] as $vibe): ?>
-                            <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($vibe); ?></span>
+                            <?php
+                            $vibe_descriptions = $this->get_vibe_descriptions();
+                            foreach ($strain['vibes'] as $vibe):
+                                $description = isset($vibe_descriptions[$vibe]) ? $vibe_descriptions[$vibe] : '';
+                            ?>
+                            <span class="tripdar-tag tripdar-tag--vibe" title="<?php echo esc_attr($description); ?>"><?php echo esc_html($vibe); ?></span>
                             <?php endforeach; ?>
                         <?php endif; ?>
                         <span class="tripdar-tag tripdar-tag--potency tripdar-tag--<?php echo esc_attr($strain['potencyTier']); ?>">
@@ -1147,8 +1151,12 @@ class Tripdar_Shortcodes {
                 <h3 class="tripdar-strain-card__name"><?php echo esc_html($strain['name']); ?></h3>
                 <div class="tripdar-strain-card__vibes">
                     <?php if (!empty($strain['vibes']) && is_array($strain['vibes'])): ?>
-                        <?php foreach (array_slice($strain['vibes'], 0, 2) as $vibe): ?>
-                        <span class="tripdar-vibe-tag"><?php echo esc_html($vibe); ?></span>
+                        <?php
+                        $vibe_descriptions = $this->get_vibe_descriptions();
+                        foreach (array_slice($strain['vibes'], 0, 2) as $vibe):
+                            $description = isset($vibe_descriptions[$vibe]) ? $vibe_descriptions[$vibe] : '';
+                        ?>
+                        <span class="tripdar-vibe-tag" title="<?php echo esc_attr($description); ?>"><?php echo esc_html($vibe); ?></span>
                         <?php endforeach; ?>
                     <?php endif; ?>
                     <?php echo $this->render_dose_sensitivity_tag($strain['doseSensitivity']); ?>
@@ -1886,6 +1894,37 @@ class Tripdar_Shortcodes {
         </div>
         <?php
         return ob_get_clean();
+    }
+
+    /**
+     * Get vibe descriptions for tooltips
+     */
+    private function get_vibe_descriptions() {
+        return [
+            'reflective' => 'Promotes introspection and self-examination',
+            'warm' => 'Comforting, emotionally gentle experience',
+            'grounded' => 'Helps you feel centered and connected to your body',
+            'clear' => 'Mental clarity and lucid thought',
+            'social' => 'Enhances connection and conversation with others',
+            'nature-friendly' => 'Amplifies appreciation for natural surroundings',
+            'intense' => 'Strong, powerful psychedelic effects',
+            'inward' => 'Encourages internal focus and self-exploration',
+            'mystical' => 'Facilitates profound spiritual experiences',
+            'reality-bending' => 'Strong visual and perceptual distortions',
+            'emotional' => 'Deep feelings and emotional processing',
+            'profound' => 'Life-changing insights and revelations',
+            'easygoing' => 'Relaxed, gentle, beginner-friendly',
+            'bright' => 'Uplifting, cheerful, positive mood',
+            'whimsical' => 'Playful, imaginative, lighthearted',
+            'classic' => 'Reliable, well-known effects',
+            'cosmic' => 'Connection to the universe and beyond',
+            'transformative' => 'Catalyzes personal growth and change',
+            'emotionally deep' => 'Intense emotional exploration and catharsis',
+            'euphoric' => 'Feelings of joy and bliss',
+            'playful' => 'Fun, lighthearted energy',
+            'immersive' => 'Deeply absorbing experience',
+            'cinematic' => 'Vivid, movie-like visual effects',
+        ];
     }
 
     /**

@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.4.0] - 2026-02-16
+
+### Added
+- **Progressive engagement system**: Users can now only rate each strain once (tracked via localStorage)
+- **Trip report prompts**: After rating a strain, users are prompted to submit a detailed trip report with dose, setting, and experience details
+- **Personalized recommendations**: Post-rating view displays 3 similar strains with vibe-based explanations highlighting shared characteristics and unique differences
+- **Vibe tag tooltips**: Hover over any vibe tag to see a clear description of what that vibe means (e.g., "reflective" → "Promotes introspection and self-examination")
+- **Return visit value**: Users who return to a previously-rated strain see the trip report form and recommendations immediately
+- New AJAX endpoint `tripdar_get_similar` for fetching similar strains with explanation data
+- Trip report submission directly from feedback widget (no need to navigate to separate form)
+
+### Changed
+- Feedback widget now shows different UI based on whether user has already rated the strain
+- Rating widget only displays once per strain per user (localStorage-based tracking)
+- Post-rating experience now focuses on data collection (trip reports) and discovery (recommendations)
+- Similar strains now include explanation text comparing shared vibes and highlighting unique characteristics
+
+### Technical
+- WordPress plugin version bumped to 1.4.0
+- Added `get_similar_strains()` method to API client
+- Added `handle_get_similar_strains()` AJAX handler to main plugin class
+- Enhanced feedback.js with localStorage management, post-rating views, and recommendation rendering
+- Added `get_vibe_descriptions()` method to shortcodes class for tooltip content
+- New CSS styles for post-rating view, trip report form, recommendation cards, and vibe tooltips
+
 ## [1.3.9] - 2026-02-16
 
 ### Added

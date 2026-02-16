@@ -3182,3 +3182,300 @@
         width: 30px;
     }
 }
+
+/* =============================================================================
+   Progressive Engagement - Post-Rating View
+   ============================================================================= */
+
+.tripdar-post-rating {
+    padding: var(--tripdar-space-lg);
+    background: var(--tripdar-parchment);
+}
+
+.tripdar-post-rating__message {
+    text-align: center;
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-post-rating__message h4 {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.5rem;
+    color: var(--tripdar-ink);
+    margin: 0 0 var(--tripdar-space-sm) 0;
+}
+
+.tripdar-post-rating__message p {
+    color: var(--tripdar-ink-muted);
+    margin: 0;
+}
+
+/* =============================================================================
+   Trip Report Inline Form
+   ============================================================================= */
+
+.tripdar-trip-report-prompt {
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-trip-report-inline {
+    background: var(--tripdar-parchment-dark);
+    padding: var(--tripdar-space-lg);
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-form-row {
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-form-row label {
+    display: block;
+    font-family: var(--tripdar-font-ui);
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--tripdar-ink);
+    margin-bottom: var(--tripdar-space-xs);
+}
+
+.tripdar-form-row input[type="text"],
+.tripdar-form-row select,
+.tripdar-form-row textarea {
+    width: 100%;
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    font-family: var(--tripdar-font-body);
+    font-size: 0.9rem;
+    color: var(--tripdar-ink);
+    background: white;
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: 6px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.tripdar-form-row input[type="text"]:focus,
+.tripdar-form-row select:focus,
+.tripdar-form-row textarea:focus {
+    outline: none;
+    border-color: var(--tripdar-violet);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.1);
+}
+
+.tripdar-form-row textarea {
+    resize: vertical;
+    min-height: 120px;
+}
+
+.tripdar-char-count {
+    display: block;
+    float: right;
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-muted);
+    margin-top: var(--tripdar-space-xs);
+}
+
+.tripdar-success {
+    padding: var(--tripdar-space-md);
+    background: rgba(77, 124, 90, 0.1);
+    color: var(--tripdar-moss);
+    border: 1px solid var(--tripdar-moss-light);
+    border-radius: var(--tripdar-border-radius);
+    text-align: center;
+}
+
+/* =============================================================================
+   Recommendations Grid
+   ============================================================================= */
+
+.tripdar-recommendations {
+    margin-top: var(--tripdar-space-xl);
+}
+
+.tripdar-recommendations h4 {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.25rem;
+    color: var(--tripdar-ink);
+    margin: 0 0 var(--tripdar-space-md) 0;
+}
+
+.tripdar-recommendations__loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--tripdar-space-sm);
+    padding: var(--tripdar-space-xl);
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-recommendations__empty {
+    padding: var(--tripdar-space-lg);
+    text-align: center;
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+}
+
+.tripdar-recommendations__grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--tripdar-space-md);
+    margin-top: var(--tripdar-space-md);
+}
+
+/* =============================================================================
+   Recommendation Card
+   ============================================================================= */
+
+.tripdar-rec-card {
+    background: white;
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    padding: var(--tripdar-space-md);
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.tripdar-rec-card:hover {
+    box-shadow: var(--tripdar-shadow-md);
+    transform: translateY(-2px);
+}
+
+.tripdar-rec-card__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--tripdar-space-sm);
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-rec-card__header h5 {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.1rem;
+    color: var(--tripdar-ink);
+    margin: 0;
+    flex: 1;
+}
+
+.tripdar-rec-card__potency {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(212, 165, 116, 0.2);
+    color: #92400e;
+    white-space: nowrap;
+}
+
+.tripdar-rec-card__explanation {
+    font-size: 0.875rem;
+    color: var(--tripdar-ink-light);
+    margin-bottom: var(--tripdar-space-md);
+    line-height: 1.5;
+}
+
+.tripdar-rec-card__explanation p {
+    margin: var(--tripdar-space-xs) 0;
+}
+
+.tripdar-rec-card__explanation strong {
+    color: var(--tripdar-ink);
+}
+
+.tripdar-rec-card__btn {
+    width: 100%;
+}
+
+/* =============================================================================
+   Vibe Tag Tooltips
+   ============================================================================= */
+
+.tripdar-tag--vibe,
+.tripdar-vibe-tag {
+    cursor: help;
+    position: relative;
+}
+
+.tripdar-tag--vibe[title]:hover::after,
+.tripdar-vibe-tag[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(17, 24, 39, 0.95);
+    color: white;
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    border-radius: 6px;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    z-index: 100;
+    margin-bottom: var(--tripdar-space-xs);
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.tripdar-tag--vibe[title]:hover::before,
+.tripdar-vibe-tag[title]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: rgba(17, 24, 39, 0.95);
+    z-index: 100;
+    margin-bottom: calc(-6px + var(--tripdar-space-xs));
+    pointer-events: none;
+}
+
+/* =============================================================================
+   Loading Spinner
+   ============================================================================= */
+
+.tripdar-loading-spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--tripdar-border-color);
+    border-top-color: var(--tripdar-violet);
+    border-radius: 50%;
+    animation: tripdar-spin 1s linear infinite;
+}
+
+@keyframes tripdar-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* =============================================================================
+   Responsive - Progressive Engagement
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    .tripdar-recommendations__grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tripdar-post-rating {
+        padding: var(--tripdar-space-md);
+    }
+
+    .tripdar-trip-report-inline {
+        padding: var(--tripdar-space-md);
+    }
+}
+
+@media (max-width: 480px) {
+    .tripdar-post-rating__message h4 {
+        font-size: 1.25rem;
+    }
+
+    .tripdar-rec-card__header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .tripdar-tag--vibe[title]:hover::after,
+    .tripdar-vibe-tag[title]:hover::after {
+        white-space: normal;
+        max-width: 200px;
+        font-size: 0.7rem;
+    }
+}

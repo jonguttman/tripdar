@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.3.9
+ * Version: 1.4.0
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.3.9');
+define('TRIPDAR_VERSION', '1.4.0');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
@@ -135,6 +135,10 @@ class Tripdar_Strain_Explorer {
         add_action('wp_ajax_nopriv_tripdar_compare_strains', [$this, 'handle_compare_strains']);
         add_action('wp_ajax_tripdar_get_recommendations', [$this, 'handle_get_recommendations']);
         add_action('wp_ajax_nopriv_tripdar_get_recommendations', [$this, 'handle_get_recommendations']);
+
+        // AJAX handlers - Similar strains (for progressive engagement)
+        add_action('wp_ajax_tripdar_get_similar', [$this, 'handle_get_similar_strains']);
+        add_action('wp_ajax_nopriv_tripdar_get_similar', [$this, 'handle_get_similar_strains']);
     }
 
     /**
@@ -615,6 +619,62 @@ class Tripdar_Strain_Explorer {
         } else {
             // Return empty array rather than error - no recommendations is normal
             wp_send_json_success(['recommendations' => []]);
+        }
+    }
+
+    /**
+     * AJAX handler for similar strains (progressive engagement)
+     */
+    public function handle_get_similar_strains() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $strain_slug = isset($_POST['strain_slug']) ? sanitize_text_field($_POST['strain_slug']) : '';
+        $limit = isset($_POST['limit']) ? intval($_POST['limit']) : 3;
+
+        if (empty($strain_slug)) {
+            wp_send_json_error(['message' => 'Missing strain slug']);
+            return;
+        }
+
+        $result = $this->api->get_similar_strains($strain_slug, $limit);
+
+        if ($result && isset($result['success']) && $result['success']) {
+            // Extract recommendations with explanations
+            $similar = $result['data']['similar'] ?? [];
+
+            // Process each recommendation to add explanation data
+            $recommendations = array_map(function($strain) use ($strain_slug) {
+                // Get current strain data for comparison (from cache or make a quick request)
+                $current_strain_data = $this->api->get_strain($strain_slug);
+                $current_vibes = [];
+                if ($current_strain_data && isset($current_strain_data['data']['strain']['vibes'])) {
+                    $current_vibes = $current_strain_data['data']['strain']['vibes'];
+                } elseif ($current_strain_data && isset($current_strain_data['data']['strain']['vibe'])) {
+                    $current_vibes = $current_strain_data['data']['strain']['vibe'];
+                }
+
+                $rec_vibes = $strain['vibe'] ?? $strain['vibes'] ?? [];
+
+                // Find shared vibes
+                $shared_vibes = array_intersect($current_vibes, $rec_vibes);
+
+                // Find unique vibes
+                $unique_vibes = array_diff($rec_vibes, $current_vibes);
+                $unique_vibe = !empty($unique_vibes) ? array_values($unique_vibes)[0] : null;
+
+                return [
+                    'slug' => $strain['slug'],
+                    'name' => $strain['name'],
+                    'potency' => $strain['characteristics']['potencyTier'] ?? 'moderate',
+                    'sharedVibes' => array_values($shared_vibes),
+                    'uniqueVibe' => $unique_vibe,
+                    'score' => $strain['score'] ?? 0
+                ];
+            }, $similar);
+
+            wp_send_json_success($recommendations);
+        } else {
+            wp_send_json_error($result['error'] ?? ['message' => 'Failed to fetch recommendations']);
         }
     }
 
