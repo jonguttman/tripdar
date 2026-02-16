@@ -165,21 +165,30 @@ export async function PATCH(request: NextRequest) {
 
       let changed = false;
 
-      // Merge experience profile fields (only fill missing/empty)
-      const expFields = [
-        "onsetTime", "typicalDuration", "bodyHeadBalance",
-        "comeUpIntensity", "peakCharacter",
-      ] as const;
-
-      for (const field of expFields) {
-        if (!strain[field] && defaults[field]) {
-          (strain as unknown as Record<string, unknown>)[field] = defaults[field];
-          changed = true;
-        }
+      // Sync experience profile fields (ALWAYS overwrite with authoritative data)
+      if (defaults.onsetTime) {
+        (strain as unknown as Record<string, unknown>)['onsetTime'] = defaults.onsetTime;
+        changed = true;
+      }
+      if (defaults.typicalDuration) {
+        (strain as unknown as Record<string, unknown>)['typicalDuration'] = defaults.typicalDuration;
+        changed = true;
+      }
+      if (defaults.bodyHeadBalance) {
+        (strain as unknown as Record<string, unknown>)['bodyHeadBalance'] = defaults.bodyHeadBalance;
+        changed = true;
+      }
+      if (defaults.comeUpIntensity) {
+        (strain as unknown as Record<string, unknown>)['comeUpIntensity'] = defaults.comeUpIntensity;
+        changed = true;
+      }
+      if (defaults.peakCharacter) {
+        (strain as unknown as Record<string, unknown>)['peakCharacter'] = defaults.peakCharacter;
+        changed = true;
       }
 
-      // Merge emotionalCharacter (only if empty)
-      if ((!strain.emotionalCharacter || strain.emotionalCharacter.length === 0) && defaults.emotionalCharacter) {
+      // Sync emotionalCharacter (ALWAYS overwrite with authoritative data)
+      if (defaults.emotionalCharacter && defaults.emotionalCharacter.length > 0) {
         strain.emotionalCharacter = defaults.emotionalCharacter;
         changed = true;
       }
