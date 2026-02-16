@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.5] - 2026-02-16
+
+### Fixed
+- Vibe filter now counts vibes across all 25 strains instead of just the first page (12 strains), correctly showing 7-9 popular vibes instead of 4
+
 ## [1.3.4] - 2026-02-16
 
 ### Added
