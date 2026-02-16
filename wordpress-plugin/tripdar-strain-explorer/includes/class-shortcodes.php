@@ -735,8 +735,8 @@ class Tripdar_Shortcodes {
                 }
             }
         }
-        // Filter to vibes that appear in 2+ strains and sort alphabetically
-        $popular_vibes = array_keys(array_filter($vibe_counts, function($count) { return $count >= 2; }));
+        // Filter to vibes that appear in 3+ strains and sort alphabetically
+        $popular_vibes = array_keys(array_filter($vibe_counts, function($count) { return $count >= 3; }));
         sort($popular_vibes);
 
         ob_start();
