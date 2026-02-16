@@ -26,6 +26,7 @@ class Tripdar_Admin {
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_action('wp_ajax_tripdar_test_connection', [$this, 'ajax_test_connection']);
         add_action('wp_ajax_tripdar_refresh_strains', [$this, 'ajax_refresh_strains']);
+        add_action('wp_ajax_tripdar_clear_cache', [$this, 'ajax_clear_cache']);
     }
 
     /**
@@ -251,6 +252,13 @@ class Tripdar_Admin {
                 ?>
             </form>
 
+            <div class="tripdar-admin__cache-clear" style="margin-top: 20px; padding: 15px; background: #f0f0f1; border-radius: 4px;">
+                <h3>Cache Management</h3>
+                <p>Clear cached API responses to fetch fresh strain data immediately.</p>
+                <button type="button" class="button button-secondary tripdar-clear-cache">Clear Cache</button>
+                <span class="tripdar-cache-status" style="margin-left: 10px;"></span>
+            </div>
+
             <div class="tripdar-admin__shortcodes">
                 <h3>Available Shortcodes</h3>
                 <table class="widefat">
@@ -430,6 +438,26 @@ class Tripdar_Admin {
         } else {
             wp_send_json_error(['message' => 'Connection failed. Check your API key.']);
         }
+    }
+
+    /**
+     * AJAX: Clear cache
+     */
+    public function ajax_clear_cache() {
+        check_ajax_referer('tripdar_admin', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(['message' => 'Unauthorized']);
+        }
+
+        global $wpdb;
+        $deleted = $wpdb->query(
+            "DELETE FROM {$wpdb->options}
+             WHERE option_name LIKE '_transient_tripdar_%'
+             OR option_name LIKE '_transient_timeout_tripdar_%'"
+        );
+
+        wp_send_json_success(['message' => 'Cache cleared successfully!', 'deleted' => $deleted]);
     }
 
     /**

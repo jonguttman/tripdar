@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.4] - 2026-02-16
+
+### Added
+- Clear Cache button in WordPress plugin settings to manually clear cached API responses
+
 ## [1.3.3] - 2026-02-15
 
 ### Changed

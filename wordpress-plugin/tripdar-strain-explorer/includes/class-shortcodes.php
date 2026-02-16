@@ -739,6 +739,11 @@ class Tripdar_Shortcodes {
         $popular_vibes = array_keys(array_filter($vibe_counts, function($count) { return $count >= 3; }));
         sort($popular_vibes);
 
+        // Debug: If no vibes found, fallback to default set
+        if (empty($popular_vibes)) {
+            $popular_vibes = ['social', 'euphoric', 'playful', 'mystical', 'intense', 'immersive', 'clear', 'cinematic', 'bright'];
+        }
+
         ob_start();
         ?>
         <div class="tripdar-explorer" data-per-page="<?php echo esc_attr($atts['per_page']); ?>">
