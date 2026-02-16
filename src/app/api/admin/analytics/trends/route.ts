@@ -54,8 +54,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error loading trend data:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to load trend data";
     return NextResponse.json(
-      { success: false, error: { message: "Failed to load trend data" } },
+      { success: false, error: { message: `Trends error: ${errorMessage}` } },
       { status: 500 }
     );
   }
