@@ -5,6 +5,7 @@
 ### Fixed
 - Feedback rating submission now correctly normalizes 1-5 slider values to 0-1 scale expected by API (1→0.0, 5→1.0)
 - Analytics "Total Views" now correctly counts both page_view and strain_view events from partner sites
+- Feedback ratings now persist to database instead of memory-only storage, appearing correctly in admin reviews and analytics
 
 ## [1.3.8] - 2026-02-16
 
