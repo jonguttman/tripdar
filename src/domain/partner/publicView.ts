@@ -145,11 +145,12 @@ function sanitizeVibes(vibes: string[]): string[] {
 /**
  * Map body/head balance to typed value
  */
-function mapBodyHeadBalance(balance?: string): "body-heavy" | "body-leaning" | "balanced" | "head-leaning" | "head-heavy" | null {
+function mapBodyHeadBalance(balance?: string): "body-heavy" | "body-leaning" | "balanced" | "head-leaning" | "head-heavy" | "head-dominant" | null {
   if (!balance) return null;
   const b = balance.toLowerCase().replace(/[^a-z]/g, "");
   if (b.includes("bodyheavy")) return "body-heavy";
   if (b.includes("bodyleaning")) return "body-leaning";
+  if (b.includes("headdominant")) return "head-dominant";
   if (b.includes("headheavy")) return "head-heavy";
   if (b.includes("headleaning")) return "head-leaning";
   return "balanced";

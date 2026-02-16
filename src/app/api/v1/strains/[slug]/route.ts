@@ -14,12 +14,13 @@ import {
   withLogging,
   recordStrainView,
   toPublicView,
+  findBySlug,
   createMeta,
   StrainDetailResponse,
   ApiSuccessResponse,
   ApiErrorResponse,
 } from "@/domain/partner";
-import { getStrainBySlug } from "@/domain/strain/data";
+import { loadStrainData } from "@/domain/strain/blob-store";
 
 export async function GET(
   request: NextRequest,
@@ -35,8 +36,9 @@ export async function GET(
   const { slug } = await params;
 
   return withLogging(context, `/api/v1/strains/${slug}`, async () => {
-    // Find strain by slug
-    const strain = getStrainBySlug(slug);
+    // Find strain by slug from blob storage (single source of truth)
+    const allStrains = await loadStrainData();
+    const strain = findBySlug(allStrains, slug);
 
     if (!strain) {
       const response = NextResponse.json<ApiErrorResponse>(

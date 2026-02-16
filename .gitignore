@@ -39,3 +39,6 @@ out/
 # Environment
 .env
 .env.*
+
+# Plugin build artifacts
+*.zip

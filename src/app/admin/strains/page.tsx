@@ -577,6 +577,7 @@ export default function StrainsAdminPage() {
                   borderColor: dragOver ? "#8b5cf6" : "#ddd",
                   backgroundColor: dragOver ? "#f5f3ff" : "#fafafa",
                 }}
+                onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                 onDragLeave={() => setDragOver(false)}
                 onDrop={(e) => handleDrop(e, editingStrain.name, editingStrain.id)}
@@ -599,14 +600,14 @@ export default function StrainsAdminPage() {
                     Drag &amp; drop image or click to select
                   </p>
                 )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleFileSelect(e, editingStrain.name, editingStrain.id)}
-                  style={styles.fileInput}
-                />
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => handleFileSelect(e, editingStrain.name, editingStrain.id)}
+                style={{ display: "none" }}
+              />
             </div>
           )}
 
@@ -1003,16 +1004,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "12px",
     textAlign: "center" as const,
     borderRadius: "0 0 4px 4px",
-  },
-  fileInput: {
-    position: "absolute" as const,
-    top: 0,
-    left: 0,
-    width: "100%",
-    height: "100%",
-    opacity: 0,
-    cursor: "pointer",
-    zIndex: 10,
   },
   modalActions: {
     display: "flex",

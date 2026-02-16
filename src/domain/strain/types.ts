@@ -136,6 +136,7 @@ export const BODY_HEAD_OPTIONS = [
   "Balanced",
   "Head-leaning",
   "Head-heavy",
+  "Head-dominant",
 ] as const;
 
 /**

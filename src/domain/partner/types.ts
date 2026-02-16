@@ -47,7 +47,7 @@ export interface StrainPublicView {
   experienceProfile?: {
     onsetTime: string | null;
     typicalDuration: string | null;
-    bodyHeadBalance: "body-heavy" | "body-leaning" | "balanced" | "head-leaning" | "head-heavy" | null;
+    bodyHeadBalance: "body-heavy" | "body-leaning" | "balanced" | "head-leaning" | "head-heavy" | "head-dominant" | null;
     emotionalCharacter: string[];
     comeUpIntensity: string | null;
     peakCharacter: string | null;

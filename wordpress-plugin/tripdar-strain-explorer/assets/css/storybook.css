@@ -2787,3 +2787,398 @@
 .tripdar-lineage-tree__container > .tripdar-tree-node {
     padding-left: 0;
 }
+
+/* =============================================================================
+   Mini Scale Bars (Card)
+   ============================================================================= */
+
+.tripdar-strain-card__scales {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-xs);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-mini-scale {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-mini-scale__label {
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--tripdar-ink-muted);
+    width: 72px;
+    flex-shrink: 0;
+}
+
+.tripdar-mini-scale__track {
+    flex: 1;
+    height: 4px;
+    background: rgba(44, 24, 16, 0.1);
+    border-radius: 9999px;
+    overflow: hidden;
+}
+
+.tripdar-mini-scale__fill {
+    height: 100%;
+    border-radius: 9999px;
+    transition: width 0.3s ease;
+}
+
+/* =============================================================================
+   Dose Sensitivity Tag
+   ============================================================================= */
+
+.tripdar-dose-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 12px;
+}
+
+.tripdar-dose-tag--gentle {
+    background: rgba(126, 176, 140, 0.2);
+    color: var(--tripdar-moss);
+}
+
+.tripdar-dose-tag--moderate {
+    background: rgba(212, 165, 116, 0.2);
+    color: #92400e;
+}
+
+.tripdar-dose-tag--steep {
+    background: rgba(196, 91, 74, 0.15);
+    color: var(--tripdar-potency-intense);
+}
+
+/* =============================================================================
+   Lineage Link (Card)
+   ============================================================================= */
+
+.tripdar-strain-card__lineage-link {
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.75rem;
+    color: var(--tripdar-violet);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    text-decoration: none;
+    padding: 0.375rem 0;
+}
+
+.tripdar-strain-card__lineage-link:hover {
+    color: var(--tripdar-violet-dark);
+    text-decoration: underline;
+}
+
+/* =============================================================================
+   Detail Modal Tabs
+   ============================================================================= */
+
+.tripdar-detail-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--tripdar-border-color);
+    margin-bottom: var(--tripdar-space-lg);
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.tripdar-detail-tabs__tab {
+    padding: var(--tripdar-space-sm) var(--tripdar-space-lg);
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--tripdar-ink-muted);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease;
+    white-space: nowrap;
+}
+
+.tripdar-detail-tabs__tab:hover {
+    color: var(--tripdar-ink);
+}
+
+.tripdar-detail-tabs__tab.active {
+    color: var(--tripdar-violet);
+    border-bottom-color: var(--tripdar-violet);
+}
+
+.tripdar-detail-tabs__panel {
+    display: none;
+    animation: tripdarFadeIn 0.3s ease;
+}
+
+.tripdar-detail-tabs__panel.active {
+    display: block;
+}
+
+/* =============================================================================
+   Experience Profile
+   ============================================================================= */
+
+.tripdar-experience-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-experience-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-xs);
+    padding: var(--tripdar-space-md);
+    background: white;
+    border-radius: var(--tripdar-border-radius);
+    border: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-experience-card__icon {
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
+.tripdar-experience-card__label {
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-experience-card__value {
+    font-family: var(--tripdar-font-body);
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--tripdar-ink);
+}
+
+.tripdar-experience-empty {
+    text-align: center;
+    padding: var(--tripdar-space-xl);
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+    background: var(--tripdar-parchment-dark);
+    border-radius: var(--tripdar-border-radius);
+}
+
+.tripdar-experience-emotions {
+    margin-top: var(--tripdar-space-md);
+}
+
+.tripdar-experience-emotions__label {
+    display: block;
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tripdar-ink-muted);
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-experience-emotions__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-xs);
+}
+
+/* =============================================================================
+   Balance Spectrum
+   ============================================================================= */
+
+.tripdar-balance-spectrum {
+    margin-top: var(--tripdar-space-lg);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-balance-spectrum__label {
+    display: block;
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tripdar-ink-muted);
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-balance-spectrum__bar {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-balance-spectrum__end {
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--tripdar-ink-muted);
+    flex-shrink: 0;
+    width: 36px;
+}
+
+.tripdar-balance-spectrum__end:last-of-type {
+    text-align: right;
+}
+
+.tripdar-balance-spectrum__track {
+    flex: 1;
+    height: 6px;
+    background: linear-gradient(to right,
+        var(--tripdar-moss-light) 0%,
+        var(--tripdar-gold-light) 50%,
+        var(--tripdar-violet-light) 100%
+    );
+    border-radius: 9999px;
+    position: relative;
+}
+
+.tripdar-balance-spectrum__marker {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    background: white;
+    border: 3px solid var(--tripdar-violet);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: var(--tripdar-shadow-sm);
+}
+
+.tripdar-balance-spectrum__value {
+    display: block;
+    text-align: center;
+    font-family: var(--tripdar-font-body);
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--tripdar-ink-light);
+    margin-top: var(--tripdar-space-xs);
+}
+
+/* =============================================================================
+   Detail Lineage Section
+   ============================================================================= */
+
+.tripdar-detail-lineage {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-lg);
+}
+
+.tripdar-generation-badge {
+    display: inline-block;
+    padding: var(--tripdar-space-xs) var(--tripdar-space-md);
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--tripdar-violet-dark);
+    background: rgba(139, 92, 246, 0.1);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 9999px;
+}
+
+.tripdar-detail-lineage__parents-label {
+    display: block;
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tripdar-ink-muted);
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-detail-lineage__parents-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-sm);
+}
+
+.tripdar-parent-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--tripdar-space-xs);
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    font-family: var(--tripdar-font-display);
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: var(--tripdar-violet-dark);
+    background: white;
+    border: 1px solid var(--tripdar-violet-light);
+    border-radius: var(--tripdar-border-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tripdar-parent-tag:hover {
+    background: rgba(139, 92, 246, 0.08);
+    border-color: var(--tripdar-violet);
+    box-shadow: var(--tripdar-shadow-sm);
+}
+
+.tripdar-detail-lineage__notes {
+    margin: 0;
+    padding: var(--tripdar-space-md) var(--tripdar-space-lg);
+    font-style: italic;
+    color: var(--tripdar-ink-muted);
+    border-left: 3px solid var(--tripdar-violet-light);
+    background: var(--tripdar-parchment-dark);
+    border-radius: 0 var(--tripdar-border-radius) var(--tripdar-border-radius) 0;
+}
+
+/* =============================================================================
+   Card Actions Layout
+   ============================================================================= */
+
+.tripdar-strain-card__actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-sm);
+}
+
+/* =============================================================================
+   Responsive - New Components
+   ============================================================================= */
+
+@media (max-width: 768px) {
+    .tripdar-experience-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .tripdar-detail-tabs {
+        gap: 0;
+    }
+
+    .tripdar-detail-tabs__tab {
+        padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+        font-size: 0.8rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .tripdar-balance-spectrum__bar {
+        gap: var(--tripdar-space-xs);
+    }
+
+    .tripdar-balance-spectrum__end {
+        font-size: 0.65rem;
+        width: 30px;
+    }
+}
