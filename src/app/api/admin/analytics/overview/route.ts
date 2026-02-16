@@ -64,8 +64,9 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("Error loading analytics overview:", error);
+    const errorMessage = error instanceof Error ? error.message : "Failed to load analytics";
     return NextResponse.json(
-      { success: false, error: { message: "Failed to load analytics" } },
+      { success: false, error: { message: `Analytics error: ${errorMessage}` } },
       { status: 500 }
     );
   }
