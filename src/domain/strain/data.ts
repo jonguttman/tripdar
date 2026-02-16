@@ -48,7 +48,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "Legendary heavy-hitter family; deep headspace and bold visuals; experienced users only.",
     generation: 0, parentStrains: [], lineageNotes: "Legendary cultivar attributed to Terence McKenna lineage",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Powerful", "Cathartic", "Challenging"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
+    emotionalCharacter: ["Powerful", "Cathartic", "Sometimes challenging", "Awe"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
   },
   {
     id: "b-plus", name: "B+", potency: "Moderate", stability: "Variable", beginner: "Yes", visual: "Medium",
@@ -71,7 +71,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     vibe: ["cozy", "grounded", "giggly", "gentle", "social"], confidence: 72,
     description: "Gentle-to-moderate lane with warm mood lift and grounded feel.",
     generation: 0, parentStrains: [], lineageNotes: "Attributed to Arkansas/Southern US wild collection",
-    onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced",
+    onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced→Body-forward",
     emotionalCharacter: ["Playful", "Comforting", "Steady"], comeUpIntensity: "Gentle", peakCharacter: "Rolling waves"
   },
   {
@@ -80,7 +80,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "Energetic, visual-leaning; naming confusion and batch variance are common.",
     generation: 0, parentStrains: [], lineageNotes: "Cubensis cultivar (not Pan. cyanescens)",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Euphoric", "Energized"], comeUpIntensity: "Moderate", peakCharacter: "Rolling waves"
+    emotionalCharacter: ["Euphoric", "Energized", "Occasionally edgy"], comeUpIntensity: "Moderate", peakCharacter: "Rolling waves"
   },
   {
     id: "pink-buffalo", name: "Pink Buffalo", potency: "Moderate", stability: "Medium", beginner: "Yes", visual: "Medium-High",
@@ -96,14 +96,14 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "PE-family intensity: dense, serious peak and strong visuals.",
     generation: 0, parentStrains: [], lineageNotes: "Original PE genetics, preserved homestead cultivar",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Reverent", "Intense", "Challenging"], comeUpIntensity: "Intense", peakCharacter: "Sustained plateau"
+    emotionalCharacter: ["Reverent", "Intense", "Sometimes challenging"], comeUpIntensity: "Intense", peakCharacter: "Sustained plateau"
   },
   {
     id: "tosohatchee", name: "Tosohatchee", potency: "Variable", stability: "Variable", beginner: "Maybe", visual: "Medium",
     vibe: ["earthy", "outdoorsy", "raw", "curious", "rustic"], confidence: 58,
     description: "Wild-Florida lore; classic effects with higher unpredictability.",
     generation: 0, parentStrains: [], lineageNotes: "Wild Florida collection from Tosohatchee WMA",
-    onsetTime: "Variable", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced",
+    onsetTime: "15-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced",
     emotionalCharacter: ["Curious", "Grounding", "Unpredictable"], comeUpIntensity: "Variable", peakCharacter: "Variable"
   },
 
@@ -114,7 +114,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "Top-tier intensity with big visuals; experienced users only.",
     generation: 1, parentStrains: ["penis-envy"], lineageNotes: "Albino mutation of Penis Envy",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Powerful", "Cathartic", "Challenging"], comeUpIntensity: "Intense", peakCharacter: "Sustained plateau"
+    emotionalCharacter: ["Powerful", "Cathartic", "Potentially challenging"], comeUpIntensity: "Intense", peakCharacter: "Sharp peak → sustained plateau"
   },
   {
     id: "ghost", name: "Ghost", potency: "High", stability: "High", beginner: "Maybe", visual: "High",
@@ -122,7 +122,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "Lucid, head-forward intensity with crisp visuals; often tied to TAT lineage.",
     generation: 1, parentStrains: ["golden-teacher"], lineageNotes: "True Albino Teacher (TAT) isolation",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Lucid", "Uplifting", "Contemplative"], comeUpIntensity: "Moderate", peakCharacter: "Sustained plateau"
+    emotionalCharacter: ["Lucid", "Uplifting", "Introspective"], comeUpIntensity: "Moderate", peakCharacter: "Sustained plateau"
   },
   {
     id: "tidal-wave", name: "Tidal Wave", potency: "Very High", stability: "Variable", beginner: "No", visual: "Very High",
@@ -130,14 +130,14 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "Modern hybrid legend; very high visuals; multiple isolates under one umbrella name.",
     generation: 1, parentStrains: ["penis-envy", "b-plus"], lineageNotes: "PE \u00d7 B+ cross by Magic Myco",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Euphoric", "Awe", "Overwhelming"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
+    emotionalCharacter: ["Euphoric", "Awe", "Sometimes overwhelming"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
   },
   {
     id: "koh-samui-super-strain", name: "Koh Samui Super Strain", potency: "Moderate-High", stability: "Medium", beginner: "Maybe", visual: "Medium-High",
     vibe: ["tropical", "playful", "social", "lively", "colorful"], confidence: 68,
     description: "Thai-icon vibe: lively mood with bright visuals; name evolution acknowledged.",
     generation: 1, parentStrains: [], lineageNotes: "Isolation from Koh Samui Classic (Thai)",
-    onsetTime: "15-30 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced",
+    onsetTime: "15-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced",
     emotionalCharacter: ["Upbeat", "Playful", "Energized"], comeUpIntensity: "Gradual", peakCharacter: "Rolling waves"
   },
   {
@@ -146,14 +146,14 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "Modern \u2018ice\u2019 branding with thinner public lineage documentation; treat as variable.",
     generation: 1, parentStrains: [], lineageNotes: "Albino Thai Lipa Yai (ATLY) isolation",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Calm", "Lucid", "Contemplative"], comeUpIntensity: "Moderate", peakCharacter: "Sustained plateau"
+    emotionalCharacter: ["Calm", "Lucid", "Introspective"], comeUpIntensity: "Moderate", peakCharacter: "Sustained plateau"
   },
   {
     id: "khmer-kong", name: "Khmer Kong", potency: "Moderate-High", stability: "Medium", beginner: "Maybe", visual: "Medium-High",
     vibe: ["bold", "warm", "embodied", "adventurous", "energized"], confidence: 55,
     description: "Bold modern cross claim with adventurous energy and active visuals.",
     generation: 1, parentStrains: ["cambodian"], lineageNotes: "Enhanced Cambodian isolation",
-    onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced",
+    onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Balanced→Head-leaning",
     emotionalCharacter: ["Euphoric", "Adventurous", "Sensory-forward"], comeUpIntensity: "Moderate", peakCharacter: "Rolling waves"
   },
   {
@@ -185,7 +185,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     vibe: ["energizing", "forward", "social", "euphoric", "kinetic"], confidence: 58,
     description: "Momentum lane with limited open lineage documentation; treat as variable.",
     generation: 1, parentStrains: [], lineageNotes: "Possibly derived from Albino A+",
-    onsetTime: "15-30 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
+    onsetTime: "15-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
     emotionalCharacter: ["Energized", "Euphoric", "Excited"], comeUpIntensity: "Moderate", peakCharacter: "Rolling waves"
   },
 
@@ -195,8 +195,8 @@ export const STRAIN_DATA: InternalStrain[] = [
     vibe: ["alien", "mystical", "reality-melting", "deep", "transformative"], confidence: 75,
     description: "Sporeless/mutation culture icon: very high intensity and big visuals.",
     generation: 2, parentStrains: ["tidal-wave"], lineageNotes: "Blob mutation of Tidal Wave, sporeless",
-    onsetTime: "45-60 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Mystical", "Cathartic", "Awe", "Challenging"], comeUpIntensity: "Intense", peakCharacter: "Sustained plateau"
+    onsetTime: "15-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
+    emotionalCharacter: ["Mystical", "Cathartic", "Awe", "Potentially challenging"], comeUpIntensity: "Intense", peakCharacter: "Sustained plateau"
   },
   {
     id: "chodewave", name: "ChodeWave", potency: "Very High", stability: "High", beginner: "No", visual: "Very High",
@@ -204,7 +204,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "Modern powerhouse cross (TW x APE) with very high visuals and intensity.",
     generation: 2, parentStrains: ["tidal-wave"], lineageNotes: "Tidal Wave phenotype selection",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Euphoric", "Cathartic", "Overwhelming"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
+    emotionalCharacter: ["Euphoric", "Cathartic", "Sometimes overwhelming"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
   },
   {
     id: "avalanche", name: "Avalanche", potency: "High", stability: "High", beginner: "No", visual: "High",
@@ -220,7 +220,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "TAT x APE modern classic credited to Dave Wombat; refined visuals and deep headspace.",
     generation: 2, parentStrains: ["ghost", "albino-penis-envy"], lineageNotes: "True Albino Teacher \u00d7 Albino Penis Envy",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Awe", "Loving", "Mystical", "Contemplative"], comeUpIntensity: "Moderate", peakCharacter: "Sustained plateau"
+    emotionalCharacter: ["Awe", "Loving", "Mystical", "Introspective"], comeUpIntensity: "Moderate", peakCharacter: "Sustained plateau"
   },
   {
     id: "makilla-gorilla", name: "Makilla Gorilla", potency: "High-Very High", stability: "High", beginner: "No", visual: "High",
@@ -228,7 +228,7 @@ export const STRAIN_DATA: InternalStrain[] = [
     description: "PE-family brawler hybrid (Melmac x APE neighborhood); heavy visuals and strong force.",
     generation: 2, parentStrains: ["albino-penis-envy", "melmac"], lineageNotes: "APE \u00d7 DC Melmac cross",
     onsetTime: "30-45 min", typicalDuration: "4-6 hours", bodyHeadBalance: "Head-dominant",
-    emotionalCharacter: ["Euphoric", "Cathartic", "Bold", "Challenging"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
+    emotionalCharacter: ["Euphoric", "Cathartic", "Bold", "Sometimes challenging"], comeUpIntensity: "Intense", peakCharacter: "Rolling waves"
   },
   {
     id: "trinity", name: "Trinity", potency: "Very High", stability: "High", beginner: "No", visual: "Very High",
