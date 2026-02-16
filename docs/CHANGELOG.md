@@ -4,6 +4,7 @@
 
 ### Fixed
 - Analytics event tracking now works correctly - edge middleware was blocking POST requests to `/api/v1/events` endpoint, causing 405 Method Not Allowed errors
+- Feedback rating button now works in strain detail modal - TripdarFeedback class is now globally accessible for dynamic modal initialization
 
 ## [1.3.7] - 2026-02-16
 
