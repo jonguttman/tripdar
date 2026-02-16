@@ -1641,6 +1641,11 @@ class Tripdar_Shortcodes {
         $ratings = $data['ratingCount'] ?? 0;
         $reports = $data['reportCount'] ?? 0;
 
+        // Only show confidence badge if score is 65% or higher
+        if ($score < 65) {
+            return '';
+        }
+
         $tier_labels = [
             'verified' => 'Verified',
             'established' => 'Established',

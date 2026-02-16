@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.3.6] - 2026-02-16
+
+### Changed
+- Confidence badges now only display when confidence score is 65% or higher (hides "emerging" and low "developing" badges)
+
 ## [1.3.5] - 2026-02-16
 
 ### Fixed
