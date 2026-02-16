@@ -91,10 +91,10 @@ export async function POST(request: NextRequest) {
       body.matchRating
     );
 
-    // Record signal
+    // Record analytics event for rating
     recordSignal(
       partner.id,
-      "strain_view", // Feedback is associated with viewing
+      "rating", // Rating event type for analytics
       sessionHash,
       [body.strainSlug],
       { feedback_rating: body.matchRating.toFixed(2) }
