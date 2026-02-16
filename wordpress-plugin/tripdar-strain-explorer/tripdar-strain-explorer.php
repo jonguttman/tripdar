@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.3.1
+ * Version: 1.3.2
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.3.1');
+define('TRIPDAR_VERSION', '1.3.2');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
