@@ -12,9 +12,11 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
 import {
   loadStrainData,
+  saveStrainData,
   createStrain,
   initializeBlobStorage,
 } from "@/domain/strain/blob-store";
+import { STRAIN_DATA as DEFAULT_STRAINS } from "@/domain/strain/data";
 
 /**
  * Check if user is authenticated
@@ -138,6 +140,108 @@ export async function PUT(request: NextRequest) {
     console.error("Error initializing blob storage:", error);
     return NextResponse.json(
       { success: false, error: { message: "Failed to initialize blob storage" } },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * PATCH /api/admin/strains
+ * Merge experience profile + updated fields from data.ts defaults into blob storage.
+ * Only fills in missing/empty fields — does NOT overwrite existing admin values.
+ */
+export async function PATCH(request: NextRequest) {
+  const auth = await requireAuth(request);
+  if (auth instanceof NextResponse) return auth;
+
+  try {
+    const strains = await loadStrainData();
+    const defaultMap = new Map(DEFAULT_STRAINS.map(s => [s.id, s]));
+    let updated = 0;
+
+    for (const strain of strains) {
+      const defaults = defaultMap.get(strain.id);
+      if (!defaults) continue;
+
+      let changed = false;
+
+      // Merge experience profile fields (only fill missing/empty)
+      const expFields = [
+        "onsetTime", "typicalDuration", "bodyHeadBalance",
+        "comeUpIntensity", "peakCharacter",
+      ] as const;
+
+      for (const field of expFields) {
+        if (!strain[field] && defaults[field]) {
+          (strain as Record<string, unknown>)[field] = defaults[field];
+          changed = true;
+        }
+      }
+
+      // Merge emotionalCharacter (only if empty)
+      if ((!strain.emotionalCharacter || strain.emotionalCharacter.length === 0) && defaults.emotionalCharacter) {
+        strain.emotionalCharacter = defaults.emotionalCharacter;
+        changed = true;
+      }
+
+      // Merge lineage fields (only fill missing)
+      if (strain.generation === undefined && defaults.generation !== undefined) {
+        strain.generation = defaults.generation;
+        changed = true;
+      }
+      if ((!strain.parentStrains || strain.parentStrains.length === 0) && defaults.parentStrains) {
+        strain.parentStrains = defaults.parentStrains;
+        changed = true;
+      }
+      if (!strain.lineageNotes && defaults.lineageNotes) {
+        strain.lineageNotes = defaults.lineageNotes;
+        changed = true;
+      }
+
+      // Also sync core fields: vibe, description, stability, visual
+      // These use the authoritative data.ts values
+      if (defaults.vibe && defaults.vibe.length > 0) {
+        strain.vibe = defaults.vibe;
+        changed = true;
+      }
+      if (defaults.description) {
+        strain.description = defaults.description;
+        changed = true;
+      }
+      if (defaults.stability) {
+        strain.stability = defaults.stability;
+        changed = true;
+      }
+      if (defaults.visual) {
+        strain.visual = defaults.visual;
+        changed = true;
+      }
+      if (defaults.potency) {
+        strain.potency = defaults.potency;
+        changed = true;
+      }
+      if (defaults.beginner) {
+        strain.beginner = defaults.beginner;
+        changed = true;
+      }
+
+      if (changed) updated++;
+    }
+
+    await saveStrainData(strains, auth.user?.email || "migration");
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        message: `Synced ${updated} strains with authoritative defaults`,
+        updated,
+        total: strains.length,
+      },
+    });
+  } catch (error) {
+    console.error("Error syncing strain data:", error);
+    return NextResponse.json(
+      { success: false, error: { message: "Failed to sync strain data" } },
       { status: 500 }
     );
   }
