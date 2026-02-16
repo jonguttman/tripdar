@@ -724,6 +724,21 @@ class Tripdar_Shortcodes {
         $strains = $response['data']['strains'] ?? [];
         $pagination = $response['data']['pagination'] ?? [];
 
+        // Extract all vibes and count frequency for filter dropdown
+        $vibe_counts = [];
+        foreach ($strains as $strain) {
+            $normalized = $this->normalize_strain($strain);
+            if (!empty($normalized['vibes']) && is_array($normalized['vibes'])) {
+                foreach ($normalized['vibes'] as $vibe) {
+                    $vibe_lower = strtolower($vibe);
+                    $vibe_counts[$vibe_lower] = ($vibe_counts[$vibe_lower] ?? 0) + 1;
+                }
+            }
+        }
+        // Filter to vibes that appear in 2+ strains and sort alphabetically
+        $popular_vibes = array_keys(array_filter($vibe_counts, function($count) { return $count >= 2; }));
+        sort($popular_vibes);
+
         ob_start();
         ?>
         <div class="tripdar-explorer" data-per-page="<?php echo esc_attr($atts['per_page']); ?>">
@@ -734,11 +749,9 @@ class Tripdar_Shortcodes {
                         <label class="tripdar-filter-label">Vibe</label>
                         <select class="tripdar-filter-select" data-filter="vibe">
                             <option value="">All Vibes</option>
-                            <option value="introspective">Introspective</option>
-                            <option value="euphoric">Euphoric</option>
-                            <option value="visual">Visual</option>
-                            <option value="creative">Creative</option>
-                            <option value="grounding">Grounding</option>
+                            <?php foreach ($popular_vibes as $vibe): ?>
+                            <option value="<?php echo esc_attr($vibe); ?>"><?php echo esc_html(ucfirst($vibe)); ?></option>
+                            <?php endforeach; ?>
                         </select>
                     </div>
                     <div class="tripdar-filter-group">

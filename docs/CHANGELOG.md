@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.3.2] - 2026-02-15
+
+### Changed
+- Vibe filter dropdown now dynamically generates options from actual strain data, showing vibes that appear in 2+ strains (~20 options instead of 5 hardcoded)
+- Updated strain data.ts with 19 field corrections across 14 strains to match authoritative research values (emotional character refinements, body/head balance arrows, onset time corrections)
+
 ## [1.3.1] - 2026-02-15
 
 ### Fixed
