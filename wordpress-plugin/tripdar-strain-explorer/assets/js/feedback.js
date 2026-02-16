@@ -327,6 +327,9 @@
         }
     }
 
+    // Expose TripdarFeedback globally so it can be initialized in modals
+    window.TripdarFeedback = TripdarFeedback;
+
     // Initialize all feedback instances
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.tripdar-feedback').forEach(container => {
