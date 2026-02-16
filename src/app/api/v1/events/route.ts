@@ -16,7 +16,16 @@ import {
 import { recordEvent } from "@/domain/analytics/service";
 import type { ApiSuccessResponse, ApiErrorResponse } from "@/domain/partner";
 
-const ALLOWED_EVENT_TYPES = ["strain_view", "strain_tried"] as const;
+const ALLOWED_EVENT_TYPES = [
+  "page_view",
+  "strain_view",
+  "strain_tried",
+  "search",
+  "quiz_complete",
+  "rating",
+  "review",
+  "report",
+] as const;
 type AllowedEventType = (typeof ALLOWED_EVENT_TYPES)[number];
 
 export async function POST(request: NextRequest) {
