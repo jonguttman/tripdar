@@ -32,6 +32,36 @@
         });
     });
 
+    // Clear Cache
+    $('.tripdar-clear-cache').on('click', function() {
+        var $btn = $(this);
+        var $status = $('.tripdar-cache-status');
+
+        $btn.prop('disabled', true).text('Clearing...');
+        $status.removeClass('success error').text('Clearing cache...');
+
+        $.post(tripdarAdmin.ajaxUrl, {
+            action: 'tripdar_clear_cache',
+            nonce: tripdarAdmin.nonce
+        })
+        .done(function(response) {
+            if (response.success) {
+                $status.addClass('success').text('✓ Cache cleared!');
+            } else {
+                $status.addClass('error').text('✗ Failed to clear cache');
+            }
+        })
+        .fail(function() {
+            $status.addClass('error').text('✗ Network error');
+        })
+        .always(function() {
+            $btn.prop('disabled', false).text('Clear Cache');
+            setTimeout(function() {
+                $status.text('');
+            }, 3000);
+        });
+    });
+
     // Inventory: Select All
     $('.tripdar-select-all').on('click', function() {
         $('.tripdar-inventory__item').addClass('selected');
