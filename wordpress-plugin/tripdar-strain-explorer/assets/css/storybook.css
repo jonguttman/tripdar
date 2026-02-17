@@ -39,10 +39,10 @@
     /* Spacing */
     --tripdar-space-xs: 0.25rem;
     --tripdar-space-sm: 0.5rem;
-    --tripdar-space-md: 1rem;
-    --tripdar-space-lg: 1.5rem;
-    --tripdar-space-xl: 2rem;
-    --tripdar-space-xxl: 3rem;
+    --tripdar-space-md: 0.75rem;
+    --tripdar-space-lg: 1rem;
+    --tripdar-space-xl: 1.5rem;
+    --tripdar-space-xxl: 2rem;
 
     /* Borders & Shadows */
     --tripdar-border-color: rgba(44, 24, 16, 0.15);
@@ -219,8 +219,8 @@
 }
 
 .tripdar-placeholder-icon {
-    width: 60px;
-    height: 60px;
+    width: 40px;
+    height: 40px;
     opacity: 0.4;
 }
 
@@ -784,13 +784,13 @@
 
 .tripdar-strain-detail__header {
     display: flex;
-    gap: var(--tripdar-space-xl);
-    margin-bottom: var(--tripdar-space-xl);
+    gap: var(--tripdar-space-lg);
+    margin-bottom: var(--tripdar-space-lg);
 }
 
 .tripdar-strain-detail__image {
-    flex: 0 0 300px;
-    aspect-ratio: 1;
+    flex: 0 0 240px;
+    aspect-ratio: 4/3;
     border-radius: var(--tripdar-border-radius);
     overflow: hidden;
     background: var(--tripdar-parchment);
@@ -811,9 +811,9 @@
 
 .tripdar-strain-detail__name {
     font-family: var(--tripdar-font-display);
-    font-size: 2.5rem;
+    font-size: 2rem;
     font-weight: 600;
-    margin: 0 0 var(--tripdar-space-md);
+    margin: 0 0 var(--tripdar-space-sm);
     color: var(--tripdar-ink);
 }
 
@@ -867,11 +867,11 @@
     background: var(--tripdar-parchment);
     border-radius: var(--tripdar-border-radius);
     border: 1px solid var(--tripdar-border-color);
-    padding: var(--tripdar-space-xl);
+    padding: var(--tripdar-space-lg);
 }
 
 .tripdar-strain-detail__section {
-    margin-bottom: var(--tripdar-space-xl);
+    margin-bottom: var(--tripdar-space-lg);
 }
 
 .tripdar-strain-detail__section:last-child {
@@ -899,7 +899,7 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
     gap: var(--tripdar-space-md);
-    margin-bottom: var(--tripdar-space-xl);
+    margin-bottom: var(--tripdar-space-lg);
 }
 
 .tripdar-attribute {
@@ -1062,7 +1062,7 @@
     .tripdar-strain-detail__image {
         flex: none;
         width: 100%;
-        max-width: 300px;
+        max-width: 240px;
         margin: 0 auto;
     }
 
@@ -3194,7 +3194,7 @@
 
 .tripdar-post-rating__message {
     text-align: center;
-    margin-bottom: var(--tripdar-space-xl);
+    margin-bottom: var(--tripdar-space-md);
 }
 
 .tripdar-post-rating__message h4 {
@@ -3214,7 +3214,7 @@
    ============================================================================= */
 
 .tripdar-trip-report-prompt {
-    margin-bottom: var(--tripdar-space-xl);
+    margin-bottom: var(--tripdar-space-md);
 }
 
 .tripdar-trip-report-inline {
@@ -3340,7 +3340,7 @@
 
 .tripdar-rec-card__image {
     width: 100%;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 3 / 2;
     overflow: hidden;
     background: var(--tripdar-parchment-dark);
 }
@@ -3354,7 +3354,7 @@
 
 .tripdar-rec-card__placeholder {
     width: 100%;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 3 / 2;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -3363,8 +3363,8 @@
 }
 
 .tripdar-rec-card__placeholder svg {
-    width: 60px;
-    height: 60px;
+    width: 40px;
+    height: 40px;
     opacity: 0.5;
 }
 
