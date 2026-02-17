@@ -52,6 +52,9 @@ class Tripdar_API_Client {
         // Add auth header if API key is configured
         if (!empty($api_key)) {
             $args['headers']['Authorization'] = 'Bearer ' . $api_key;
+            error_log('Tripdar API: Sending request with API key to ' . $endpoint);
+        } else {
+            error_log('Tripdar API: WARNING - No API key configured! POST requests will fail. Endpoint: ' . $endpoint);
         }
 
         if ($body !== null && $method !== 'GET') {
@@ -600,9 +603,11 @@ class Tripdar_API_Client {
 
     /**
      * Submit a trip report
+     * POST /reports - strainSlug included in request body
+     * (GET /strains/{slug}/reports is for retrieving reports, not submitting)
      */
-    public function submit_trip_report($slug, $data) {
-        return $this->request("/strains/{$slug}/reports", 'POST', $data);
+    public function submit_trip_report($data) {
+        return $this->request('/reports', 'POST', $data);
     }
 
     /**
