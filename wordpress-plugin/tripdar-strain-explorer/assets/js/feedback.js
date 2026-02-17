@@ -34,7 +34,11 @@
         init() {
             // Check if user has already rated this strain
             if (this.hasRated) {
-                this.showPostRatingView();
+                this.showPostRatingView().catch(err => {
+                    console.error('Error showing post-rating view:', err);
+                    // Fallback to showing rating widget if there's an error
+                    this.showRatingWidget();
+                });
             } else {
                 this.showRatingWidget();
             }
@@ -66,6 +70,10 @@
 
         loadRatedStrains() {
             try {
+                if (typeof localStorage === 'undefined') {
+                    console.warn('localStorage not available, rating tracking disabled');
+                    return {};
+                }
                 const data = localStorage.getItem('tripdar_rated_strains');
                 return data ? JSON.parse(data) : {};
             } catch (e) {
@@ -75,11 +83,20 @@
         }
 
         hasUserRated() {
-            return this.strainSlug in this.ratedStrains;
+            try {
+                return this.strainSlug in this.ratedStrains;
+            } catch (e) {
+                console.error('Error checking rated status:', e);
+                return false;
+            }
         }
 
         saveRating(rating) {
             try {
+                if (typeof localStorage === 'undefined') {
+                    console.warn('localStorage not available, cannot save rating');
+                    return;
+                }
                 this.ratedStrains[this.strainSlug] = rating;
                 localStorage.setItem('tripdar_rated_strains', JSON.stringify(this.ratedStrains));
             } catch (e) {
@@ -354,6 +371,8 @@
         }
 
         async showPostRatingView() {
+            console.log('showPostRatingView called for strain:', this.strainSlug);
+
             const strainName = this.strainSlug.split('-').map(word =>
                 word.charAt(0).toUpperCase() + word.slice(1)
             ).join(' ');
@@ -380,8 +399,19 @@
             `;
 
             // Find the feedback body section and replace its content
-            const feedbackBody = this.container.querySelector('.tripdar-feedback__rating').parentElement;
+            const ratingSection = this.container.querySelector('.tripdar-feedback__rating');
+            console.log('Rating section found:', !!ratingSection);
+
+            if (!ratingSection) {
+                console.error('Cannot find .tripdar-feedback__rating element');
+                return;
+            }
+
+            const feedbackBody = ratingSection.parentElement;
+            console.log('Feedback body found:', !!feedbackBody);
+
             if (feedbackBody) {
+                console.log('Replacing feedback body HTML');
                 feedbackBody.innerHTML = html;
 
                 // Bind trip report form
@@ -389,6 +419,8 @@
 
                 // Load recommendations
                 await this.loadRecommendations();
+            } else {
+                console.error('Cannot find feedback body parent element');
             }
         }
 
@@ -446,8 +478,15 @@
         }
 
         bindTripReportForm() {
+            console.log('Binding trip report form...');
             const form = this.container.querySelector('.tripdar-trip-report-inline');
-            if (!form) return;
+
+            if (!form) {
+                console.error('Trip report form not found in container');
+                return;
+            }
+
+            console.log('Trip report form found, attaching handlers');
 
             const textarea = form.querySelector('textarea[name="body"]');
             const charCount = form.querySelector('.tripdar-char-count');
@@ -461,6 +500,7 @@
 
             // Form submission
             form.addEventListener('submit', async (e) => {
+                console.log('Form submit event triggered!');
                 e.preventDefault();
 
                 const formData = new FormData(form);
