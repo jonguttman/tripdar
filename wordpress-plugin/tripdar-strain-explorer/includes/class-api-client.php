@@ -62,6 +62,11 @@ class Tripdar_API_Client {
         }
 
         $url = TRIPDAR_API_BASE . $endpoint;
+
+        // Log full request details
+        error_log('Tripdar API Request: ' . $method . ' ' . $url);
+        error_log('Tripdar API Headers: ' . print_r($args['headers'], true));
+
         $response = wp_remote_request($url, $args);
 
         if (is_wp_error($response)) {
@@ -74,6 +79,9 @@ class Tripdar_API_Client {
 
         $code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+
+        error_log('Tripdar API Response Code: ' . $code);
+        error_log('Tripdar API Response Body: ' . $body);
         $data = json_decode($body, true);
 
         // Handle rate limiting
