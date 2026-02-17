@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.3] - 2026-02-16
+
+### Fixed
+- Recommendation cards now display strain images by fetching visualization URLs from API
+- Added fallback to fetch visualizations separately if not included in similar strains response
+
 ## [1.4.2] - 2026-02-16
 
 ### Fixed

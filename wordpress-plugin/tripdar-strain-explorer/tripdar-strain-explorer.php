@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.4.2
+ * Version: 1.4.3
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.4.2');
+define('TRIPDAR_VERSION', '1.4.3');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
@@ -671,12 +671,20 @@ class Tripdar_Strain_Explorer {
                 $unique_vibes = array_diff($rec_vibes, $current_vibes);
                 $unique_vibe = !empty($unique_vibes) ? array_values($unique_vibes)[0] : null;
 
-                // Get visualization URL
+                // Get visualization URL - try multiple sources
                 $visualization_url = '';
                 if (isset($strain['visualizationRef'])) {
                     $visualization_url = $strain['visualizationRef'];
                 } elseif (isset($strain['visualizationUrl'])) {
                     $visualization_url = $strain['visualizationUrl'];
+                } else {
+                    // Fetch visualization separately if not included
+                    $viz_data = $this->api->get_visualization($strain['slug']);
+                    if ($viz_data && isset($viz_data['data']['visualizationUrl'])) {
+                        $visualization_url = $viz_data['data']['visualizationUrl'];
+                    } elseif ($viz_data && isset($viz_data['data']['url'])) {
+                        $visualization_url = $viz_data['data']['url'];
+                    }
                 }
 
                 return [
