@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.1] - 2026-02-17
+
+### Changed
+- Tightened spacing across the WordPress plugin to reduce empty space under graphics
+- Reduced global spacing variables (md/lg/xl/xxl) for a more compact layout
+- Recommendation card images changed from square (1:1) to landscape (3:2) aspect ratio
+- Strain detail image reduced from 300px square to 240px at 4:3 aspect ratio
+- Reduced detail header gap, body padding, and section margins
+- Smaller placeholder icons (60px → 40px) on cards and recommendations
+- Reduced post-rating message and trip report form margins
+
 ## [1.5.0] - 2026-02-17
 
 ### Changed
