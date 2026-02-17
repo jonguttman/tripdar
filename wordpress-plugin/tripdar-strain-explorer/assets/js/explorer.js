@@ -49,6 +49,15 @@
                     return;
                 }
 
+                // Handle vibe tag click - show tooltip instead of opening modal
+                const vibeTag = e.target.closest('.tripdar-vibe-tag, .tripdar-tag--vibe');
+                if (vibeTag) {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    this.handleVibeTagClick(vibeTag);
+                    return;
+                }
+
                 // Handle "View Lineage" link - open modal and switch to lineage tab
                 const lineageLink = e.target.closest('.tripdar-strain-card__lineage-link');
                 if (lineageLink) {
@@ -277,6 +286,53 @@
             }
 
             localStorage.setItem('tripdar_tried', JSON.stringify(this.triedStrains));
+        }
+
+        handleVibeTagClick(tag) {
+            const description = tag.getAttribute('title');
+            if (!description) return;
+
+            // Close any existing JS tooltip
+            const existing = document.querySelector('.tripdar-vibe-tooltip');
+            if (existing) {
+                existing._dismiss();
+            }
+
+            // If clicking the same tag that was active, just close it
+            if (tag.classList.contains('tripdar-vibe-tag--tooltip-active')) {
+                return;
+            }
+
+            // Create tooltip appended to body (avoids overflow clipping)
+            const tooltip = document.createElement('div');
+            tooltip.className = 'tripdar-vibe-tooltip';
+            tooltip.textContent = description;
+            document.body.appendChild(tooltip);
+
+            // Position above the tag
+            const rect = tag.getBoundingClientRect();
+            tooltip.style.left = (rect.left + rect.width / 2) + 'px';
+            tooltip.style.top = (rect.top + window.scrollY - 8) + 'px';
+
+            // Suppress CSS hover tooltip
+            tag.classList.add('tripdar-vibe-tag--tooltip-active');
+
+            // Dismiss function
+            const dismiss = () => {
+                tooltip.remove();
+                tag.classList.remove('tripdar-vibe-tag--tooltip-active');
+                document.removeEventListener('click', onOutsideClick, true);
+            };
+            tooltip._dismiss = dismiss;
+
+            const onOutsideClick = (evt) => {
+                if (!tag.contains(evt.target) && !tooltip.contains(evt.target)) {
+                    dismiss();
+                }
+            };
+            setTimeout(() => {
+                document.addEventListener('click', onOutsideClick, true);
+            }, 0);
         }
 
         updateTriedButtons() {

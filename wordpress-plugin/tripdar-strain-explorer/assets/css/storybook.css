@@ -181,7 +181,6 @@
     background: white;
     border-radius: var(--tripdar-border-radius);
     border: 1px solid var(--tripdar-border-color);
-    overflow: hidden;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
     cursor: pointer;
 }
@@ -196,6 +195,7 @@
     aspect-ratio: 3/2;
     background: var(--tripdar-parchment);
     overflow: hidden;
+    border-radius: var(--tripdar-border-radius) var(--tripdar-border-radius) 0 0;
 }
 
 .tripdar-strain-card__image {
@@ -233,7 +233,7 @@
 .tripdar-strain-card__potency {
     display: inline-block;
     padding: var(--tripdar-space-xs) var(--tripdar-space-sm);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -285,7 +285,7 @@
 .tripdar-vibe-tag {
     display: inline-block;
     padding: 2px 8px;
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 500;
     text-transform: lowercase;
     color: var(--tripdar-violet-dark);
@@ -1571,7 +1571,7 @@
     position: absolute;
     top: var(--tripdar-space-sm);
     right: var(--tripdar-space-sm);
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -2130,7 +2130,7 @@
 
 .tripdar-scale__label {
     font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--tripdar-ink-muted);
@@ -2225,7 +2225,7 @@
 }
 
 .tripdar-tried-btn__count {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--tripdar-ink-muted);
     margin-left: 0.125rem;
 }
@@ -2238,15 +2238,15 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 3px;
-    border-radius: 4px;
     cursor: help;
     position: relative;
+    vertical-align: super;
+    margin-left: 2px;
 }
 
 .tripdar-confidence__svg {
-    width: 18px;
-    height: 20px;
+    width: 14px;
+    height: 16px;
     display: block;
 }
 
@@ -2265,12 +2265,12 @@
     bottom: 100%;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(17, 24, 39, 0.95);
-    color: white;
+    background: var(--tripdar-ink);
+    color: var(--tripdar-parchment);
     padding: var(--tripdar-space-sm) var(--tripdar-space-md);
     border-radius: 6px;
-    font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
+    font-family: var(--tripdar-font-body);
+    font-size: 0.75rem;
     font-weight: 400;
     line-height: 1.4;
     white-space: nowrap;
@@ -2279,7 +2279,7 @@
     z-index: 100;
     margin-bottom: 4px;
     pointer-events: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--tripdar-shadow-md);
 }
 
 .tripdar-confidence[title]:hover::before {
@@ -2289,7 +2289,7 @@
     left: 50%;
     transform: translateX(-50%);
     border: 5px solid transparent;
-    border-top-color: rgba(17, 24, 39, 0.95);
+    border-top-color: var(--tripdar-ink);
     z-index: 100;
     margin-bottom: -6px;
     pointer-events: none;
@@ -2520,7 +2520,7 @@
 }
 
 .tripdar-similar__reason {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     color: var(--tripdar-ink-muted);
 }
 
@@ -2612,7 +2612,7 @@
 }
 
 .tripdar-dosage-curve__label {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -2826,12 +2826,12 @@
 
 .tripdar-mini-scale__label {
     font-family: var(--tripdar-font-ui);
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--tripdar-ink-muted);
-    width: 80px;
+    width: 88px;
     flex-shrink: 0;
 }
 
@@ -2856,7 +2856,7 @@
 .tripdar-dose-tag {
     display: inline-block;
     padding: 2px 8px;
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.04em;
@@ -2971,7 +2971,7 @@
 
 .tripdar-experience-card__label {
     font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -3001,7 +3001,7 @@
 .tripdar-experience-emotions__label {
     display: block;
     font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -3027,7 +3027,7 @@
 .tripdar-balance-spectrum__label {
     display: block;
     font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -3043,7 +3043,7 @@
 
 .tripdar-balance-spectrum__end {
     font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     color: var(--tripdar-ink-muted);
     flex-shrink: 0;
@@ -3115,7 +3115,7 @@
 .tripdar-detail-lineage__parents-label {
     display: block;
     font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.08em;
@@ -3197,7 +3197,7 @@
     }
 
     .tripdar-balance-spectrum__end {
-        font-size: 0.65rem;
+        font-size: 0.75rem;
         width: 30px;
     }
 }
@@ -3412,7 +3412,7 @@
 }
 
 .tripdar-rec-card__potency {
-    font-size: 0.65rem;
+    font-size: 0.75rem;
     font-weight: 600;
     text-transform: uppercase;
     padding: 2px 6px;
@@ -3460,16 +3460,23 @@
     bottom: 100%;
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(17, 24, 39, 0.95);
-    color: white;
+    background: var(--tripdar-ink);
+    color: var(--tripdar-parchment);
     padding: var(--tripdar-space-sm) var(--tripdar-space-md);
     border-radius: 6px;
+    font-family: var(--tripdar-font-body);
     font-size: 0.75rem;
     white-space: nowrap;
     z-index: 100;
     margin-bottom: var(--tripdar-space-xs);
     pointer-events: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--tripdar-shadow-md);
+}
+
+/* Suppress CSS hover tooltip when JS tooltip is active */
+.tripdar-vibe-tag--tooltip-active[title]:hover::after,
+.tripdar-vibe-tag--tooltip-active[title]:hover::before {
+    display: none;
 }
 
 .tripdar-tag--vibe[title]:hover::before,
@@ -3480,10 +3487,43 @@
     left: 50%;
     transform: translateX(-50%);
     border: 6px solid transparent;
-    border-top-color: rgba(17, 24, 39, 0.95);
+    border-top-color: var(--tripdar-ink);
     z-index: 100;
     margin-bottom: calc(-6px + var(--tripdar-space-xs));
     pointer-events: none;
+}
+
+/* =============================================================================
+   Vibe Tag JS Tooltip (click-driven for mobile)
+   ============================================================================= */
+
+.tripdar-vibe-tooltip {
+    position: absolute;
+    transform: translateX(-50%) translateY(-100%);
+    background: var(--tripdar-ink);
+    color: var(--tripdar-parchment);
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    border-radius: 6px;
+    font-family: var(--tripdar-font-body);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    white-space: normal;
+    max-width: 220px;
+    min-width: 120px;
+    z-index: 999999;
+    pointer-events: auto;
+    box-shadow: var(--tripdar-shadow-md);
+    text-align: center;
+}
+
+.tripdar-vibe-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--tripdar-ink);
 }
 
 /* =============================================================================
@@ -3547,6 +3587,14 @@
     .tripdar-vibe-tag[title]:hover::after {
         white-space: normal;
         max-width: 200px;
-        font-size: 0.7rem;
+        font-size: 0.75rem;
+        background: var(--tripdar-ink);
+        color: var(--tripdar-parchment);
+        box-shadow: var(--tripdar-shadow-md);
+    }
+
+    .tripdar-tag--vibe[title]:hover::before,
+    .tripdar-vibe-tag[title]:hover::before {
+        border-top-color: var(--tripdar-ink);
     }
 }
