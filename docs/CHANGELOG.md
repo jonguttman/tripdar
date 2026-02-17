@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.8] - 2026-02-17
+
+### Fixed
+- **Trip report submission now works!** Root cause: Edge middleware whitelist (`postAllowedPaths`) did not include `/api/v1/reports`, so POST requests were blocked with "Only GET requests are allowed on this endpoint"
+- Reverted unnecessary `redirection => 0` workaround in API client
+
 ## [1.4.3] - 2026-02-16
 
 ### Fixed
