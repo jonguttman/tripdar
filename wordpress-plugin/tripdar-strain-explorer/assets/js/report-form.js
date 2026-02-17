@@ -86,20 +86,20 @@
             .then(function(response) { return response.json(); })
             .then(function(result) {
                 if (result.success) {
-                    showMessage('Thank you! Your trip report has been submitted and is pending review.', 'success');
+                    showMessage('Thank you! Your TripTale has been submitted and is pending review.', 'success');
                     form.reset();
                     if (charCount) charCount.textContent = '0 / 50 minimum';
                     submitBtn.textContent = 'Submitted';
                 } else {
                     showMessage(result.data || 'Failed to submit report. Please try again.', 'error');
                     submitBtn.disabled = false;
-                    submitBtn.textContent = 'Submit Trip Report';
+                    submitBtn.textContent = 'Submit TripTale';
                 }
             })
             .catch(function(err) {
                 showMessage('Network error. Please try again.', 'error');
                 submitBtn.disabled = false;
-                submitBtn.textContent = 'Submit Trip Report';
+                submitBtn.textContent = 'Submit TripTale';
             });
         });
 

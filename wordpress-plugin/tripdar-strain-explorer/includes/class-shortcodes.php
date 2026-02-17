@@ -469,11 +469,11 @@ class Tripdar_Shortcodes {
         ob_start();
         ?>
         <div class="tripdar-trip-reports" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
-            <h3 class="tripdar-trip-reports__title">Trip Reports for <?php echo esc_html($strain_name); ?></h3>
+            <h3 class="tripdar-trip-reports__title">TripTales for <?php echo esc_html($strain_name); ?></h3>
 
             <?php if (empty($reports)): ?>
             <p class="tripdar-trip-reports__empty">
-                No trip reports yet. Be the first to share your experience!
+                No TripTales yet. Be the first to share your experience!
             </p>
             <?php else: ?>
             <p class="tripdar-trip-reports__count"><?php echo $total; ?> experience<?php echo $total === 1 ? '' : 's'; ?> shared</p>
@@ -541,7 +541,7 @@ class Tripdar_Shortcodes {
         ?>
         <div class="tripdar-report-form" data-strain-slug="<?php echo esc_attr($atts['slug']); ?>">
             <h3 class="tripdar-report-form__title">Share Your Experience with <?php echo esc_html($strain_name); ?></h3>
-            <p class="tripdar-report-form__intro">Help others by sharing your trip report. All submissions are reviewed before publishing.</p>
+            <p class="tripdar-report-form__intro">Help others by sharing your TripTale. All submissions are reviewed before publishing.</p>
 
             <form class="tripdar-report-form__form">
                 <div class="tripdar-report-form__row">
@@ -598,7 +598,7 @@ class Tripdar_Shortcodes {
                 </div>
 
                 <button type="submit" class="tripdar-btn tripdar-btn--primary tripdar-report-form__submit">
-                    Submit Trip Report
+                    Submit TripTale
                 </button>
 
                 <div class="tripdar-report-form__message" style="display: none;"></div>
