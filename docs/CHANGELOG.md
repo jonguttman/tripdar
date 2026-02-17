@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.4] - 2026-02-17
+
+### Fixed
+- Tooltips now render above the strain detail modal (z-index bumped to 10000000 vs modal's 999999)
+- Converted last 4 native `title=` attributes to `data-tooltip=` for consistent warm-themed tooltips:
+  - Mini-scale bars on cards
+  - Body/head balance spectrum marker
+  - Similar strains similarity score
+  - Dosage curve bars
+- Confidence shield tooltip now works inside the detail modal (was blocked by z-index collision)
+
 ## [1.5.3] - 2026-02-17
 
 ### Changed
