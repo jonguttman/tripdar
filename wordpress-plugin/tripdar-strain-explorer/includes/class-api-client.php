@@ -601,8 +601,8 @@ class Tripdar_API_Client {
     /**
      * Submit a trip report
      */
-    public function submit_trip_report($data) {
-        return $this->request('/reports', 'POST', $data);
+    public function submit_trip_report($slug, $data) {
+        return $this->request("/strains/{$slug}/reports", 'POST', $data);
     }
 
     /**
