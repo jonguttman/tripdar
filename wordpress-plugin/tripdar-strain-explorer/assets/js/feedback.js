@@ -536,7 +536,16 @@
                     } else {
                         const errorMsg = data.data || data.message || 'Failed to submit report';
                         console.error('Trip report submission failed:', errorMsg);
-                        alert('Failed to submit report: ' + errorMsg);
+                        // Show full error details on the page for debugging
+                        const submitBtn = form.querySelector('[type="submit"]');
+                        if (submitBtn) submitBtn.disabled = false;
+                        const existing = form.querySelector('.tripdar-submit-error');
+                        if (existing) existing.remove();
+                        const errEl = document.createElement('p');
+                        errEl.className = 'tripdar-submit-error';
+                        errEl.style.cssText = 'color:red;font-size:0.85rem;margin-top:0.5rem;padding:0.5rem;background:#fff0f0;border-radius:4px;';
+                        errEl.textContent = 'Error: ' + JSON.stringify(errorMsg);
+                        form.appendChild(errEl);
                     }
                 } catch (error) {
                     console.error('Report submission error:', error);
