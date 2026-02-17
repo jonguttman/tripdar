@@ -2258,42 +2258,7 @@
     color: #1e40af;
 }
 
-/* Confidence tooltip */
-.tripdar-confidence[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--tripdar-ink);
-    color: var(--tripdar-parchment);
-    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
-    border-radius: 6px;
-    font-family: var(--tripdar-font-body);
-    font-size: 0.75rem;
-    font-weight: 400;
-    line-height: 1.4;
-    white-space: nowrap;
-    max-width: 240px;
-    white-space: normal;
-    z-index: 100;
-    margin-bottom: 4px;
-    pointer-events: none;
-    box-shadow: var(--tripdar-shadow-md);
-}
-
-.tripdar-confidence[title]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 5px solid transparent;
-    border-top-color: var(--tripdar-ink);
-    z-index: 100;
-    margin-bottom: -6px;
-    pointer-events: none;
-}
+/* Confidence tooltip — handled by JS tooltip system */
 
 /* =============================================================================
    Compare Tool
@@ -3444,86 +3409,57 @@
 }
 
 /* =============================================================================
-   Vibe Tag Tooltips
+   Tooltip Target Styles
    ============================================================================= */
 
-.tripdar-tag--vibe,
-.tripdar-vibe-tag {
+.tripdar-tag--vibe[data-tooltip],
+.tripdar-vibe-tag[data-tooltip],
+.tripdar-confidence[data-tooltip] {
     cursor: help;
-    position: relative;
-}
-
-.tripdar-tag--vibe[title]:hover::after,
-.tripdar-vibe-tag[title]:hover::after {
-    content: attr(title);
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    background: var(--tripdar-ink);
-    color: var(--tripdar-parchment);
-    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
-    border-radius: 6px;
-    font-family: var(--tripdar-font-body);
-    font-size: 0.75rem;
-    white-space: nowrap;
-    z-index: 100;
-    margin-bottom: var(--tripdar-space-xs);
-    pointer-events: none;
-    box-shadow: var(--tripdar-shadow-md);
-}
-
-/* Suppress CSS hover tooltip when JS tooltip is active */
-.tripdar-vibe-tag--tooltip-active[title]:hover::after,
-.tripdar-vibe-tag--tooltip-active[title]:hover::before {
-    display: none;
-}
-
-.tripdar-tag--vibe[title]:hover::before,
-.tripdar-vibe-tag[title]:hover::before {
-    content: '';
-    position: absolute;
-    bottom: 100%;
-    left: 50%;
-    transform: translateX(-50%);
-    border: 6px solid transparent;
-    border-top-color: var(--tripdar-ink);
-    z-index: 100;
-    margin-bottom: calc(-6px + var(--tripdar-space-xs));
-    pointer-events: none;
 }
 
 /* =============================================================================
-   Vibe Tag JS Tooltip (click-driven for mobile)
+   JS Tooltip (hover + click, appended to body)
    ============================================================================= */
 
-.tripdar-vibe-tooltip {
+.tripdar-tooltip {
     position: absolute;
-    transform: translateX(-50%) translateY(-100%);
-    background: var(--tripdar-ink);
-    color: var(--tripdar-parchment);
-    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    background: var(--tripdar-ink, #2c1810);
+    color: var(--tripdar-parchment, #faf6f1);
+    padding: 6px 10px;
     border-radius: 6px;
-    font-family: var(--tripdar-font-body);
+    font-family: 'Lora', 'Georgia', serif;
     font-size: 0.75rem;
     line-height: 1.4;
     white-space: normal;
-    max-width: 220px;
-    min-width: 120px;
+    max-width: 240px;
+    min-width: 100px;
     z-index: 999999;
-    pointer-events: auto;
-    box-shadow: var(--tripdar-shadow-md);
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(44, 24, 16, 0.12);
     text-align: center;
 }
 
-.tripdar-vibe-tooltip::after {
+.tripdar-tooltip::after {
     content: '';
     position: absolute;
-    top: 100%;
-    left: 50%;
+    left: var(--arrow-left, 50%);
     transform: translateX(-50%);
     border: 6px solid transparent;
-    border-top-color: var(--tripdar-ink);
+}
+
+.tripdar-tooltip--above::after {
+    top: 100%;
+    border-top-color: var(--tripdar-ink, #2c1810);
+}
+
+.tripdar-tooltip--below::after {
+    bottom: 100%;
+    border-bottom-color: var(--tripdar-ink, #2c1810);
+}
+
+.tripdar-tooltip--sticky {
+    pointer-events: auto;
 }
 
 /* =============================================================================
@@ -3583,18 +3519,4 @@
         align-items: flex-start;
     }
 
-    .tripdar-tag--vibe[title]:hover::after,
-    .tripdar-vibe-tag[title]:hover::after {
-        white-space: normal;
-        max-width: 200px;
-        font-size: 0.75rem;
-        background: var(--tripdar-ink);
-        color: var(--tripdar-parchment);
-        box-shadow: var(--tripdar-shadow-md);
-    }
-
-    .tripdar-tag--vibe[title]:hover::before,
-    .tripdar-vibe-tag[title]:hover::before {
-        border-top-color: var(--tripdar-ink);
-    }
 }

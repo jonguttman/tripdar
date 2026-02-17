@@ -1041,7 +1041,7 @@ class Tripdar_Shortcodes {
                             foreach ($strain['vibes'] as $vibe):
                                 $description = isset($vibe_descriptions[$vibe]) ? $vibe_descriptions[$vibe] : '';
                             ?>
-                            <span class="tripdar-tag tripdar-tag--vibe" title="<?php echo esc_attr($description); ?>"><?php echo esc_html($vibe); ?></span>
+                            <span class="tripdar-tag tripdar-tag--vibe" data-tooltip="<?php echo esc_attr($description); ?>"><?php echo esc_html($vibe); ?></span>
                             <?php endforeach; ?>
                         <?php endif; ?>
                         <span class="tripdar-tag tripdar-tag--potency tripdar-tag--<?php echo esc_attr($strain['potencyTier']); ?>">
@@ -1154,7 +1154,7 @@ class Tripdar_Shortcodes {
                         foreach (array_slice($strain['vibes'], 0, 2) as $vibe):
                             $description = isset($vibe_descriptions[$vibe]) ? $vibe_descriptions[$vibe] : '';
                         ?>
-                        <span class="tripdar-vibe-tag" title="<?php echo esc_attr($description); ?>"><?php echo esc_html($vibe); ?></span>
+                        <span class="tripdar-vibe-tag" data-tooltip="<?php echo esc_attr($description); ?>"><?php echo esc_html($vibe); ?></span>
                         <?php endforeach; ?>
                     <?php endif; ?>
                     <?php echo $this->render_dose_sensitivity_tag($strain['doseSensitivity']); ?>
@@ -1677,7 +1677,7 @@ class Tripdar_Shortcodes {
         ob_start();
         ?>
         <span class="tripdar-confidence tripdar-confidence--<?php echo esc_attr($tier); ?>"
-             title="<?php echo esc_attr($tier_tooltips[$tier] ?? ''); ?>">
+             data-tooltip="<?php echo esc_attr($tier_tooltips[$tier] ?? ''); ?>">
             <?php echo $shield_svg; ?>
         </span>
         <?php
@@ -1807,8 +1807,12 @@ class Tripdar_Shortcodes {
         <div class="tripdar-experience-emotions">
             <span class="tripdar-experience-emotions__label">Emotional Character</span>
             <div class="tripdar-experience-emotions__tags">
-                <?php foreach ($profile['emotionalCharacter'] as $emotion): ?>
-                <span class="tripdar-tag tripdar-tag--vibe"><?php echo esc_html($emotion); ?></span>
+                <?php
+                $emotion_descriptions = $this->get_emotion_descriptions();
+                foreach ($profile['emotionalCharacter'] as $emotion):
+                    $desc = isset($emotion_descriptions[$emotion]) ? $emotion_descriptions[$emotion] : '';
+                ?>
+                <span class="tripdar-tag tripdar-tag--vibe" data-tooltip="<?php echo esc_attr($desc); ?>"><?php echo esc_html($emotion); ?></span>
                 <?php endforeach; ?>
             </div>
         </div>
@@ -2011,6 +2015,77 @@ class Tripdar_Shortcodes {
             'forward' => 'Momentum and drive — channel it into creative output',
             'crystalline' => 'Ultra-clear, gem-like precision in the experience',
             'music-friendly' => 'Put on headphones — music becomes transcendent',
+        ];
+    }
+
+    /**
+     * Get descriptions for emotional character tags
+     */
+    private function get_emotion_descriptions() {
+        return [
+            // Core emotions
+            'peaceful' => 'A sense of calm and inner stillness',
+            'joyful' => 'Feelings of happiness, delight, and contentment',
+            'euphoric' => 'Intense waves of bliss and elation',
+            'blissful' => 'Deep, sustained sense of happiness and well-being',
+            'serene' => 'Quiet tranquility and emotional smoothness',
+            'content' => 'Settled satisfaction without needing anything more',
+            'grateful' => 'Heightened appreciation for life and connection',
+            'loving' => 'Warmth, compassion, and emotional openness toward others',
+            'compassionate' => 'Deep empathy and tenderness toward all beings',
+            'tender' => 'Soft emotional sensitivity and gentle vulnerability',
+            'nostalgic' => 'Bittersweet memories and longing for the past',
+            'melancholic' => 'Gentle sadness with a reflective, beautiful quality',
+            'cathartic' => 'Emotional release and cleansing — tears may flow',
+            'vulnerable' => 'Emotional openness and lowered defenses',
+            'raw' => 'Unfiltered emotional intensity without polish',
+            'sensitive' => 'Heightened emotional awareness and receptivity',
+
+            // Awe / wonder
+            'awe' => 'Overwhelming sense of wonder at the vastness of existence',
+            'wonder' => 'Childlike amazement and curiosity about everything',
+            'reverent' => 'Deep respect and humility before something greater',
+            'humbled' => 'Feeling small in a meaningful, grounding way',
+            'mystical' => 'Connection to something sacred and beyond ordinary experience',
+            'transcendent' => 'Rising above everyday concerns into expanded awareness',
+
+            // Energy / mood
+            'warm' => 'Emotionally comforting and nurturing',
+            'bright' => 'Emotionally light, optimistic, and cheerful',
+            'gentle' => 'Soft, easy emotional tone without sharp edges',
+            'uplifting' => 'Elevates mood and emotional energy',
+            'soothing' => 'Calming emotional quality that eases tension',
+            'grounded' => 'Emotionally stable and connected to the present',
+            'centered' => 'Balanced emotional state with clear inner focus',
+            'steady' => 'Consistent emotional tone without dramatic swings',
+            'resilient' => 'Emotional strength and ability to process difficulty',
+
+            // Depth / introspection
+            'introspective' => 'Turned inward for self-examination and reflection',
+            'reflective' => 'Contemplative emotional quality that encourages insight',
+            'contemplative' => 'Quiet, thoughtful emotional tone',
+            'profound' => 'Emotionally deep and meaningful',
+            'deep' => 'Goes beneath the surface into core feelings',
+            'philosophical' => 'Emotion-driven questioning of life and meaning',
+
+            // Social / relational
+            'empathetic' => 'Strong ability to feel what others feel',
+            'connected' => 'Sense of deep bond with others and the world',
+            'open' => 'Emotionally available and receptive',
+            'trusting' => 'Feeling safe and willing to be vulnerable',
+            'playful' => 'Lighthearted, fun emotional energy',
+            'giggly' => 'Bubbly, laughter-prone emotional state',
+            'social' => 'Drawn toward connection and shared experience',
+            'intimate' => 'Emotionally close and deeply personal',
+
+            // Intensity descriptors
+            'intense' => 'Strong, powerful emotional impact',
+            'overwhelming' => 'Emotions that feel larger than oneself',
+            'subtle' => 'Gentle, understated emotional quality',
+            'electric' => 'Buzzing, charged emotional energy',
+            'fiery' => 'Passionate, burning emotional intensity',
+            'fluid' => 'Emotions shift and flow smoothly',
+            'expansive' => 'Emotions feel boundless and wide-open',
         ];
     }
 
