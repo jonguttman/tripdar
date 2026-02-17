@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.4.2] - 2026-02-16
+
+### Fixed
+- **Trip report submission now works!** Fixed API endpoint from `/reports` to `/strains/{slug}/reports` to match API routing
+- Trip reports can now be successfully submitted after rating a strain
+
 ## [1.4.1] - 2026-02-16
 
 ### Fixed
