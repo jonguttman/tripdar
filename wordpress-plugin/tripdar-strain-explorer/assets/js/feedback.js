@@ -471,7 +471,7 @@
                     </div>
 
                     <button type="submit" class="tripdar-btn tripdar-btn--primary">
-                        Submit Trip Report
+                        Submit TripTale
                     </button>
                 </form>
             `;
@@ -532,7 +532,7 @@
                     console.log('Trip report response:', data);
 
                     if (data.success) {
-                        form.innerHTML = '<p class="tripdar-success">✓ Trip report submitted! Thank you for sharing.</p>';
+                        form.innerHTML = '<p class="tripdar-success">✓ TripTale submitted! Thank you for sharing.</p>';
                     } else {
                         const errorMsg = data.data || data.message || 'Failed to submit report';
                         console.error('Trip report submission failed:', errorMsg);

@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.4.9] - 2026-02-17
+
+### Changed
+- Renamed all user-facing "Trip Report" / "Trip Reports" text to "TripTale" / "TripTales" throughout the WordPress plugin
+
+### Fixed
+- Admin strain editor no longer triggers file picker when clicking Save - image area now shows existing photo with a separate "Replace Image" button instead of full-area click target
+
 ## [1.4.8] - 2026-02-17
 
 ### Fixed
