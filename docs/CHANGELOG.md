@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.5.2] - 2026-02-17
+
+### Changed
+- Strain card images tightened from 4:3 to 3:2 aspect ratio to reduce empty space under landscape graphics
+- Confidence badges replaced with small shield icons (green for high-confidence, blue for established) with descriptive hover tooltips
+- Mini-scale label width increased from 72px to 80px with larger gap to prevent "Consistency" text from bumping into the track bar
+- Vibe tooltips now cover all 77 vibes (was only 23) — self-explanatory vibes include suggested activities
+
+### Fixed
+- Consistency scale bar no longer visually collides with its label text
+
 ## [1.5.1] - 2026-02-17
 
 ### Changed

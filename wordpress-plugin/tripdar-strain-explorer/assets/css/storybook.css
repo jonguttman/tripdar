@@ -193,7 +193,7 @@
 
 .tripdar-strain-card__image-wrapper {
     position: relative;
-    aspect-ratio: 4/3;
+    aspect-ratio: 3/2;
     background: var(--tripdar-parchment);
     overflow: hidden;
 }
@@ -296,7 +296,7 @@
 .tripdar-strain-card__excerpt {
     font-size: 0.875rem;
     color: var(--tripdar-ink-muted);
-    margin: 0 0 var(--tripdar-space-md);
+    margin: 0 0 var(--tripdar-space-sm);
     line-height: 1.5;
 }
 
@@ -2237,43 +2237,62 @@
 .tripdar-confidence {
     display: inline-flex;
     align-items: center;
-    gap: 0.25rem;
-    padding: 0.25rem 0.5rem;
-    font-family: var(--tripdar-font-ui);
-    font-size: 0.7rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    justify-content: center;
+    padding: 3px;
     border-radius: 4px;
     cursor: help;
+    position: relative;
 }
 
-.tripdar-confidence--verified {
+.tripdar-confidence__svg {
+    width: 18px;
+    height: 20px;
+    display: block;
+}
+
+.tripdar-confidence--high-confidence {
     color: #166534;
-    background: rgba(22, 163, 74, 0.15);
-    border: 1px solid rgba(22, 163, 74, 0.3);
 }
 
 .tripdar-confidence--established {
     color: #1e40af;
-    background: rgba(59, 130, 246, 0.15);
-    border: 1px solid rgba(59, 130, 246, 0.3);
 }
 
-.tripdar-confidence--developing {
-    color: #92400e;
-    background: rgba(217, 119, 6, 0.15);
-    border: 1px solid rgba(217, 119, 6, 0.3);
+/* Confidence tooltip */
+.tripdar-confidence[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(17, 24, 39, 0.95);
+    color: white;
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    border-radius: 6px;
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.7rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: nowrap;
+    max-width: 240px;
+    white-space: normal;
+    z-index: 100;
+    margin-bottom: 4px;
+    pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
-.tripdar-confidence--emerging {
-    color: var(--tripdar-ink-muted);
-    background: rgba(139, 115, 85, 0.1);
-    border: 1px solid var(--tripdar-border-color);
-}
-
-.tripdar-confidence__icon {
-    font-size: 0.75rem;
+.tripdar-confidence[title]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(17, 24, 39, 0.95);
+    z-index: 100;
+    margin-bottom: -6px;
+    pointer-events: none;
 }
 
 /* =============================================================================
@@ -2796,13 +2815,13 @@
     display: flex;
     flex-direction: column;
     gap: var(--tripdar-space-xs);
-    margin-bottom: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-sm);
 }
 
 .tripdar-mini-scale {
     display: flex;
     align-items: center;
-    gap: var(--tripdar-space-sm);
+    gap: var(--tripdar-space-md);
 }
 
 .tripdar-mini-scale__label {
@@ -2812,7 +2831,7 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--tripdar-ink-muted);
-    width: 72px;
+    width: 80px;
     flex-shrink: 0;
 }
 

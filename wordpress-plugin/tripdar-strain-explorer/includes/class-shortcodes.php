@@ -1657,26 +1657,30 @@ class Tripdar_Shortcodes {
             return '';
         }
 
-        $tier_labels = [
-            'high-confidence' => 'High Confidence',
-            'established' => 'Established',
-            'developing' => 'Developing',
-            'emerging' => 'Emerging',
+        $tier_tooltips = [
+            'high-confidence' => 'Well-researched strain with extensive community data and consistent reports',
+            'established' => 'Solid data from multiple sources — effects are well-documented',
         ];
 
-        $tier_icons = [
-            'high-confidence' => '✓✓',
-            'established' => '✓',
-            'developing' => '◐',
-            'emerging' => '○',
-        ];
+        // SVG shield icon — filled for high-confidence, half for established
+        $shield_svg = '';
+        if ($tier === 'high-confidence') {
+            $shield_svg = '<svg class="tripdar-confidence__svg" viewBox="0 0 16 18" fill="none" xmlns="http://www.w3.org/2000/svg">'
+                . '<path d="M8 1L2 4v5c0 4 2.5 6.5 6 8 3.5-1.5 6-4 6-8V4L8 1z" fill="currentColor" opacity="0.2" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>'
+                . '<path d="M5.5 9L7 10.5L10.5 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>'
+                . '</svg>';
+        } else {
+            $shield_svg = '<svg class="tripdar-confidence__svg" viewBox="0 0 16 18" fill="none" xmlns="http://www.w3.org/2000/svg">'
+                . '<path d="M8 1L2 4v5c0 4 2.5 6.5 6 8 3.5-1.5 6-4 6-8V4L8 1z" fill="currentColor" opacity="0.12" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>'
+                . '<path d="M5.5 9L7 10.5L10.5 7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>'
+                . '</svg>';
+        }
 
         ob_start();
         ?>
         <div class="tripdar-confidence tripdar-confidence--<?php echo esc_attr($tier); ?>"
-             title="Data quality: <?php echo esc_html($tier_labels[$tier] ?? 'Unknown'); ?>">
-            <span class="tripdar-confidence__icon"><?php echo $tier_icons[$tier] ?? '○'; ?></span>
-            <span class="tripdar-confidence__label"><?php echo esc_html($tier_labels[$tier] ?? 'Unknown'); ?></span>
+             title="<?php echo esc_attr($tier_tooltips[$tier] ?? ''); ?>">
+            <?php echo $shield_svg; ?>
         </div>
         <?php
         return ob_get_clean();
@@ -1904,29 +1908,111 @@ class Tripdar_Shortcodes {
      */
     private function get_vibe_descriptions() {
         return [
-            'reflective' => 'Promotes introspection and self-examination',
-            'warm' => 'Comforting, emotionally gentle experience',
-            'grounded' => 'Helps you feel centered and connected to your body',
-            'clear' => 'Mental clarity and lucid thought',
-            'social' => 'Enhances connection and conversation with others',
-            'nature-friendly' => 'Amplifies appreciation for natural surroundings',
-            'intense' => 'Strong, powerful psychedelic effects',
-            'inward' => 'Encourages internal focus and self-exploration',
+            // Emotional / mood
+            'warm' => 'Comforting, emotionally gentle — great for cozy indoor sessions',
+            'bright' => 'Try journaling or creative art while riding the uplifting mood',
+            'euphoric' => 'Let the joy wash over you — perfect with your favorite music',
+            'emotional' => 'Deep feelings and emotional processing — have tissues nearby',
+            'emotionally deep' => 'Intense emotional exploration — best with a trusted sitter',
+            'emotionally lifting' => 'Gently elevates mood — pair with a sunset walk',
+            'easygoing' => 'Relaxed and beginner-friendly — ideal for a first experience',
+            'gentle' => 'Soft and approachable — try light yoga or stretching',
+            'giggly' => 'Expect waves of laughter — best enjoyed with friends',
+            'cozy' => 'Curl up with blankets and ambient music',
+            'celebratory' => 'Festive, joyful energy — great for gatherings',
+            'confident' => 'Steady self-assurance — try creative projects or journaling',
+
+            // Introspective / spiritual
+            'reflective' => 'Try journaling or meditation while in this headspace',
+            'inward' => 'Encourages internal focus — solo sessions with eye mask recommended',
+            'introspective' => 'Deep self-reflection — write down your insights',
+            'contemplative' => 'Quiet thinking and philosophical exploration',
             'mystical' => 'Facilitates profound spiritual experiences',
+            'spiritual' => 'Try breathwork or meditation for deeper connection',
+            'lightly spiritual' => 'A gentle touch of the sacred — try being in nature',
+            'profound' => 'Life-changing insights — set clear intentions beforehand',
+            'transformative' => 'Catalyzes personal growth — integration journaling after',
+            'deep' => 'Goes beyond the surface — set aside uninterrupted time',
+
+            // Mental / cognitive
+            'clear' => 'Mental clarity and lucid thought — great for creative work',
+            'lucid' => 'Sharp awareness throughout — good for reflective walks',
+            'heady' => 'Strong cerebral effects — try puzzles or deep conversation',
+            'crisp' => 'Clean and precise mental effects',
+            'clean' => 'No mental fog — great for first-timers wanting clarity',
+
+            // Visual / sensory
+            'visual' => 'Rich visual effects — try looking at nature or art',
+            'bright visuals' => 'Vivid colors and patterns — visit a garden or gallery',
+            'cinematic' => 'Movie-like visual sequences — dim the lights and enjoy',
+            'colorful' => 'Enhanced color perception — surround yourself with art',
+            'luminous' => 'Glowing, radiant visual quality',
             'reality-bending' => 'Strong visual and perceptual distortions',
-            'emotional' => 'Deep feelings and emotional processing',
-            'profound' => 'Life-changing insights and revelations',
-            'easygoing' => 'Relaxed, gentle, beginner-friendly',
-            'bright' => 'Uplifting, cheerful, positive mood',
-            'whimsical' => 'Playful, imaginative, lighthearted',
-            'classic' => 'Reliable, well-known effects',
-            'cosmic' => 'Connection to the universe and beyond',
-            'transformative' => 'Catalyzes personal growth and change',
-            'emotionally deep' => 'Intense emotional exploration and catharsis',
-            'euphoric' => 'Feelings of joy and bliss',
-            'playful' => 'Fun, lighthearted energy',
-            'immersive' => 'Deeply absorbing experience',
-            'cinematic' => 'Vivid, movie-like visual effects',
+            'reality-melting' => 'Intense dissolution of normal perception — have a sitter',
+            'trippy' => 'Classic psychedelic visuals — kaleidoscopic patterns and trails',
+
+            // Energy / physical
+            'grounded' => 'Helps you feel centered — try walking barefoot outside',
+            'embodied' => 'Strong body awareness — try dance or movement',
+            'energized' => 'Active and alert — perfect for hiking or exploring',
+            'energizing' => 'Gets you moving — try a nature walk or creative project',
+            'electric' => 'Buzzing, charged energy throughout the body',
+            'kinetic' => 'Urge to move and dance — put on your best playlist',
+            'zippy' => 'Quick, buzzy energy — great for active adventures',
+            'lively' => 'Vibrant and animated — enjoy with upbeat music',
+            'buoyant' => 'Light and floating sensation — try being near water',
+            'airy' => 'Weightless, breezy feeling — best enjoyed outdoors',
+            'tidal' => 'Comes in waves — ride each wave and breathe through it',
+            'heavy' => 'Strong body load — have a comfortable place to rest',
+
+            // Social / interpersonal
+            'social' => 'Enhances connection — great for deep conversations with friends',
+            'social-glow' => 'Warm social radiance — enjoy with close companions',
+            'playful' => 'Fun and lighthearted — try games or creative play',
+            'whimsical' => 'Childlike wonder — explore a garden or make art',
+
+            // Nature / environment
+            'nature-friendly' => 'Head to a park, forest, or garden for best results',
+            'outdoorsy' => 'Made for the outdoors — try a trail or lakeside spot',
+            'earthy' => 'Raw, organic character — feels connected to the land',
+            'tropical' => 'Warm, lush vibes — pair with tropical music',
+            'rustic' => 'Simple, unrefined character — feels old-world authentic',
+
+            // Intensity / character
+            'intense' => 'Strong, powerful effects — start with a lower dose',
+            'powerful' => 'High impact — respect the dose and set intentions',
+            'bold' => 'Strong and assertive character — not for the faint of heart',
+            'explosive' => 'Rapid, intense onset — buckle up and breathe',
+            'loud' => 'Overwhelmingly present effects — have a calm space ready',
+            'raw' => 'Unfiltered, primal psychedelic experience',
+            'primal' => 'Connects to something ancient and instinctual',
+
+            // Creative / imaginative
+            'creative' => 'Try painting, writing, or playing music',
+            'dreamy' => 'Soft, dreamlike quality — try lying down with headphones',
+            'immersive' => 'Deeply absorbing — let yourself be carried by the experience',
+            'visionary' => 'Expansive visions and imagery — keep a journal handy',
+            'mythic' => 'Archetypal, story-like experiences — feels like a hero\'s journey',
+            'alien' => 'Strange, otherworldly territory — stay grounded with a sitter',
+
+            // Expansive / cosmic
+            'cosmic' => 'Connection to the universe — try stargazing',
+            'expansive' => 'Sense of vastness and openness — best in open spaces',
+            'boundary-dissolving' => 'Ego boundaries soften — have a trusted guide nearby',
+
+            // Classic / familiar
+            'classic' => 'Reliable, well-known effects — a great baseline experience',
+            'simple' => 'Straightforward and uncomplicated',
+            'refined' => 'Polished, sophisticated character',
+            'elegant' => 'Graceful and balanced effects',
+            'luxurious' => 'Rich, indulgent quality — treat yourself to comfort',
+
+            // Misc
+            'adventurous' => 'Explore new places or try something you\'ve never done',
+            'curious' => 'Heightened wonder — investigate textures, sounds, nature',
+            'forward' => 'Momentum and drive — channel it into creative output',
+            'crystalline' => 'Ultra-clear, gem-like precision in the experience',
+            'music-friendly' => 'Put on headphones — music becomes transcendent',
         ];
     }
 
