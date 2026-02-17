@@ -1032,7 +1032,7 @@ class Tripdar_Shortcodes {
                 <?php endif; ?>
 
                 <div class="tripdar-strain-detail__info">
-                    <h2 class="tripdar-strain-detail__name"><?php echo esc_html($strain['name']); ?></h2>
+                    <h2 class="tripdar-strain-detail__name"><?php echo esc_html($strain['name']); ?><?php echo $this->render_confidence_badge($strain['confidenceTier']); ?></h2>
 
                     <div class="tripdar-strain-detail__tags">
                         <?php if (!empty($strain['vibes']) && is_array($strain['vibes'])): ?>
@@ -1052,7 +1052,6 @@ class Tripdar_Shortcodes {
                         <?php endif; ?>
                         <?php echo $this->render_dose_sensitivity_tag($strain['doseSensitivity']); ?>
                     </div>
-                    <?php echo $this->render_confidence_badge($strain['confidenceTier']); ?>
                 </div>
             </div>
 
