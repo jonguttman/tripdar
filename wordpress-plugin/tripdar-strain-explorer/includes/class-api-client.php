@@ -47,6 +47,7 @@ class Tripdar_API_Client {
                 'Content-Type' => 'application/json',
             ],
             'timeout' => 15,
+            'redirection' => 0, // Don't follow redirects - POST becomes GET on redirect
         ];
 
         // Add auth header if API key is configured
