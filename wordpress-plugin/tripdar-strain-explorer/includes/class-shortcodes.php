@@ -1144,11 +1144,10 @@ class Tripdar_Shortcodes {
                     <span class="tripdar-strain-card__potency tripdar-potency--<?php echo esc_attr($strain['potencyTier']); ?>">
                         <?php echo esc_html($strain['potency']); ?>
                     </span>
-                    <?php echo $this->render_confidence_badge($strain['confidenceTier']); ?>
                 </div>
             </div>
             <div class="tripdar-strain-card__content">
-                <h3 class="tripdar-strain-card__name"><?php echo esc_html($strain['name']); ?></h3>
+                <h3 class="tripdar-strain-card__name"><?php echo esc_html($strain['name']); ?><?php echo $this->render_confidence_badge($strain['confidenceTier']); ?></h3>
                 <div class="tripdar-strain-card__vibes">
                     <?php if (!empty($strain['vibes']) && is_array($strain['vibes'])): ?>
                         <?php
@@ -1678,10 +1677,10 @@ class Tripdar_Shortcodes {
 
         ob_start();
         ?>
-        <div class="tripdar-confidence tripdar-confidence--<?php echo esc_attr($tier); ?>"
+        <span class="tripdar-confidence tripdar-confidence--<?php echo esc_attr($tier); ?>"
              title="<?php echo esc_attr($tier_tooltips[$tier] ?? ''); ?>">
             <?php echo $shield_svg; ?>
-        </div>
+        </span>
         <?php
         return ob_get_clean();
     }

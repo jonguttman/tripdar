@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.5.3] - 2026-02-17
+
+### Changed
+- Vibe tags now respond to click/tap with a JS-driven tooltip, preventing accidental strain modal opens on mobile
+- Confidence shield icon moved from image overlay to superscript position after strain name for visibility
+- All tooltips (vibe, confidence) now use warm parchment theme instead of black/white
+- Minimum font size raised from 0.65rem/0.7rem to 0.75rem (12px) across all card labels, tags, tooltips, and scale indicators
+- Mini-scale label width increased from 80px to 88px to fit "Consistency" at the larger font size
+
+### Fixed
+- Vibe tag hover tooltips now visible — removed overflow:hidden from card that was clipping them
+- Vibe tag clicks on cards no longer open the strain detail modal — tooltip shows instead
+- Confidence shield icons now visible as superscript notation next to strain name with hover explanation
+
 ## [1.5.2] - 2026-02-17
 
 ### Changed
