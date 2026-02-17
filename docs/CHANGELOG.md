@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.5.5] - 2026-02-17
+
+### Changed
+- Reset all community analytics data (ratings, reviews, trip reports, analytics events) to start fresh after testing period
+- Added `scripts/reset-community-data.ts` reusable reset script
+
 ## [1.5.4] - 2026-02-17
 
 ### Fixed
