@@ -49,12 +49,11 @@
                     return;
                 }
 
-                // Handle vibe tag click - show tooltip instead of opening modal
-                const vibeTag = e.target.closest('.tripdar-vibe-tag, .tripdar-tag--vibe');
-                if (vibeTag) {
+                // Handle vibe/confidence tag click - prevent opening modal
+                const tooltipTag = e.target.closest('[data-tooltip]');
+                if (tooltipTag) {
                     e.stopPropagation();
                     e.preventDefault();
-                    this.handleVibeTagClick(vibeTag);
                     return;
                 }
 
@@ -288,53 +287,6 @@
             localStorage.setItem('tripdar_tried', JSON.stringify(this.triedStrains));
         }
 
-        handleVibeTagClick(tag) {
-            const description = tag.getAttribute('title');
-            if (!description) return;
-
-            // Close any existing JS tooltip
-            const existing = document.querySelector('.tripdar-vibe-tooltip');
-            if (existing) {
-                existing._dismiss();
-            }
-
-            // If clicking the same tag that was active, just close it
-            if (tag.classList.contains('tripdar-vibe-tag--tooltip-active')) {
-                return;
-            }
-
-            // Create tooltip appended to body (avoids overflow clipping)
-            const tooltip = document.createElement('div');
-            tooltip.className = 'tripdar-vibe-tooltip';
-            tooltip.textContent = description;
-            document.body.appendChild(tooltip);
-
-            // Position above the tag
-            const rect = tag.getBoundingClientRect();
-            tooltip.style.left = (rect.left + rect.width / 2) + 'px';
-            tooltip.style.top = (rect.top + window.scrollY - 8) + 'px';
-
-            // Suppress CSS hover tooltip
-            tag.classList.add('tripdar-vibe-tag--tooltip-active');
-
-            // Dismiss function
-            const dismiss = () => {
-                tooltip.remove();
-                tag.classList.remove('tripdar-vibe-tag--tooltip-active');
-                document.removeEventListener('click', onOutsideClick, true);
-            };
-            tooltip._dismiss = dismiss;
-
-            const onOutsideClick = (evt) => {
-                if (!tag.contains(evt.target) && !tooltip.contains(evt.target)) {
-                    dismiss();
-                }
-            };
-            setTimeout(() => {
-                document.addEventListener('click', onOutsideClick, true);
-            }, 0);
-        }
-
         updateTriedButtons() {
             this.container.querySelectorAll('.tripdar-tried-btn').forEach(btn => {
                 const slug = btn.dataset.slug;
@@ -473,10 +425,139 @@
     styleSheet.textContent = modalStyles;
     document.head.appendChild(styleSheet);
 
-    // Initialize all explorer instances
+    /**
+     * Global Tooltip System
+     * Handles hover + click for all [data-tooltip] elements on the page.
+     */
+    class TripdarTooltips {
+        constructor() {
+            this.tooltip = null;
+            this.activeTag = null;
+            this.isSticky = false;
+            this.hoverTimeout = null;
+            this.init();
+        }
+
+        init() {
+            // Hover: show tooltip on mouseover
+            document.addEventListener('mouseover', (e) => {
+                const tag = e.target.closest('[data-tooltip]');
+                if (!tag || !tag.getAttribute('data-tooltip')) return;
+                if (this.isSticky) return; // Don't interfere with sticky tooltip
+
+                clearTimeout(this.hoverTimeout);
+                this.hoverTimeout = setTimeout(() => {
+                    this.show(tag, false);
+                }, 80);
+            });
+
+            // Hover: hide on mouseout (unless sticky)
+            document.addEventListener('mouseout', (e) => {
+                const tag = e.target.closest('[data-tooltip]');
+                if (!tag) return;
+                clearTimeout(this.hoverTimeout);
+                if (!this.isSticky) {
+                    this.hide();
+                }
+            });
+
+            // Click: toggle sticky tooltip
+            document.addEventListener('click', (e) => {
+                const tag = e.target.closest('[data-tooltip]');
+                if (tag && tag.getAttribute('data-tooltip')) {
+                    e.stopPropagation();
+                    e.preventDefault();
+
+                    if (this.isSticky && this.activeTag === tag) {
+                        // Clicking same tag: dismiss
+                        this.hide();
+                    } else {
+                        // Show sticky
+                        this.show(tag, true);
+                    }
+                    return;
+                }
+
+                // Click outside: dismiss sticky tooltip
+                if (this.isSticky) {
+                    this.hide();
+                }
+            }, true);
+        }
+
+        show(tag, sticky) {
+            this.hide();
+
+            const text = tag.getAttribute('data-tooltip');
+            if (!text) return;
+
+            const el = document.createElement('div');
+            el.className = 'tripdar-tooltip' + (sticky ? ' tripdar-tooltip--sticky' : '');
+            el.textContent = text;
+            document.body.appendChild(el);
+
+            this.tooltip = el;
+            this.activeTag = tag;
+            this.isSticky = sticky;
+
+            this.position(tag, el);
+        }
+
+        position(tag, el) {
+            const rect = tag.getBoundingClientRect();
+            const scrollY = window.scrollY;
+            const scrollX = window.scrollX;
+            const vpWidth = window.innerWidth;
+            const elRect = el.getBoundingClientRect();
+
+            // Try above first
+            let top = rect.top + scrollY - elRect.height - 8;
+            let placedBelow = false;
+            if (rect.top - elRect.height - 8 < 0) {
+                // Not enough room above: place below
+                top = rect.bottom + scrollY + 8;
+                placedBelow = true;
+            }
+            el.classList.add(placedBelow ? 'tripdar-tooltip--below' : 'tripdar-tooltip--above');
+
+            // Horizontal centering with edge clamping
+            let left = rect.left + scrollX + rect.width / 2 - elRect.width / 2;
+            const minLeft = scrollX + 8;
+            const maxLeft = scrollX + vpWidth - elRect.width - 8;
+            if (left < minLeft) left = minLeft;
+            if (left > maxLeft) left = maxLeft;
+
+            // Adjust arrow position if tooltip was clamped
+            const idealCenter = rect.left + scrollX + rect.width / 2;
+            const tooltipCenter = left + elRect.width / 2;
+            const arrowOffset = idealCenter - tooltipCenter;
+            if (Math.abs(arrowOffset) > 4) {
+                const arrowPct = 50 + (arrowOffset / elRect.width) * 100;
+                el.style.setProperty('--arrow-left', arrowPct + '%');
+            }
+
+            el.style.left = left + 'px';
+            el.style.top = top + 'px';
+        }
+
+        hide() {
+            if (this.tooltip) {
+                this.tooltip.remove();
+                this.tooltip = null;
+            }
+            this.activeTag = null;
+            this.isSticky = false;
+            clearTimeout(this.hoverTimeout);
+        }
+    }
+
+    // Initialize all explorer instances + global tooltips
     document.addEventListener('DOMContentLoaded', function() {
         document.querySelectorAll('.tripdar-explorer').forEach(container => {
             new TripdarExplorer(container);
         });
+
+        // Initialize global tooltip system
+        new TripdarTooltips();
     });
 })();

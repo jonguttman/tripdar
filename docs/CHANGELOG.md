@@ -3,16 +3,22 @@
 ## [1.5.3] - 2026-02-17
 
 ### Changed
-- Vibe tags now respond to click/tap with a JS-driven tooltip, preventing accidental strain modal opens on mobile
-- Confidence shield icon moved from image overlay to superscript position after strain name for visibility
-- All tooltips (vibe, confidence) now use warm parchment theme instead of black/white
+- Complete tooltip overhaul: all tooltips now use JS-based system with edge detection so they never get clipped by viewport edges
+- Switched from `title` to `data-tooltip` attributes to prevent native browser tooltips (which were showing as black/white)
+- Tooltips now use warm parchment theme (dark brown bg, cream text) matching the storybook aesthetic
+- Vibe tags: hover shows tooltip, click makes it sticky until you click away
+- Confidence shield icon moved from image overlay to superscript position after strain name
+- Added emotional character tag tooltips that explain each emotion (e.g. "peaceful" → "A sense of calm and inner stillness")
 - Minimum font size raised from 0.65rem/0.7rem to 0.75rem (12px) across all card labels, tags, tooltips, and scale indicators
 - Mini-scale label width increased from 80px to 88px to fit "Consistency" at the larger font size
 
 ### Fixed
-- Vibe tag hover tooltips now visible — removed overflow:hidden from card that was clipping them
-- Vibe tag clicks on cards no longer open the strain detail modal — tooltip shows instead
-- Confidence shield icons now visible as superscript notation next to strain name with hover explanation
+- Tooltips no longer get cut off by page/window edges — JS positions them with viewport boundary detection
+- Tooltips now display in dark parchment color instead of black/white
+- Vibe tag hover tooltips work in both explorer cards and strain detail modal
+- Vibe tag clicks on cards no longer open the strain detail modal
+- Emotional character tags now have descriptive tooltips
+- Confidence badge no longer floats in strain detail popup — positioned inline as superscript
 
 ## [1.5.2] - 2026-02-17
 
