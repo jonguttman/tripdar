@@ -1,12 +1,14 @@
 # Changelog
 
-## [1.4.9] - 2026-02-17
+## [1.5.0] - 2026-02-17
 
 ### Changed
 - Renamed all user-facing "Trip Report" / "Trip Reports" text to "TripTale" / "TripTales" throughout the WordPress plugin
 
 ### Fixed
-- Admin strain editor no longer triggers file picker when clicking Save - image area now shows existing photo with a separate "Replace Image" button instead of full-area click target
+- **"B+" strain now displays correctly** instead of showing as "b plus" in recommendations and post-rating views. Root cause: `getStrainBySlug()` only matched by name-derived slug (B+ → "b"), not by ID ("b-plus"), so the strain wasn't found and fell back to raw slug display
+- Feedback widget now uses actual strain name from API data attribute instead of slug-to-name conversion
+- Admin strain editor image section simplified - shows "browse files" link when image exists, label clarifies image is optional
 
 ## [1.4.8] - 2026-02-17
 

@@ -1107,7 +1107,7 @@ class Tripdar_Shortcodes {
 
             <?php if ($show_feedback): ?>
             <div class="tripdar-strain-detail__feedback">
-                <?php echo $this->render_feedback_widget($strain['slug']); ?>
+                <?php echo $this->render_feedback_widget($strain['slug'], $strain['name'] ?? ''); ?>
             </div>
             <?php endif; ?>
         </div>
@@ -1188,13 +1188,16 @@ class Tripdar_Shortcodes {
     /**
      * Render feedback widget
      */
-    private function render_feedback_widget($strain_slug) {
+    private function render_feedback_widget($strain_slug, $strain_name = '') {
+        if (empty($strain_name)) {
+            $strain_name = ucwords(str_replace('-', ' ', $strain_slug));
+        }
         ob_start();
         ?>
-        <div class="tripdar-feedback" data-strain-slug="<?php echo esc_attr($strain_slug); ?>">
+        <div class="tripdar-feedback" data-strain-slug="<?php echo esc_attr($strain_slug); ?>" data-strain-name="<?php echo esc_attr($strain_name); ?>">
             <div class="tripdar-feedback__prompt">
                 <h4 class="tripdar-feedback__title">Share Your Experience</h4>
-                <p class="tripdar-feedback__subtitle">Does this description match your journey with <?php echo esc_html(ucwords(str_replace('-', ' ', $strain_slug))); ?>?</p>
+                <p class="tripdar-feedback__subtitle">Does this description match your journey with <?php echo esc_html($strain_name); ?>?</p>
             </div>
 
             <div class="tripdar-feedback__rating">

@@ -259,6 +259,9 @@ export function getStrainById(id: string): InternalStrain | undefined {
  */
 export function getStrainBySlug(slug: string): InternalStrain | undefined {
   return STRAIN_DATA.find(s => {
+    // Check by ID first (handles cases like B+ where id="b-plus" but name-derived slug="b")
+    if (s.id === slug) return true;
+    // Then check by name-derived slug
     const strainSlug = s.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")

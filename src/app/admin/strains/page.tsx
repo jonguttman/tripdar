@@ -570,50 +570,45 @@ export default function StrainsAdminPage() {
           {/* Image upload for editing */}
           {editingStrain && (
             <div style={styles.formGroup}>
-              <label style={styles.label}>Visualization Image</label>
-              {uploadingImage ? (
-                <div style={{ ...styles.dropZone, borderColor: "#ddd", backgroundColor: "#fafafa" }}>
+              <label style={styles.label}>Visualization Image (optional)</label>
+              <div
+                style={{
+                  ...styles.dropZone,
+                  borderColor: dragOver ? "#8b5cf6" : "#ddd",
+                  backgroundColor: dragOver ? "#f5f3ff" : "#fafafa",
+                }}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => handleDrop(e, editingStrain.name, editingStrain.id)}
+              >
+                {uploadingImage ? (
                   <p style={styles.dropText}>Uploading...</p>
-                </div>
-              ) : visualizationUrls[editingStrain.id] ? (
-                <div>
-                  <div
-                    style={{ ...styles.dropZone, borderColor: dragOver ? "#8b5cf6" : "transparent", backgroundColor: dragOver ? "#f5f3ff" : "#fafafa", cursor: "default" }}
-                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={(e) => handleDrop(e, editingStrain.name, editingStrain.id)}
-                  >
+                ) : visualizationUrls[editingStrain.id] ? (
+                  <div style={{ position: "relative" }}>
                     <img
                       src={visualizationUrls[editingStrain.id]}
                       alt={editingStrain.name}
                       style={styles.previewImage}
                     />
+                    <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#666" }}>
+                      Drag a new image here to replace, or{" "}
+                      <span
+                        style={{ color: "#8b5cf6", cursor: "pointer", textDecoration: "underline" }}
+                        onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                      >
+                        browse files
+                      </span>
+                    </p>
                   </div>
-                  <button
-                    type="button"
+                ) : (
+                  <p
+                    style={{ ...styles.dropText, cursor: "pointer" }}
                     onClick={() => fileInputRef.current?.click()}
-                    style={{ ...styles.secondaryButton, marginTop: "8px", fontSize: "12px", padding: "6px 12px" }}
                   >
-                    Replace Image
-                  </button>
-                </div>
-              ) : (
-                <div
-                  style={{
-                    ...styles.dropZone,
-                    borderColor: dragOver ? "#8b5cf6" : "#ddd",
-                    backgroundColor: dragOver ? "#f5f3ff" : "#fafafa",
-                  }}
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                  onDragLeave={() => setDragOver(false)}
-                  onDrop={(e) => handleDrop(e, editingStrain.name, editingStrain.id)}
-                >
-                  <p style={styles.dropText}>
                     Drag &amp; drop image or click to select
                   </p>
-                </div>
-              )}
+                )}
+              </div>
               <input
                 ref={fileInputRef}
                 type="file"
