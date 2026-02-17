@@ -3434,7 +3434,7 @@
     white-space: normal;
     max-width: 240px;
     min-width: 100px;
-    z-index: 999999;
+    z-index: 10000000;
     pointer-events: none;
     box-shadow: 0 4px 12px rgba(44, 24, 16, 0.12);
     text-align: center;

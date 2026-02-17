@@ -1443,7 +1443,7 @@ class Tripdar_Shortcodes {
                     <div class="tripdar-similar__card-content">
                         <h5 class="tripdar-similar__card-name"><?php echo esc_html($strain['name']); ?></h5>
                         <div class="tripdar-similar__card-meta">
-                            <span class="tripdar-similar__score" title="Similarity Score">
+                            <span class="tripdar-similar__score" data-tooltip="Similarity Score">
                                 <?php echo round($strain['score'] * 100); ?>% match
                             </span>
                             <?php if (!empty($strain['reason'])): ?>
@@ -1524,7 +1524,7 @@ class Tripdar_Shortcodes {
                         </div>
                         <div class="tripdar-dosage-curve__bar tripdar-dosage-curve__bar--<?php echo esc_attr(strtolower($category)); ?>"
                              style="height: <?php echo $height_pct; ?>%;"
-                             title="Avg: <?php echo number_format($avg, 1); ?>/10 (<?php echo $count; ?> reports)">
+                             data-tooltip="Avg: <?php echo number_format($avg, 1); ?>/10 (<?php echo $count; ?> reports)">
                         </div>
                     </div>
                     <span class="tripdar-dosage-curve__label">
@@ -1704,7 +1704,7 @@ class Tripdar_Shortcodes {
 
         ob_start();
         ?>
-        <div class="tripdar-mini-scale" title="<?php echo esc_attr($label . ': ' . $value); ?>">
+        <div class="tripdar-mini-scale" data-tooltip="<?php echo esc_attr($label . ': ' . $value); ?>">
             <span class="tripdar-mini-scale__label"><?php echo esc_html($label); ?></span>
             <div class="tripdar-mini-scale__track">
                 <div class="tripdar-mini-scale__fill tripdar-scale__fill--<?php echo esc_attr($color_class); ?>"
@@ -1845,7 +1845,7 @@ class Tripdar_Shortcodes {
                 <span class="tripdar-balance-spectrum__end">Body</span>
                 <div class="tripdar-balance-spectrum__track">
                     <div class="tripdar-balance-spectrum__marker" style="left: <?php echo $position; ?>%"
-                         title="<?php echo esc_attr($display); ?>"></div>
+                         data-tooltip="<?php echo esc_attr($display); ?>"></div>
                 </div>
                 <span class="tripdar-balance-spectrum__end">Head</span>
             </div>
