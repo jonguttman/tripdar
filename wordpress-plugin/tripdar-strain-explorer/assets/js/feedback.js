@@ -11,6 +11,9 @@
         constructor(container) {
             this.container = container;
             this.strainSlug = container.dataset.strainSlug;
+            this.strainName = container.dataset.strainName || this.strainSlug.split('-').map(word =>
+                word.charAt(0).toUpperCase() + word.slice(1)
+            ).join(' ');
             this.currentRating = 3;
             this.surveyResponses = {};
             this.surveyQuestions = [];
@@ -373,9 +376,7 @@
         async showPostRatingView() {
             console.log('showPostRatingView called for strain:', this.strainSlug);
 
-            const strainName = this.strainSlug.split('-').map(word =>
-                word.charAt(0).toUpperCase() + word.slice(1)
-            ).join(' ');
+            const strainName = this.strainName;
 
             const html = `
                 <div class="tripdar-post-rating">
@@ -624,7 +625,7 @@
                         <div class="tripdar-rec-card__explanation">
                             ${sharedVibes.length > 0 ? `
                                 <p>
-                                    <strong>Like ${this.strainSlug}:</strong>
+                                    <strong>Like ${this.escapeHtml(this.strainName)}:</strong>
                                     ${sharedVibes.slice(0, 2).map(v => this.escapeHtml(v)).join(', ')}
                                 </p>
                             ` : ''}
