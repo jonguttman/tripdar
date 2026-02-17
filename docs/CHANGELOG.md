@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.1] - 2026-02-16
+
+### Fixed
+- Added comprehensive console logging throughout trip report submission flow for debugging
+- Fixed unhandled promise rejection when showing post-rating view
+- Added localStorage availability checks to prevent "Not implemented on this platform" errors
+- Added defensive checks for DOM element queries to prevent silent failures
+- Improved error handling for async operations in feedback widget
+
 ## [1.4.0] - 2026-02-16
 
 ### Added
