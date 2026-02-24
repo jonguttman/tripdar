@@ -1,0 +1,824 @@
+/**
+ * Tripdar Recommendation Engine - Frontend Styles
+ *
+ * Uses CSS custom properties from tripdar-base.css.
+ * Themes: parchment (default), dark, minimal.
+ */
+
+/* =========================================================================
+   Container & Layout
+   ========================================================================= */
+
+.tripdar-rec {
+    font-family: var(--tripdar-font-body);
+    color: var(--tripdar-ink);
+    max-width: 800px;
+    margin: 0 auto;
+    padding: var(--tripdar-space-xl);
+    -webkit-font-smoothing: antialiased;
+}
+
+.tripdar-rec__title {
+    font-family: var(--tripdar-font-display);
+    font-size: 2rem;
+    font-weight: 600;
+    text-align: center;
+    margin-bottom: var(--tripdar-space-sm);
+    color: var(--tripdar-ink);
+}
+
+.tripdar-rec__subtitle {
+    text-align: center;
+    color: var(--tripdar-ink-muted);
+    margin-bottom: var(--tripdar-space-xl);
+    font-size: 1rem;
+}
+
+/* =========================================================================
+   Consent Gate
+   ========================================================================= */
+
+.tripdar-rec__consent-card {
+    background: var(--tripdar-parchment);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    padding: var(--tripdar-space-xxl);
+    text-align: center;
+    box-shadow: var(--tripdar-shadow-md);
+}
+
+.tripdar-rec__consent-icon {
+    color: var(--tripdar-violet);
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+.tripdar-rec__consent-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--tripdar-ink-light);
+    margin-bottom: var(--tripdar-space-xl);
+    text-align: left;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.tripdar-rec__consent-btn {
+    display: inline-block;
+    padding: 12px 32px;
+    background: var(--tripdar-violet);
+    color: #fff;
+    border: none;
+    border-radius: var(--tripdar-border-radius);
+    font-family: var(--tripdar-font-body);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.tripdar-rec__consent-btn:hover {
+    background: var(--tripdar-violet-dark);
+}
+
+.tripdar-rec__consent-btn:active {
+    transform: scale(0.98);
+}
+
+/* =========================================================================
+   Experience Level
+   ========================================================================= */
+
+.tripdar-rec__experience-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--tripdar-space-md);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+@media (max-width: 480px) {
+    .tripdar-rec__experience-options {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tripdar-rec__experience-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--tripdar-space-lg) var(--tripdar-space-md);
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.tripdar-rec__experience-btn:hover {
+    border-color: var(--tripdar-violet-light);
+    box-shadow: var(--tripdar-shadow-sm);
+}
+
+.tripdar-rec__experience-btn.selected {
+    border-color: var(--tripdar-violet);
+    background: rgba(139, 92, 246, 0.08);
+}
+
+.tripdar-rec__exp-label {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--tripdar-ink);
+    margin-bottom: 4px;
+}
+
+.tripdar-rec__exp-desc {
+    font-size: 0.85rem;
+    color: var(--tripdar-ink-muted);
+}
+
+/* =========================================================================
+   Path Selection
+   ========================================================================= */
+
+.tripdar-rec__path-cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--tripdar-space-lg);
+}
+
+@media (max-width: 600px) {
+    .tripdar-rec__path-cards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tripdar-rec__path-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--tripdar-space-xl) var(--tripdar-space-lg);
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-align: center;
+}
+
+.tripdar-rec__path-card:hover {
+    border-color: var(--tripdar-violet-light);
+    box-shadow: var(--tripdar-shadow-md);
+    transform: translateY(-2px);
+}
+
+.tripdar-rec__path-icon {
+    color: var(--tripdar-violet);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-rec__path-card h3 {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-sm);
+}
+
+.tripdar-rec__path-card p {
+    font-size: 0.85rem;
+    color: var(--tripdar-ink-muted);
+    margin: 0;
+}
+
+/* =========================================================================
+   Path A: Mood Tiles
+   ========================================================================= */
+
+.tripdar-rec__tiles-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-lg);
+}
+
+@media (max-width: 600px) {
+    .tripdar-rec__tiles-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.tripdar-rec__tile {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: var(--tripdar-space-lg) var(--tripdar-space-md);
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.tripdar-rec__tile:hover {
+    border-color: var(--tripdar-violet-light);
+    transform: translateY(-1px);
+}
+
+.tripdar-rec__tile.selected {
+    border-color: var(--tripdar-violet);
+    background: rgba(139, 92, 246, 0.1);
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15);
+}
+
+.tripdar-rec__tile-label {
+    font-family: var(--tripdar-font-display);
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.tripdar-rec__tile-desc {
+    font-size: 0.8rem;
+    color: var(--tripdar-ink-muted);
+}
+
+.tripdar-rec__tiles-actions {
+    text-align: center;
+}
+
+/* =========================================================================
+   Path B: Compass
+   ========================================================================= */
+
+.tripdar-rec__compass-container {
+    max-width: 500px;
+    margin: 0 auto var(--tripdar-space-lg);
+}
+
+.tripdar-rec__compass-pad {
+    position: relative;
+    width: 100%;
+    padding-bottom: 100%;
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    cursor: crosshair;
+    overflow: hidden;
+}
+
+.tripdar-rec__compass-crosshair {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        linear-gradient(to right, transparent calc(50% - 0.5px), var(--tripdar-border-color) calc(50% - 0.5px), var(--tripdar-border-color) calc(50% + 0.5px), transparent calc(50% + 0.5px)),
+        linear-gradient(to bottom, transparent calc(50% - 0.5px), var(--tripdar-border-color) calc(50% - 0.5px), var(--tripdar-border-color) calc(50% + 0.5px), transparent calc(50% + 0.5px));
+    pointer-events: none;
+}
+
+.tripdar-rec__compass-label {
+    position: absolute;
+    font-family: var(--tripdar-font-ui);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--tripdar-ink-muted);
+    pointer-events: none;
+}
+
+.tripdar-rec__compass-label--top { top: 8px; left: 50%; transform: translateX(-50%); }
+.tripdar-rec__compass-label--bottom { bottom: 8px; left: 50%; transform: translateX(-50%); }
+.tripdar-rec__compass-label--left { left: 8px; top: 50%; transform: translateY(-50%); }
+.tripdar-rec__compass-label--right { right: 8px; top: 50%; transform: translateY(-50%); }
+
+.tripdar-rec__compass-marker {
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    background: var(--tripdar-violet);
+    border: 3px solid #fff;
+    border-radius: 50%;
+    box-shadow: var(--tripdar-shadow-md);
+    transform: translate(-50%, -50%);
+    left: 50%;
+    top: 50%;
+    pointer-events: none;
+    transition: none;
+    z-index: 2;
+}
+
+.tripdar-rec__intensity-slider {
+    margin-top: var(--tripdar-space-lg);
+    text-align: center;
+}
+
+.tripdar-rec__intensity-slider label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-rec__intensity-slider input[type="range"] {
+    width: 100%;
+    accent-color: var(--tripdar-violet);
+}
+
+.tripdar-rec__intensity-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.8rem;
+    color: var(--tripdar-ink-muted);
+    margin-top: 4px;
+}
+
+/* =========================================================================
+   Path C: Guided Quiz
+   ========================================================================= */
+
+.tripdar-rec__quiz-progress {
+    height: 4px;
+    background: var(--tripdar-parchment-dark);
+    border-radius: 2px;
+    margin-bottom: var(--tripdar-space-xl);
+    overflow: hidden;
+}
+
+.tripdar-rec__quiz-progress-bar {
+    height: 100%;
+    background: var(--tripdar-violet);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+    width: 0%;
+}
+
+.tripdar-rec__quiz-title {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.6rem;
+    text-align: center;
+    margin-bottom: var(--tripdar-space-xl);
+}
+
+.tripdar-rec__quiz-options {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--tripdar-space-md);
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+@media (max-width: 480px) {
+    .tripdar-rec__quiz-options {
+        grid-template-columns: 1fr;
+    }
+}
+
+.tripdar-rec__quiz-option {
+    padding: var(--tripdar-space-lg);
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    cursor: pointer;
+    font-family: var(--tripdar-font-body);
+    font-size: 0.95rem;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.tripdar-rec__quiz-option:hover {
+    border-color: var(--tripdar-violet-light);
+}
+
+.tripdar-rec__quiz-option.selected {
+    border-color: var(--tripdar-violet);
+    background: rgba(139, 92, 246, 0.1);
+}
+
+/* =========================================================================
+   Loading
+   ========================================================================= */
+
+.tripdar-rec__loading {
+    text-align: center;
+    padding: var(--tripdar-space-xxl) 0;
+}
+
+.tripdar-rec__loading-spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--tripdar-border-color);
+    border-top-color: var(--tripdar-violet);
+    border-radius: 50%;
+    animation: tripdar-spin 0.8s linear infinite;
+}
+
+@keyframes tripdar-spin {
+    to { transform: rotate(360deg); }
+}
+
+.tripdar-rec__loading p {
+    margin-top: var(--tripdar-space-md);
+    color: var(--tripdar-ink-muted);
+    font-style: italic;
+}
+
+/* =========================================================================
+   Submit Button (Shared)
+   ========================================================================= */
+
+.tripdar-rec__submit-btn {
+    display: inline-block;
+    padding: 14px 40px;
+    background: var(--tripdar-violet);
+    color: #fff;
+    border: none;
+    border-radius: var(--tripdar-border-radius);
+    font-family: var(--tripdar-font-body);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.1s ease;
+    margin-top: var(--tripdar-space-lg);
+}
+
+.tripdar-rec__submit-btn:hover { background: var(--tripdar-violet-dark); }
+.tripdar-rec__submit-btn:active { transform: scale(0.98); }
+
+/* =========================================================================
+   Results
+   ========================================================================= */
+
+.tripdar-rec__results-cards {
+    display: flex;
+    flex-direction: column;
+    gap: var(--tripdar-space-lg);
+}
+
+.tripdar-rec__result-card {
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    padding: var(--tripdar-space-xl);
+    box-shadow: var(--tripdar-shadow-sm);
+}
+
+.tripdar-rec__result-card--best {
+    border-color: var(--tripdar-violet-light);
+    box-shadow: var(--tripdar-shadow-md);
+}
+
+.tripdar-rec__result-badge {
+    display: inline-block;
+    padding: 3px 12px;
+    background: var(--tripdar-violet);
+    color: #fff;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--tripdar-space-sm);
+}
+
+.tripdar-rec__result-badge--alt {
+    background: var(--tripdar-ink-muted);
+}
+
+.tripdar-rec__result-name {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin: 0 0 var(--tripdar-space-md);
+}
+
+/* Match bar */
+.tripdar-rec__result-match {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-md);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-rec__match-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--tripdar-parchment-dark);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.tripdar-rec__match-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--tripdar-violet-light), var(--tripdar-violet));
+    border-radius: 4px;
+    transition: width 0.5s ease;
+}
+
+.tripdar-rec__match-pct {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--tripdar-violet);
+    white-space: nowrap;
+}
+
+/* Dose info */
+.tripdar-rec__result-dose {
+    display: flex;
+    gap: var(--tripdar-space-md);
+    align-items: baseline;
+    margin-bottom: var(--tripdar-space-md);
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    background: rgba(139, 92, 246, 0.05);
+    border-radius: var(--tripdar-border-radius);
+}
+
+.tripdar-rec__dose-level {
+    font-weight: 600;
+    color: var(--tripdar-violet-dark);
+}
+
+.tripdar-rec__dose-range {
+    font-size: 0.9rem;
+    color: var(--tripdar-ink-light);
+}
+
+/* Product */
+.tripdar-rec__result-product {
+    display: flex;
+    align-items: center;
+    gap: var(--tripdar-space-md);
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    background: rgba(77, 124, 90, 0.08);
+    border-radius: var(--tripdar-border-radius);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-rec__product-name { font-weight: 600; color: var(--tripdar-moss); }
+.tripdar-rec__product-units { font-size: 0.9rem; color: var(--tripdar-ink-light); }
+
+.tripdar-rec__product-link {
+    margin-left: auto;
+    padding: 4px 16px;
+    background: var(--tripdar-moss);
+    color: #fff;
+    text-decoration: none;
+    border-radius: var(--tripdar-border-radius);
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: background 0.2s ease;
+}
+
+.tripdar-rec__product-link:hover { background: #3d6348; }
+
+/* Description */
+.tripdar-rec__result-desc {
+    font-size: 0.9rem;
+    color: var(--tripdar-ink-light);
+    line-height: 1.6;
+    margin-bottom: var(--tripdar-space-md);
+}
+
+/* Tags */
+.tripdar-rec__result-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--tripdar-space-xs);
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-rec__tag {
+    display: inline-block;
+    padding: 2px 10px;
+    background: var(--tripdar-parchment-dark);
+    border-radius: 12px;
+    font-size: 0.75rem;
+    color: var(--tripdar-ink-light);
+}
+
+/* Cautions */
+.tripdar-rec__result-cautions {
+    border-top: 1px solid var(--tripdar-border-color);
+    padding-top: var(--tripdar-space-md);
+}
+
+.tripdar-rec__caution {
+    display: flex;
+    gap: var(--tripdar-space-sm);
+    align-items: flex-start;
+    padding: var(--tripdar-space-sm) 0;
+    font-size: 0.85rem;
+    color: var(--tripdar-ink-light);
+}
+
+.tripdar-rec__caution-icon {
+    color: var(--tripdar-gold);
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+/* Stepped path */
+.tripdar-rec__stepped-path {
+    background: rgba(212, 165, 116, 0.15);
+    border: 1px solid var(--tripdar-gold-light);
+    border-radius: var(--tripdar-border-radius);
+    padding: var(--tripdar-space-lg);
+    margin-bottom: var(--tripdar-space-lg);
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--tripdar-ink-light);
+}
+
+/* Results actions */
+.tripdar-rec__results-actions {
+    text-align: center;
+    margin-top: var(--tripdar-space-xl);
+}
+
+.tripdar-rec__restart-btn {
+    padding: 10px 28px;
+    background: transparent;
+    color: var(--tripdar-ink-muted);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    font-family: var(--tripdar-font-body);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tripdar-rec__restart-btn:hover {
+    border-color: var(--tripdar-ink-muted);
+    color: var(--tripdar-ink);
+}
+
+/* Error */
+.tripdar-rec__error {
+    text-align: center;
+    padding: var(--tripdar-space-xxl);
+    color: var(--tripdar-ink-muted);
+}
+
+/* =========================================================================
+   Feedback
+   ========================================================================= */
+
+.tripdar-rec__feedback-card,
+.tripdar-rec__deep-dive-card,
+.tripdar-rec__thanks-card {
+    background: var(--tripdar-parchment);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    padding: var(--tripdar-space-xl);
+    text-align: center;
+    box-shadow: var(--tripdar-shadow-sm);
+}
+
+.tripdar-rec__feedback-card h3,
+.tripdar-rec__deep-dive-card h3,
+.tripdar-rec__thanks-card h3 {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.3rem;
+    margin-bottom: var(--tripdar-space-md);
+}
+
+.tripdar-rec__feedback-buttons {
+    display: flex;
+    justify-content: center;
+    gap: var(--tripdar-space-lg);
+    margin: var(--tripdar-space-lg) 0;
+}
+
+.tripdar-rec__feedback-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--tripdar-space-xs);
+    padding: var(--tripdar-space-md) var(--tripdar-space-lg);
+    background: var(--tripdar-parchment);
+    border: 2px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-family: var(--tripdar-font-body);
+    font-size: 0.85rem;
+}
+
+.tripdar-rec__feedback-btn:hover {
+    border-color: var(--tripdar-violet-light);
+}
+
+.tripdar-rec__feedback-btn.selected {
+    border-color: var(--tripdar-violet);
+    background: rgba(139, 92, 246, 0.08);
+}
+
+.tripdar-rec__feedback-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.tripdar-rec__feedback-emoji {
+    font-size: 1.8rem;
+}
+
+.tripdar-rec__feedback-note textarea {
+    width: 100%;
+    max-width: 400px;
+    padding: var(--tripdar-space-sm);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    font-family: var(--tripdar-font-body);
+    resize: vertical;
+    margin-top: var(--tripdar-space-md);
+}
+
+/* Deep dive signals */
+.tripdar-rec__signal-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--tripdar-space-sm) 0;
+    border-bottom: 1px solid var(--tripdar-border-color);
+}
+
+.tripdar-rec__signal-row:last-child {
+    border-bottom: none;
+}
+
+.tripdar-rec__signal-label {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+.tripdar-rec__signal-options {
+    display: flex;
+    gap: var(--tripdar-space-md);
+}
+
+.tripdar-rec__signal-option {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.tripdar-rec__signal-option input {
+    accent-color: var(--tripdar-violet);
+}
+
+.tripdar-rec__deep-dive-dose {
+    margin-top: var(--tripdar-space-lg);
+    text-align: center;
+}
+
+.tripdar-rec__deep-dive-dose label {
+    display: block;
+    margin-bottom: var(--tripdar-space-sm);
+    font-size: 0.9rem;
+}
+
+.tripdar-rec__deep-dive-dose input {
+    padding: var(--tripdar-space-sm);
+    border: 1px solid var(--tripdar-border-color);
+    border-radius: var(--tripdar-border-radius);
+    width: 100px;
+    text-align: center;
+}
+
+/* =========================================================================
+   Dark Theme
+   ========================================================================= */
+
+.tripdar-rec[data-theme="dark"] {
+    --tripdar-parchment: #1a1a2e;
+    --tripdar-parchment-dark: #16213e;
+    --tripdar-ink: #e0e0e0;
+    --tripdar-ink-light: #b0b0b0;
+    --tripdar-ink-muted: #808080;
+    --tripdar-border-color: rgba(255, 255, 255, 0.12);
+    --tripdar-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --tripdar-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+/* =========================================================================
+   Minimal Theme
+   ========================================================================= */
+
+.tripdar-rec[data-theme="minimal"] {
+    --tripdar-parchment: #ffffff;
+    --tripdar-parchment-dark: #f5f5f5;
+    --tripdar-ink: #333333;
+    --tripdar-ink-light: #666666;
+    --tripdar-ink-muted: #999999;
+    --tripdar-violet: #5b21b6;
+    --tripdar-violet-dark: #4c1d95;
+    --tripdar-violet-light: #7c3aed;
+    --tripdar-border-color: #e5e5e5;
+}

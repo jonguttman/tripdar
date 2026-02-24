@@ -1,0 +1,57 @@
+/**
+ * Tripdar Base Styles
+ * Shared design tokens for all Tripdar WordPress plugins.
+ */
+
+:root {
+    /* Parchment palette */
+    --tripdar-parchment: #faf6f1;
+    --tripdar-parchment-dark: #f0e6d8;
+    --tripdar-ink: #2c1810;
+    --tripdar-ink-light: #5c4033;
+    --tripdar-ink-muted: #8b7355;
+
+    /* Accent colors */
+    --tripdar-violet: #8b5cf6;
+    --tripdar-violet-dark: #6d28d9;
+    --tripdar-violet-light: #a78bfa;
+    --tripdar-gold: #d4a574;
+    --tripdar-gold-light: #e8c9a0;
+    --tripdar-moss: #4d7c5a;
+    --tripdar-moss-light: #7eb08c;
+
+    /* Potency colors */
+    --tripdar-potency-gentle: #7eb08c;
+    --tripdar-potency-moderate: #d4a574;
+    --tripdar-potency-intense: #c45b4a;
+    --tripdar-potency-variable: #8b7355;
+
+    /* Typography */
+    --tripdar-font-display: 'Cormorant Garamond', 'Georgia', serif;
+    --tripdar-font-body: 'Lora', 'Georgia', serif;
+    --tripdar-font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+    /* Spacing */
+    --tripdar-space-xs: 0.25rem;
+    --tripdar-space-sm: 0.5rem;
+    --tripdar-space-md: 0.75rem;
+    --tripdar-space-lg: 1rem;
+    --tripdar-space-xl: 1.5rem;
+    --tripdar-space-xxl: 2rem;
+
+    /* Borders & Shadows */
+    --tripdar-border-color: rgba(44, 24, 16, 0.15);
+    --tripdar-border-radius: 8px;
+    --tripdar-shadow-sm: 0 2px 4px rgba(44, 24, 16, 0.08);
+    --tripdar-shadow-md: 0 4px 12px rgba(44, 24, 16, 0.12);
+    --tripdar-shadow-lg: 0 8px 24px rgba(44, 24, 16, 0.16);
+}
+
+/* Base typography for all Tripdar plugin containers */
+[class^="tripdar-"],
+[class*=" tripdar-"] {
+    font-family: var(--tripdar-font-body);
+    color: var(--tripdar-ink);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+}

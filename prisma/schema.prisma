@@ -237,3 +237,105 @@ model StrainCorrelation {
   @@index([strainA, similarityScore(sort: Desc)])
   @@index([strainB, similarityScore(sort: Desc)])
 }
+
+// ============================================================================
+// Recommendation Engine
+// ============================================================================
+
+model RecommendationSession {
+  id              String   @id @default(cuid())
+  sessionToken    String   @unique
+  experienceLevel String   // new, few_times, experienced, very_experienced
+  inputPath       String   // mood_tiles, sliders, guided_quiz
+  intentVector    String   // JSON string: { clarity_cognition: 0.6, ... }
+  rawInput        String   // JSON string: original user selections
+  partnerId       String
+  createdAt       DateTime @default(now())
+
+  results         RecommendationResult[]
+
+  @@index([partnerId, createdAt])
+  @@index([sessionToken])
+}
+
+model RecommendationResult {
+  id              String   @id @default(cuid())
+  sessionId       String
+  strainSlug      String
+  rank            Int
+  matchScore      Float
+  baseScore       Float
+  feedbackMod     Float    @default(0)
+  adminMod        Float    @default(0)
+  doseLevel       Int      // 1-6 canonical level
+  doseLowMg       Int
+  doseHighMg      Int
+  productUnits    Int?
+  cautionFlags    String?  // JSON string
+  createdAt       DateTime @default(now())
+
+  session         RecommendationSession @relation(fields: [sessionId], references: [id])
+  feedback        RecommendationFeedback?
+
+  @@index([sessionId])
+  @@index([strainSlug, createdAt])
+}
+
+model RecommendationFeedback {
+  id              String   @id @default(cuid())
+  resultId        String   @unique
+  quickRating     String   // nailed_it, pretty_close, missed
+  actualDoseMg    Int?
+  note            String?
+  createdAt       DateTime @default(now())
+
+  result          RecommendationResult @relation(fields: [resultId], references: [id])
+  signals         RecommendationSignal[]
+
+  @@index([quickRating])
+}
+
+model RecommendationSignal {
+  id              String   @id @default(cuid())
+  feedbackId      String
+  dimensionId     String   // One of the 28 experiential dimensions
+  direction       String   // more, less, same
+  createdAt       DateTime @default(now())
+
+  feedback        RecommendationFeedback @relation(fields: [feedbackId], references: [id])
+
+  @@index([feedbackId])
+  @@index([dimensionId])
+}
+
+model StrainRecommendationConfig {
+  id                      String   @id @default(cuid())
+  strainSlug              String   @unique
+  productName             String?
+  productUrl              String?
+  productUnitMg           Int?
+  productFormat           String?  // capsule, chocolate, gummy, dried
+  availability            String   @default("in_stock") // in_stock, out_of_stock, seasonal
+  doseSensitivityOverride String?  // null = use algorithm default
+  intentOverrides         String?  // JSON string: { "calm_centered": "boost", ... }
+  cautionFlags            String?  // JSON string: { "show_sensitivity": true, "custom": "..." }
+  updatedAt               DateTime @updatedAt
+  createdAt               DateTime @default(now())
+
+  @@index([availability])
+}
+
+model FeedbackAggregate {
+  id              String   @id @default(cuid())
+  strainSlug      String
+  intentCategory  String
+  totalRatings    Int      @default(0)
+  nailedIt        Int      @default(0)
+  prettyClose     Int      @default(0)
+  missed          Int      @default(0)
+  feedbackMod     Float    @default(0)
+  updatedAt       DateTime @updatedAt
+
+  @@unique([strainSlug, intentCategory])
+  @@index([strainSlug])
+}

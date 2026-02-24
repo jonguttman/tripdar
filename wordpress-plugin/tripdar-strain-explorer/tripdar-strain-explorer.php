@@ -17,11 +17,18 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Require tripdar-core
+if (!function_exists('tripdar_core_loaded')) {
+    add_action('admin_notices', function() {
+        echo '<div class="notice notice-error"><p><strong>Tripdar Strain Explorer</strong> requires the <strong>Tripdar Core</strong> plugin to be installed and activated.</p></div>';
+    });
+    return;
+}
+
 // Plugin constants
 define('TRIPDAR_VERSION', '1.5.4');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
-define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
 define('TRIPDAR_GITHUB_USER', 'jonguttman');
 define('TRIPDAR_GITHUB_REPO', 'tripdar');
 
@@ -70,7 +77,7 @@ class Tripdar_Strain_Explorer {
             require_once TRIPDAR_PLUGIN_DIR . 'admin/class-admin.php';
         }
 
-        $this->api = new Tripdar_API_Client();
+        $this->api = new Tripdar_Strain_API_Client();
 
         // Initialize GitHub updater for automatic updates
         new Tripdar_GitHub_Updater(
@@ -191,20 +198,14 @@ class Tripdar_Strain_Explorer {
      * Enqueue frontend assets
      */
     public function enqueue_frontend_assets() {
+        tripdar_core_enqueue_base_styles();
+
         // Main stylesheet
         wp_enqueue_style(
             'tripdar-storybook',
             TRIPDAR_PLUGIN_URL . 'assets/css/storybook.css',
-            [],
+            ['tripdar-base'],
             TRIPDAR_VERSION
-        );
-
-        // Google Fonts for storybook aesthetic
-        wp_enqueue_style(
-            'tripdar-fonts',
-            'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=Lora:ital,wght@0,400;0,500;1,400&display=swap',
-            [],
-            null
         );
 
         // Explorer script

@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.6.0] - 2026-02-24
+
+### Added
+- **tripdar-core v1.0.0**: Shared library plugin with API client, caching, and base styles
+- **tripdar-recommendation-engine v1.0.0**: Full dose recommendation engine with:
+  - Three-layer scoring model (rule-based + feedback adjustment + admin overrides)
+  - 6 Prisma models (RecommendationSession, RecommendationResult, RecommendationFeedback, RecommendationSignal, StrainRecommendationConfig, FeedbackAggregate)
+  - Scoring engine: cosine similarity matching, 6-dimension intent vectors, experience level modifiers, canonical 6-level dose scale with strain-specific sensitivity adjustments
+  - 9 API endpoints: POST /recommend, GET /recommend/config, POST /recommend/feedback, POST /recommend/feedback/signals, GET /admin/recommend/strains, PUT /admin/recommend/strains/[slug]/config, GET /admin/recommend/strains/[slug]/feedback, GET /admin/recommend/dashboard, GET+PUT /admin/recommend/settings
+  - Feedback aggregation module (Layer 2): weighted rating formula, threshold activation, signal processing
+  - WordPress admin: per-strain config page (product mapping, dose overrides, intent overrides, caution flags), global settings page, dashboard health widget
+  - WordPress frontend: [tripdar_recommendation_engine] shortcode with three input paths (mood tiles, 2D compass, guided quiz), result cards with dose info and product links, caution indicators, stepped path notices, two-tier feedback collection
+  - Three themes: parchment (default), dark, minimal
+  - Consent gate with configurable text
+  - Graceful degradation (works with zero, partial, or full product mapping)
+
+### Changed
+- Strain explorer now depends on tripdar-core for shared API client and base styles
+- Strain explorer API client refactored to extend core client (Tripdar_Strain_API_Client)
+
 ## [1.5.5] - 2026-02-17
 
 ### Changed
