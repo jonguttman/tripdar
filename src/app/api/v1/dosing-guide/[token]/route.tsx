@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import { loadStrainData } from "@/domain/strain/blob-store";
 import { mapDoseSensitivity } from "@/domain/recommendation-engine/strain-profiles";
 import { calculateAllDoseRanges } from "@/domain/dosing-guide/utils";
+import sharp from "sharp";
 
 export const runtime = "nodejs";
 
@@ -98,19 +99,16 @@ export async function GET(
     phone?: string;
   };
 
-  // Fetch retailer logo if provided (Satori supports PNG, JPEG, GIF, SVG only)
+  // Fetch retailer logo and convert to PNG for Satori compatibility
   let logoSrc: string | null = null;
   if (retailer.logoUrl) {
     try {
       const logoRes = await fetch(retailer.logoUrl);
       if (logoRes.ok) {
-        const contentType = logoRes.headers.get("content-type") || "";
-        const supportedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/svg+xml"];
-        if (supportedTypes.some(t => contentType.includes(t))) {
-          const buf = await logoRes.arrayBuffer();
-          logoSrc = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
-        }
-        // Skip unsupported formats (avif, webp, etc.) — render without logo
+        const buf = Buffer.from(await logoRes.arrayBuffer());
+        // Convert any format (AVIF, WebP, etc.) to PNG via sharp
+        const pngBuf = await sharp(buf).png().toBuffer();
+        logoSrc = `data:image/png;base64,${pngBuf.toString("base64")}`;
       }
     } catch {
       // continue without logo
