@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.6.2] - 2026-02-27
+
+### Added
+- Dose card utility functions (`src/domain/dosing-guide/utils.ts`): token generation, dose range calculation with sensitivity modifiers, formatted display strings for dose card image rendering
+- Comprehensive test suite for dosing guide utilities (11 tests)
+
 ## [1.6.1] - 2026-02-27
 
 ### Added
