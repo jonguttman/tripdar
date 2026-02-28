@@ -111,6 +111,16 @@ export function middleware(request: NextRequest) {
   // Extract API key
   const apiKey = extractApiKey(request);
 
+  // Public endpoints that don't require API key
+  const publicPaths = ["/api/v1/dosing-guide/"];
+  const isPublicGet = request.method === "GET" && publicPaths.some(p => pathname.startsWith(p) && pathname.length > p.length);
+
+  if (isPublicGet) {
+    const response = NextResponse.next();
+    response.headers.set("X-Request-ID", requestId);
+    return response;
+  }
+
   if (!apiKey) {
     return NextResponse.json(
       {

@@ -56,7 +56,7 @@ const DEPTH_NEGATIVE_KEYWORDS = [
 // Potency → DoseSensitivity Mapping
 // =============================================================================
 
-function mapDoseSensitivity(potency: string, strainName: string): DoseSensitivity {
+export function mapDoseSensitivity(potency: string, strainName: string): DoseSensitivity {
   const name = strainName.toLowerCase();
 
   // PE-family strains are very steep (from Strain Experience Guide)
