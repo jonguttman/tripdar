@@ -89,10 +89,13 @@ class Tripdar_Rec_API_Client extends Tripdar_API_Client {
      * Create a dosing guide for a strain recommendation
      */
     public function create_dosing_guide($session_token, $strain_slug, $retailer_branding) {
-        return $this->post('/dosing-guide/create', [
-            'sessionToken' => $session_token,
+        $body = [
             'strainSlug' => $strain_slug,
             'retailerBranding' => $retailer_branding,
-        ]);
+        ];
+        if (!empty($session_token)) {
+            $body['sessionToken'] = $session_token;
+        }
+        return $this->post('/dosing-guide/create', $body);
     }
 }

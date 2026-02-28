@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.8.0] - 2026-02-27
+
+### Added — "Map Your Journey" Dose Card in Strain Explorer (Strain Explorer v1.6.0, Rec Engine v1.2.0)
+- **Strain explorer dose card**: "Map Your Journey" button now appears in the strain detail modal, allowing users to download dose cards from any strain (not just recommendations)
+- **Standalone dose cards**: Dosing guide tokens no longer require a recommendation session — works in both the recommendation engine and strain explorer
+- **CTA updated**: Button text changed from "Get Your Dose Card" to "Map Your Journey" across both plugins
+
+### Changed
+- `DosingGuideToken.sessionId` is now optional (nullable) in Prisma schema — supports dose cards created without a recommendation session
+- API `POST /api/v1/dosing-guide/create` no longer requires `sessionToken` — creates standalone dose card when omitted
+- Strain explorer localizes dosing guide settings (`dosingGuideEnabled`, `forceQr`) for frontend access
+
 ## [1.7.0] - 2026-02-27
 
 ### Added — Dosing Guide "To Go" (Recommendation Engine v1.1.0)
@@ -9,7 +21,7 @@
 - **Dose display**: Grams (rounded to nearest 0.25g) as primary unit for levels above microdose, milligrams in small print; microdose stays in mg only
 - **Analytics events**: `dosing_guide_created` and `dosing_guide_downloaded` with device/referrer metadata
 - **WordPress admin settings**: Store logo upload (WP Media Library), store name, address, phone, enable/disable toggle, force QR mode for kiosks
-- **Frontend UX**: "Get Your Dose Card" button on each result card; adaptive delivery (QR popover on desktop, direct download on mobile); admin override to force QR on all devices
+- **Frontend UX**: "Map Your Journey" button on each result card; adaptive delivery (QR popover on desktop, direct download on mobile); admin override to force QR on all devices
 - **Middleware**: Public GET bypass for dosing guide download URLs (no API key required)
 
 ## [1.6.0] - 2026-02-24

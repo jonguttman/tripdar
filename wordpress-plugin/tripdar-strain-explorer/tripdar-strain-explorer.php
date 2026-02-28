@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.5.6
+ * Version: 1.6.0
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Plugin constants
-define('TRIPDAR_VERSION', '1.5.6');
+define('TRIPDAR_VERSION', '1.6.0');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_GITHUB_USER', 'jonguttman');
@@ -138,6 +138,10 @@ class Tripdar_Strain_Explorer {
         // AJAX handlers - Similar strains (for progressive engagement)
         add_action('wp_ajax_tripdar_get_similar', [$this, 'handle_get_similar_strains']);
         add_action('wp_ajax_nopriv_tripdar_get_similar', [$this, 'handle_get_similar_strains']);
+
+        // AJAX handlers - Dosing guide
+        add_action('wp_ajax_tripdar_dosing_guide', [$this, 'handle_create_dosing_guide']);
+        add_action('wp_ajax_nopriv_tripdar_dosing_guide', [$this, 'handle_create_dosing_guide']);
     }
 
     /**
@@ -267,6 +271,8 @@ class Tripdar_Strain_Explorer {
         $ajax_settings = [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('tripdar_nonce'),
+            'dosingGuideEnabled' => (bool) get_option('tripdar_rec_dosing_guide_enabled', false),
+            'forceQr' => (bool) get_option('tripdar_rec_force_qr', false),
         ];
 
         wp_localize_script('tripdar-explorer', 'tripdarExplorer', $ajax_settings);
@@ -693,6 +699,39 @@ class Tripdar_Strain_Explorer {
             wp_send_json_success($recommendations);
         } else {
             wp_send_json_error($result['error'] ?? ['message' => 'Failed to fetch recommendations']);
+        }
+    }
+
+    /**
+     * Handle dosing guide creation via AJAX
+     */
+    public function handle_create_dosing_guide() {
+        check_ajax_referer('tripdar_nonce', 'nonce');
+
+        $strain_slug = isset($_POST['strainSlug']) ? sanitize_text_field($_POST['strainSlug']) : '';
+
+        if (empty($strain_slug)) {
+            wp_send_json_error(['message' => 'Missing strain slug']);
+        }
+
+        $retailer_branding = [
+            'logoUrl' => get_option('tripdar_rec_store_logo', ''),
+            'storeName' => get_option('tripdar_rec_store_name', ''),
+            'address' => get_option('tripdar_rec_store_address', ''),
+            'phone' => get_option('tripdar_rec_store_phone', ''),
+        ];
+
+        $body = [
+            'strainSlug' => $strain_slug,
+            'retailerBranding' => $retailer_branding,
+        ];
+
+        $response = $this->api->post('/dosing-guide/create', $body);
+
+        if ($response && isset($response['success']) && $response['success']) {
+            wp_send_json_success($response['data']);
+        } else {
+            wp_send_json_error($response['error'] ?? ['message' => 'Failed to create dosing guide']);
         }
     }
 

@@ -31,8 +31,11 @@ class Tripdar_Rec_Shortcodes {
     public function render_engine($atts) {
         $atts = shortcode_atts([
             'theme' => get_option('tripdar_rec_theme', 'parchment'),
-            'show_consent' => 'true',
+            'show_consent' => 'yes',
         ], $atts);
+
+        // Normalize show_consent to 'true'/'false' for JS
+        $show_consent = in_array(strtolower($atts['show_consent']), ['yes', 'true', '1'], true) ? 'true' : 'false';
 
         // Load consent text from global settings
         $settings_response = $this->api->get_settings();
@@ -41,14 +44,17 @@ class Tripdar_Rec_Shortcodes {
             $consent_text = $settings_response['data']['settings']['consentGateText'] ?? '';
         }
 
+        // Determine which section to show by default (before JS takes over)
+        $show_consent_gate = ($show_consent === 'true' && !empty($consent_text));
+
         ob_start();
         ?>
         <div class="tripdar-rec"
              data-theme="<?php echo esc_attr($atts['theme']); ?>"
-             data-show-consent="<?php echo esc_attr($atts['show_consent']); ?>">
+             data-show-consent="<?php echo esc_attr($show_consent); ?>">
 
             <!-- Consent Gate -->
-            <div class="tripdar-rec__consent" style="display: none;">
+            <div class="tripdar-rec__consent" style="display: <?php echo $show_consent_gate ? '' : 'none'; ?>">
                 <div class="tripdar-rec__consent-card">
                     <div class="tripdar-rec__consent-icon">
                         <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -66,7 +72,7 @@ class Tripdar_Rec_Shortcodes {
             </div>
 
             <!-- Experience Level Selector -->
-            <div class="tripdar-rec__experience" style="display: none;">
+            <div class="tripdar-rec__experience" style="display: <?php echo $show_consent_gate ? 'none' : ''; ?>">
                 <h2 class="tripdar-rec__title">How experienced are you?</h2>
                 <p class="tripdar-rec__subtitle">This helps us calibrate dose recommendations to your comfort level.</p>
                 <div class="tripdar-rec__experience-options">
@@ -91,6 +97,7 @@ class Tripdar_Rec_Shortcodes {
 
             <!-- Path Selection -->
             <div class="tripdar-rec__paths" style="display: none;">
+                <button type="button" class="tripdar-rec__back-btn" data-back="experience">&larr; Back</button>
                 <h2 class="tripdar-rec__title">How would you like to explore?</h2>
                 <p class="tripdar-rec__subtitle">Choose your path — all three lead to personalized recommendations.</p>
                 <div class="tripdar-rec__path-cards">
@@ -134,6 +141,7 @@ class Tripdar_Rec_Shortcodes {
 
             <!-- Path A: Mood Tiles -->
             <div class="tripdar-rec__mood-tiles" style="display: none;">
+                <button type="button" class="tripdar-rec__back-btn" data-back="paths">&larr; Back</button>
                 <h2 class="tripdar-rec__title">What are you looking for?</h2>
                 <p class="tripdar-rec__subtitle">Select 1-3 tiles that resonate with you.</p>
                 <div class="tripdar-rec__tiles-grid" id="tripdar-rec-tiles">
@@ -148,6 +156,7 @@ class Tripdar_Rec_Shortcodes {
 
             <!-- Path B: Compass -->
             <div class="tripdar-rec__compass" style="display: none;">
+                <button type="button" class="tripdar-rec__back-btn" data-back="paths">&larr; Back</button>
                 <h2 class="tripdar-rec__title">Find Your Sweet Spot</h2>
                 <p class="tripdar-rec__subtitle">Drag the marker to describe your ideal experience.</p>
                 <div class="tripdar-rec__compass-container">
@@ -176,6 +185,7 @@ class Tripdar_Rec_Shortcodes {
 
             <!-- Path C: Guided Quiz -->
             <div class="tripdar-rec__quiz" style="display: none;">
+                <button type="button" class="tripdar-rec__back-btn" data-back="paths">&larr; Back</button>
                 <div class="tripdar-rec__quiz-progress">
                     <div class="tripdar-rec__quiz-progress-bar" id="tripdar-rec-quiz-bar"></div>
                 </div>
@@ -251,6 +261,46 @@ class Tripdar_Rec_Shortcodes {
                 </div>
             </div>
         </div>
+        <script>
+        (function(){
+            var c = document.querySelector('.tripdar-rec');
+            if (!c) return;
+            function show(sel) {
+                c.querySelectorAll('[class^="tripdar-rec__"]').forEach(function(el){
+                    if (el.parentNode === c) el.style.display = 'none';
+                });
+                var t = c.querySelector(sel);
+                if (t) t.style.display = '';
+            }
+            // Experience buttons
+            c.querySelectorAll('.tripdar-rec__experience-btn').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    c.querySelectorAll('.tripdar-rec__experience-btn').forEach(function(b){ b.classList.remove('selected'); });
+                    btn.classList.add('selected');
+                    c.dataset.experienceLevel = btn.dataset.level;
+                    setTimeout(function(){ show('.tripdar-rec__paths'); }, 300);
+                });
+            });
+            // Path cards
+            c.querySelectorAll('.tripdar-rec__path-card').forEach(function(card){
+                card.addEventListener('click', function(){
+                    c.dataset.inputPath = card.dataset.path;
+                    if (card.dataset.path === 'mood_tiles') show('.tripdar-rec__mood-tiles');
+                    else if (card.dataset.path === 'sliders') show('.tripdar-rec__compass');
+                    else if (card.dataset.path === 'guided_quiz') show('.tripdar-rec__quiz');
+                });
+            });
+            // Back buttons
+            c.querySelectorAll('.tripdar-rec__back-btn').forEach(function(btn){
+                btn.addEventListener('click', function(){
+                    show('.tripdar-rec__' + btn.dataset.back);
+                });
+            });
+            // Consent button
+            var cb = c.querySelector('.tripdar-rec__consent-btn');
+            if (cb) cb.addEventListener('click', function(){ show('.tripdar-rec__experience'); });
+        })();
+        </script>
         <?php
         return ob_get_clean();
     }
