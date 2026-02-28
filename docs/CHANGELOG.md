@@ -4,11 +4,13 @@
 
 ### Added
 - **Dose experience descriptions**: Each dose level on the dosing guide card now shows a short, strain-specific poetic description (e.g., "Gentle clarity, quiet warmth" for Golden Teacher's microdose) — 150 hand-curated descriptions across all 25 strains
+- **Strain watermark**: Dose card now displays the strain's visualization photo as a subtle watermark behind the dose rows
 - **Admin dose descriptions**: 6 text inputs in the strain edit modal for editing dose-level experience descriptions
 - **Dosing guide disclaimer**: "For educational use only" disclaimer added to the "For the Journey" wisdom section
 
 ### Changed
 - `InternalStrain` type now includes optional `doseExperiences?: string[]` field (backward compatible)
+- Dose experience descriptions and secondary mg values now render on the same line
 
 ## [1.8.2] - 2026-02-28
 
