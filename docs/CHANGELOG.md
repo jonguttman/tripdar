@@ -1,32 +1,16 @@
 # Changelog
 
-## [1.6.4] - 2026-02-27
+## [1.7.0] - 2026-02-27
 
-### Added
-- `GET /api/v1/dosing-guide/[token]` public endpoint: serves branded 1080x1920 PNG dose card image via `@vercel/og` (Satori), with retailer branding, strain-specific dose ranges, and safety footer
-- Middleware bypass for public GET requests to dosing guide download URLs (no API key required, token validation only)
-- Exported `mapDoseSensitivity` from recommendation engine for reuse in dosing guide image generation
-- Download tracking: increments `downloadCount`, records `downloadedAt`, logs `dosing_guide_downloaded` analytics event
-
-## [1.6.3] - 2026-02-27
-
-### Added
-- `POST /api/v1/dosing-guide/create` endpoint: creates dosing guide tokens from recommendation sessions, returns public URL for branded dose card image
-- Added `/api/v1/dosing-guide` to middleware `postAllowedPaths` for POST method support
-- `dosing_guide_created` and `dosing_guide_downloaded` event types added to `EventType` union in analytics domain
-
-## [1.6.2] - 2026-02-27
-
-### Added
-- Dose card utility functions (`src/domain/dosing-guide/utils.ts`): token generation, dose range calculation with sensitivity modifiers, formatted display strings for dose card image rendering
-- Comprehensive test suite for dosing guide utilities (11 tests)
-
-## [1.6.1] - 2026-02-27
-
-### Added
-- `DosingGuideToken` Prisma model for tracking dosing guide PDF generation and downloads (token-based access, download counting, retailer data)
-- `dosingGuides` relation on `RecommendationSession` model
-- `dosing_guide_created` and `dosing_guide_downloaded` analytics event types
+### Added — Dosing Guide "To Go" (Recommendation Engine v1.1.0)
+- **Dose card image generation**: Server-side rendering via `@vercel/og` (Satori) producing 1080x1920px branded PNG dose cards with retailer logo, strain info, all 6 dose levels with strain-specific sensitivity-adjusted ranges, safety tips, and "powered by tripd.ar" footer
+- **Token-based attribution tracking**: `DosingGuideToken` Prisma model links dose card downloads to recommendation sessions for full funnel attribution (session → result → guide → download)
+- **API endpoints**: `POST /api/v1/dosing-guide/create` (authenticated) and `GET /api/v1/dosing-guide/[token]` (public download)
+- **Dose display**: Grams (rounded to nearest 0.25g) as primary unit for levels above microdose, milligrams in small print; microdose stays in mg only
+- **Analytics events**: `dosing_guide_created` and `dosing_guide_downloaded` with device/referrer metadata
+- **WordPress admin settings**: Store logo upload (WP Media Library), store name, address, phone, enable/disable toggle, force QR mode for kiosks
+- **Frontend UX**: "Get Your Dose Card" button on each result card; adaptive delivery (QR popover on desktop, direct download on mobile); admin override to force QR on all devices
+- **Middleware**: Public GET bypass for dosing guide download URLs (no API key required)
 
 ## [1.6.0] - 2026-02-24
 
