@@ -1,11 +1,10 @@
 /**
  * GET /api/v1/dosing-guide/[token]
  *
- * Public endpoint: serves a branded dose card PNG image.
+ * Public endpoint: serves a branded dose card as a mobile-optimized HTML page.
  * No API key required — token validation only.
  */
 
-import { ImageResponse } from "@vercel/og";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { loadStrainData } from "@/domain/strain/blob-store";
@@ -99,52 +98,6 @@ export async function GET(
     phone?: string;
   };
 
-  // Fetch retailer logo (Satori supports PNG, JPEG, GIF, SVG only)
-  // WordPress may auto-convert uploads to AVIF/WebP, so try the PNG original first
-  let logoSrc: string | null = null;
-  if (retailer.logoUrl) {
-    try {
-      let logoUrl = retailer.logoUrl;
-      // If URL ends with .avif or .webp, try .png first (WordPress keeps originals)
-      if (/\.(avif|webp)$/i.test(logoUrl)) {
-        const pngUrl = logoUrl.replace(/\.(avif|webp)$/i, ".png");
-        const pngRes = await fetch(pngUrl);
-        if (pngRes.ok) {
-          const contentType = pngRes.headers.get("content-type") || "";
-          if (contentType.includes("image/png") || contentType.includes("image/jpeg")) {
-            const buf = await pngRes.arrayBuffer();
-            logoSrc = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
-          }
-        }
-        // If PNG fallback didn't work, try .jpg
-        if (!logoSrc) {
-          const jpgUrl = logoUrl.replace(/\.(avif|webp)$/i, ".jpg");
-          const jpgRes = await fetch(jpgUrl);
-          if (jpgRes.ok) {
-            const ct = jpgRes.headers.get("content-type") || "";
-            if (ct.includes("image/jpeg") || ct.includes("image/png")) {
-              const buf = await jpgRes.arrayBuffer();
-              logoSrc = `data:${ct};base64,${Buffer.from(buf).toString("base64")}`;
-            }
-          }
-        }
-      } else {
-        // URL is already a supported format
-        const logoRes = await fetch(logoUrl);
-        if (logoRes.ok) {
-          const contentType = logoRes.headers.get("content-type") || "";
-          const supported = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
-          if (supported.some(t => contentType.includes(t))) {
-            const buf = await logoRes.arrayBuffer();
-            logoSrc = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
-          }
-        }
-      }
-    } catch {
-      // continue without logo
-    }
-  }
-
   // Sensitivity display label
   const sensitivityLabel: Record<string, string> = {
     gentle: "Gentle Potency",
@@ -153,273 +106,232 @@ export async function GET(
     very_steep: "Very High Potency",
   };
 
-  // Generate image with @vercel/og
-  // Use 720x1280 (HD 9:16) — 1080x1920 exceeds Satori/Resvg WASM memory limits
-  try {
-  return new ImageResponse(
-    (
-      <div
-        style={{
-          width: "720px",
-          height: "1280px",
-          display: "flex",
-          flexDirection: "column",
-          backgroundColor: "#f5f0e8",
-          fontFamily: "sans-serif",
-          color: "#3a3226",
-          padding: "40px",
-        }}
-      >
-        {/* Retailer Header */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginBottom: "28px",
-          }}
-        >
-          {logoSrc && (
-            <img
-              src={logoSrc}
-              width={130}
-              height={130}
-              style={{ objectFit: "contain", marginBottom: "14px" }}
-            />
-          )}
-          {retailer.storeName && (
-            <div
-              style={{
-                fontSize: "24px",
-                fontWeight: "bold",
-                textAlign: "center",
-              }}
-            >
-              {retailer.storeName}
-            </div>
-          )}
-          {retailer.address && (
-            <div
-              style={{
-                fontSize: "15px",
-                color: "#6b5c4d",
-                textAlign: "center",
-                marginTop: "6px",
-              }}
-            >
-              {retailer.address}
-            </div>
-          )}
-          {retailer.phone && (
-            <div
-              style={{
-                fontSize: "15px",
-                color: "#6b5c4d",
-                textAlign: "center",
-                marginTop: "3px",
-              }}
-            >
-              {retailer.phone}
-            </div>
-          )}
-        </div>
+  // Escape HTML helper
+  const esc = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-        {/* Divider */}
-        <div
-          style={{
-            width: "100%",
-            height: "2px",
-            backgroundColor: "#d4c9b8",
-            marginBottom: "28px",
-          }}
-        />
-
-        {/* Strain Section */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            marginBottom: "28px",
-          }}
-        >
-          <div
-            style={{
-              fontSize: "28px",
-              fontWeight: "bold",
-              textAlign: "center",
-            }}
-          >
-            {strain.name}
+  // Build dose rows
+  const doseRowsHtml = doseRanges
+    .map(
+      (range) => `
+      <div class="dose-row">
+        <div class="dose-header">
+          <div class="dose-left">
+            <span class="dose-dot"></span>
+            <span class="dose-name">${esc(range.name)}</span>
           </div>
-          <div
-            style={{
-              fontSize: "15px",
-              color: "#6b5c4d",
-              textAlign: "center",
-              marginTop: "6px",
-              maxWidth: "540px",
-            }}
-          >
-            {strain.description}
-          </div>
+          <span class="dose-value">${esc(range.display.primary)}</span>
         </div>
+        ${range.display.secondary ? `<div class="dose-secondary">${esc(range.display.secondary)}</div>` : ""}
+      </div>`
+    )
+    .join("\n");
 
-        {/* Divider */}
-        <div
-          style={{
-            width: "100%",
-            height: "2px",
-            backgroundColor: "#d4c9b8",
-            marginBottom: "20px",
-          }}
-        />
-
-        {/* Dose Guide */}
-        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
-          <div
-            style={{
-              fontSize: "19px",
-              fontWeight: "bold",
-              marginBottom: "4px",
-              letterSpacing: "1px",
-            }}
-          >
-            DOSING GUIDE
-          </div>
-          <div
-            style={{
-              fontSize: "14px",
-              color: "#8a7b6b",
-              marginBottom: "16px",
-            }}
-          >
-            {sensitivityLabel[sensitivity] || sensitivity}
-          </div>
-
-          {doseRanges.map((range) => (
-            <div
-              key={range.level}
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                marginBottom: "11px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "baseline",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center" }}>
-                  <div
-                    style={{
-                      width: "8px",
-                      height: "8px",
-                      borderRadius: "50%",
-                      border: "2px solid #8a7b6b",
-                      marginRight: "8px",
-                    }}
-                  />
-                  <span style={{ fontSize: "17px", fontWeight: 600 }}>
-                    {range.name}
-                  </span>
-                </div>
-                <span style={{ fontSize: "17px", fontWeight: "bold" }}>
-                  {range.display.primary}
-                </span>
-              </div>
-              {range.display.secondary && (
-                <div
-                  style={{
-                    fontSize: "12px",
-                    color: "#8a7b6b",
-                    textAlign: "right",
-                    marginTop: "2px",
-                  }}
-                >
-                  {range.display.secondary}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        {/* Divider */}
-        <div
-          style={{
-            width: "100%",
-            height: "2px",
-            backgroundColor: "#d4c9b8",
-            marginTop: "14px",
-            marginBottom: "14px",
-          }}
-        />
-
-        {/* Safety Footer */}
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            marginBottom: "20px",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              marginBottom: "6px",
-            }}
-          >
-            <span style={{ fontSize: "15px", marginRight: "6px" }}>
-              &#9888;
-            </span>
-            <span style={{ fontSize: "15px", color: "#6b5c4d" }}>
-              Start low, go slow
-            </span>
-          </div>
-          {strain.onsetTime && (
-            <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ fontSize: "15px", marginRight: "6px" }}>
-                &#9888;
-              </span>
-              <span style={{ fontSize: "15px", color: "#6b5c4d" }}>
-                Allow {strain.onsetTime} for onset
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Powered By */}
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <span style={{ fontSize: "12px", color: "#a89882" }}>
-            powered by tripd.ar
-          </span>
-        </div>
-      </div>
-    ),
-    {
-      width: 720,
-      height: 1280,
-      headers: {
-        "Content-Disposition": `attachment; filename="${guide.strainSlug}-dose-card.png"`,
-        "Cache-Control": "public, max-age=86400, immutable",
-      },
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>${esc(strain.name)} – Dosing Guide</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #e8e0d4;
+      color: #3a3226;
+      min-height: 100dvh;
+      display: flex;
+      justify-content: center;
+      padding: 16px;
     }
-  );
-  } catch (renderError) {
-    console.error("Dose card render error:", renderError);
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          code: "RENDER_FAILED",
-          message: "Failed to generate dose card image.",
-        },
-      },
-      { status: 500 }
-    );
-  }
+    .card {
+      background: #f5f0e8;
+      border-radius: 20px;
+      padding: 36px 28px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 4px 24px rgba(58,50,38,0.10);
+      display: flex;
+      flex-direction: column;
+      align-self: flex-start;
+    }
+    .retailer-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .retailer-logo {
+      max-width: 120px;
+      max-height: 120px;
+      object-fit: contain;
+      margin-bottom: 12px;
+      border-radius: 8px;
+    }
+    .retailer-name {
+      font-size: 20px;
+      font-weight: 700;
+      text-align: center;
+    }
+    .retailer-info {
+      font-size: 13px;
+      color: #6b5c4d;
+      text-align: center;
+      margin-top: 4px;
+    }
+    .divider {
+      width: 100%;
+      height: 1px;
+      background: #d4c9b8;
+      margin: 20px 0;
+    }
+    .strain-section {
+      text-align: center;
+      margin-bottom: 4px;
+    }
+    .strain-name {
+      font-size: 26px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .strain-desc {
+      font-size: 14px;
+      color: #6b5c4d;
+      line-height: 1.5;
+    }
+    .dose-guide-label {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: #3a3226;
+      margin-bottom: 2px;
+    }
+    .dose-sensitivity {
+      font-size: 13px;
+      color: #8a7b6b;
+      margin-bottom: 16px;
+    }
+    .dose-row {
+      margin-bottom: 12px;
+    }
+    .dose-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .dose-left {
+      display: flex;
+      align-items: center;
+    }
+    .dose-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      border: 2px solid #8a7b6b;
+      margin-right: 10px;
+      flex-shrink: 0;
+    }
+    .dose-name {
+      font-size: 16px;
+      font-weight: 600;
+    }
+    .dose-value {
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .dose-secondary {
+      font-size: 12px;
+      color: #8a7b6b;
+      text-align: right;
+      margin-top: 2px;
+    }
+    .safety {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 20px;
+    }
+    .safety-item {
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+      color: #6b5c4d;
+    }
+    .safety-icon {
+      margin-right: 8px;
+      font-size: 16px;
+    }
+    .powered-by {
+      text-align: right;
+      font-size: 12px;
+      color: #a89882;
+    }
+    .save-hint {
+      text-align: center;
+      font-size: 12px;
+      color: #a89882;
+      margin-top: 16px;
+      padding: 10px;
+      background: rgba(168,152,130,0.08);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    ${retailer.logoUrl ? `<div class="retailer-header">
+      <img class="retailer-logo" src="${esc(retailer.logoUrl)}" alt="${esc(retailer.storeName || "Store logo")}">
+      ${retailer.storeName ? `<div class="retailer-name">${esc(retailer.storeName)}</div>` : ""}
+      ${retailer.address ? `<div class="retailer-info">${esc(retailer.address)}</div>` : ""}
+      ${retailer.phone ? `<div class="retailer-info">${esc(retailer.phone)}</div>` : ""}
+    </div>` : retailer.storeName ? `<div class="retailer-header">
+      <div class="retailer-name">${esc(retailer.storeName)}</div>
+      ${retailer.address ? `<div class="retailer-info">${esc(retailer.address)}</div>` : ""}
+      ${retailer.phone ? `<div class="retailer-info">${esc(retailer.phone)}</div>` : ""}
+    </div>` : ""}
+
+    <div class="divider"></div>
+
+    <div class="strain-section">
+      <div class="strain-name">${esc(strain.name)}</div>
+      <div class="strain-desc">${esc(strain.description || "")}</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="dose-guide-label">Dosing Guide</div>
+    <div class="dose-sensitivity">${esc(sensitivityLabel[sensitivity] || sensitivity)}</div>
+
+    ${doseRowsHtml}
+
+    <div class="divider"></div>
+
+    <div class="safety">
+      <div class="safety-item">
+        <span class="safety-icon">&#9888;&#65039;</span>
+        <span>Start low, go slow</span>
+      </div>
+      ${strain.onsetTime ? `<div class="safety-item">
+        <span class="safety-icon">&#9888;&#65039;</span>
+        <span>Allow ${esc(String(strain.onsetTime))} for onset</span>
+      </div>` : ""}
+    </div>
+
+    <div class="powered-by">powered by tripd.ar</div>
+
+    <div class="save-hint">Screenshot to save this guide to your phone</div>
+  </div>
+</body>
+</html>`;
+
+  return new Response(html, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=86400, immutable",
+    },
+  });
 }
