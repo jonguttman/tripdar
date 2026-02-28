@@ -37,6 +37,7 @@ interface Strain {
   emotionalCharacter?: string[];
   comeUpIntensity?: string;
   peakCharacter?: string;
+  doseExperiences?: string[];
 }
 
 const emptyStrain: Omit<Strain, "id" | "createdAt" | "updatedAt"> = {
@@ -57,6 +58,7 @@ const emptyStrain: Omit<Strain, "id" | "createdAt" | "updatedAt"> = {
   emotionalCharacter: [],
   comeUpIntensity: "",
   peakCharacter: "",
+  doseExperiences: ["", "", "", "", "", ""],
 };
 
 export default function StrainsAdminPage() {
@@ -158,6 +160,7 @@ export default function StrainsAdminPage() {
       emotionalCharacter: strain.emotionalCharacter || [],
       comeUpIntensity: strain.comeUpIntensity || "",
       peakCharacter: strain.peakCharacter || "",
+      doseExperiences: strain.doseExperiences || ["", "", "", "", "", ""],
     });
     setVibeInput(strain.vibe.join(", "));
     setEditingStrain(strain);
@@ -565,6 +568,36 @@ export default function StrainsAdminPage() {
               </select>
               <small style={styles.helpText}>Hold Ctrl/Cmd to select multiple</small>
             </div>
+          </div>
+
+          {/* Dose Experience Descriptions */}
+          <div style={styles.lineageSection}>
+            <h4 style={styles.lineageTitle}>Dose Experience Descriptions</h4>
+            <small style={styles.helpText}>Short poetic descriptions (~35-45 chars) for each dose level on the dose card</small>
+            {[
+              "I. Microdose",
+              "II. Mini-dose",
+              "III. Macro Dose",
+              "IV. Museum Dose",
+              "V. Megadose",
+              "VI. Heroic Dose",
+            ].map((label, i) => (
+              <div key={label} style={{ ...styles.formGroup, marginBottom: "10px" }}>
+                <label style={styles.label}>{label}</label>
+                <input
+                  type="text"
+                  value={(formData.doseExperiences || [])[i] || ""}
+                  onChange={(e) => {
+                    const updated = [...(formData.doseExperiences || ["", "", "", "", "", ""])];
+                    updated[i] = e.target.value;
+                    setFormData({ ...formData, doseExperiences: updated });
+                  }}
+                  style={styles.input}
+                  placeholder="e.g., Gentle clarity, quiet warmth"
+                  maxLength={60}
+                />
+              </div>
+            ))}
           </div>
 
           {/* Image upload for editing */}

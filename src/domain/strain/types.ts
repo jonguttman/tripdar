@@ -33,6 +33,9 @@ export interface InternalStrain {
   emotionalCharacter?: string[]; // Emotional qualities
   comeUpIntensity?: string;    // How the come-up feels
   peakCharacter?: string;      // Peak experience pattern
+
+  // Dose experience descriptions (6-element array, one per dose level)
+  doseExperiences?: string[];
 }
 
 /**

@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Recommendation Engine
  * Plugin URI: https://tripd.ar
  * Description: Dose recommendation engine with three-layer scoring, feedback loop, and admin controls.
- * Version: 1.2.0
+ * Version: 1.2.1
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('TRIPDAR_REC_VERSION', '1.2.0');
+define('TRIPDAR_REC_VERSION', '1.2.1');
 define('TRIPDAR_REC_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_REC_URL', plugin_dir_url(__FILE__));
 

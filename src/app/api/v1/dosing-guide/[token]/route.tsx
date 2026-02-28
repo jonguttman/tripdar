@@ -112,6 +112,7 @@ export async function GET(
 
   // Build dose rows with escalating intensity indicators
   const doseIntensity = ["I", "II", "III", "IV", "V", "VI"];
+  const experiences = strain.doseExperiences || [];
   const doseRowsHtml = doseRanges
     .map(
       (range, i) => `
@@ -123,6 +124,7 @@ export async function GET(
           </div>
           <span class="dose-value">${esc(range.display.primary)}</span>
         </div>
+        ${experiences[i] ? `<div class="dose-experience">${esc(experiences[i])}</div>` : ""}
         ${range.display.secondary ? `<div class="dose-secondary">${esc(range.display.secondary)}</div>` : ""}
       </div>`
     )
@@ -388,6 +390,19 @@ export async function GET(
       color: var(--ink-light);
       letter-spacing: 0.3px;
     }
+    .dose-experience {
+      font-size: 12px;
+      font-style: italic;
+      color: var(--ink-muted);
+      padding-left: 36px;
+      max-width: 70%;
+      line-height: 1.4;
+      margin-top: 2px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .dose-secondary {
       font-size: 11px;
       color: var(--ink-muted);
@@ -433,6 +448,15 @@ export async function GET(
       flex-shrink: 0;
       margin-top: 1px;
       opacity: 0.5;
+    }
+    .wisdom-disclaimer {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(44,24,16,0.08);
+      font-size: 10px;
+      color: var(--ink-muted);
+      line-height: 1.5;
+      opacity: 0.7;
     }
 
     /* === FOOTER === */
@@ -545,6 +569,10 @@ export async function GET(
           </svg>
           <span>Allow ${esc(String(strain.onsetTime))} for onset before redosing</span>
         </div>` : ""}
+        <div class="wisdom-disclaimer">
+          For educational use only. Effects vary by individual, setting, and intention.
+          Know your source, prepare your space, and have a trusted guide or plan.
+        </div>
       </div>
 
       <!-- Footer -->
