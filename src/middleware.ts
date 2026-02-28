@@ -195,7 +195,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Determine allowed methods based on path
-  const postAllowedPaths = ["/api/v1/quiz", "/api/v1/feedback", "/api/v1/events", "/api/v1/reports", "/api/v1/recommend"];
+  const postAllowedPaths = ["/api/v1/quiz", "/api/v1/feedback", "/api/v1/events", "/api/v1/reports", "/api/v1/recommend", "/api/v1/dosing-guide"];
   const isPostAllowed = postAllowedPaths.some(p => pathname.startsWith(p));
   const allowedMethods = isPostAllowed ? ["GET", "POST"] : ["GET"];
 

@@ -218,6 +218,8 @@ async function getEventCounts(
     report: 0,
     strain_tried: 0,
     strain_view: 0,
+    dosing_guide_created: 0,
+    dosing_guide_downloaded: 0,
   };
 
   for (const count of counts) {
