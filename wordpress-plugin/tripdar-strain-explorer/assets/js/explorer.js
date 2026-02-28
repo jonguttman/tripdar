@@ -407,24 +407,28 @@
         }
 
         showQrPopover(btn, url, strainSlug) {
-            const existing = document.querySelector('.tripdar-qr-popover');
+            const existing = document.querySelector('.tripdar-qr-overlay');
             if (existing) existing.remove();
 
-            const popover = document.createElement('div');
-            popover.className = 'tripdar-qr-popover';
-            popover.innerHTML = '<div class="tripdar-qr-popover__inner">'
-                + '<button type="button" class="tripdar-qr-popover__close">&times;</button>'
+            const overlay = document.createElement('div');
+            overlay.className = 'tripdar-qr-overlay';
+            overlay.innerHTML = '<div class="tripdar-qr-overlay__backdrop"></div>'
+                + '<div class="tripdar-qr-overlay__inner">'
+                + '<button type="button" class="tripdar-qr-overlay__close">&times;</button>'
+                + '<h4>Scan to Save Your Dose Card</h4>'
                 + '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url) + '" '
                 + 'alt="QR Code" width="200" height="200">'
-                + '<p>Scan to save your dose card</p>'
-                + '<a href="' + url + '" download="' + strainSlug + '-dose-card.png" class="tripdar-qr-popover__download">Or download here</a>'
+                + '<p>Point your phone camera at the code</p>'
+                + '<a href="' + url + '" download="' + strainSlug + '-dose-card.png" class="tripdar-qr-overlay__download">Or download here</a>'
                 + '</div>';
 
-            btn.parentNode.style.position = 'relative';
-            btn.parentNode.appendChild(popover);
+            document.body.appendChild(overlay);
 
-            popover.querySelector('.tripdar-qr-popover__close').addEventListener('click', () => {
-                popover.remove();
+            overlay.querySelector('.tripdar-qr-overlay__backdrop').addEventListener('click', () => {
+                overlay.remove();
+            });
+            overlay.querySelector('.tripdar-qr-overlay__close').addEventListener('click', () => {
+                overlay.remove();
             });
         }
 

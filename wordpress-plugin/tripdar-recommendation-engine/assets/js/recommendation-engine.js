@@ -770,24 +770,28 @@
         }
 
         showQrPopover(btn, url, strainSlug) {
-            var existing = this.container.querySelector('.tripdar-rec__qr-popover');
+            var existing = document.querySelector('.tripdar-rec__qr-overlay');
             if (existing) existing.remove();
 
-            var popover = document.createElement('div');
-            popover.className = 'tripdar-rec__qr-popover';
-            popover.innerHTML = '<div class="tripdar-rec__qr-popover-inner">'
+            var overlay = document.createElement('div');
+            overlay.className = 'tripdar-rec__qr-overlay';
+            overlay.innerHTML = '<div class="tripdar-rec__qr-overlay-backdrop"></div>'
+                + '<div class="tripdar-rec__qr-overlay-inner">'
                 + '<button type="button" class="tripdar-rec__qr-close">&times;</button>'
+                + '<h4>Scan to Save Your Dose Card</h4>'
                 + '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url) + '" '
                 + 'alt="QR Code" width="200" height="200">'
-                + '<p>Scan to save your dose card</p>'
+                + '<p>Point your phone camera at the code</p>'
                 + '<a href="' + url + '" download="' + strainSlug + '-dose-card.png" class="tripdar-rec__qr-download">Or download here</a>'
                 + '</div>';
 
-            btn.parentNode.style.position = 'relative';
-            btn.parentNode.appendChild(popover);
+            document.body.appendChild(overlay);
 
-            popover.querySelector('.tripdar-rec__qr-close').addEventListener('click', function() {
-                popover.remove();
+            overlay.querySelector('.tripdar-rec__qr-overlay-backdrop').addEventListener('click', function() {
+                overlay.remove();
+            });
+            overlay.querySelector('.tripdar-rec__qr-close').addEventListener('click', function() {
+                overlay.remove();
             });
         }
 
