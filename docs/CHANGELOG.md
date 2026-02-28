@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.4] - 2026-02-27
+
+### Added
+- `GET /api/v1/dosing-guide/[token]` public endpoint: serves branded 1080x1920 PNG dose card image via `@vercel/og` (Satori), with retailer branding, strain-specific dose ranges, and safety footer
+- Middleware bypass for public GET requests to dosing guide download URLs (no API key required, token validation only)
+- Exported `mapDoseSensitivity` from recommendation engine for reuse in dosing guide image generation
+- Download tracking: increments `downloadCount`, records `downloadedAt`, logs `dosing_guide_downloaded` analytics event
+
 ## [1.6.3] - 2026-02-27
 
 ### Added
