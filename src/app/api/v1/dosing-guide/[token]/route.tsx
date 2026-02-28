@@ -126,8 +126,7 @@ export async function GET(
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-  // Build dose rows with escalating intensity indicators
-  const doseIntensity = ["I", "II", "III", "IV", "V", "VI"];
+  // Build dose rows
   const fallbackStrain = getStrainById(strain.id);
   const experiences = strain.doseExperiences || fallbackStrain?.doseExperiences || [];
   const doseRowsHtml = doseRanges
@@ -135,10 +134,7 @@ export async function GET(
       (range, i) => `
       <div class="dose-row" style="animation-delay: ${0.3 + i * 0.08}s">
         <div class="dose-header">
-          <div class="dose-left">
-            <span class="dose-numeral">${doseIntensity[i] || (i + 1)}</span>
-            <span class="dose-name">${esc(range.name)}</span>
-          </div>
+          <span class="dose-name">${esc(range.name)}</span>
           <span class="dose-value">${esc(range.display.primary)}</span>
         </div>
         ${experiences[i] || range.display.secondary ? `<div class="dose-detail">
@@ -168,7 +164,7 @@ export async function GET(
       --parchment-deep: #f0e6d8;
       --ink: #2c1810;
       --ink-light: #5c4033;
-      --ink-muted: #8b7355;
+      --ink-muted: #7a6347;
       --gold: #d4a574;
       --gold-light: #e8c9a0;
       --gold-dim: rgba(212,165,116,0.25);
@@ -312,8 +308,9 @@ export async function GET(
       line-height: 1.2;
     }
     .retailer-detail {
-      font-size: 11px;
+      font-size: 13px;
       color: var(--ink-muted);
+      font-weight: 500;
       letter-spacing: 0.2px;
       line-height: 1.3;
       margin-top: 2px;
@@ -349,7 +346,7 @@ export async function GET(
     /* === DOSING GUIDE LABEL (above compass) === */
     .guide-label-top {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 13px;
+      font-size: 14px;
       font-weight: 700;
       letter-spacing: 3.5px;
       text-transform: uppercase;
@@ -403,26 +400,6 @@ export async function GET(
       justify-content: space-between;
       align-items: center;
     }
-    .dose-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-    .dose-numeral {
-      font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--gold);
-      width: 24px;
-      height: 24px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border: 1px solid var(--gold-dim);
-      border-radius: 50%;
-      flex-shrink: 0;
-      letter-spacing: 0;
-    }
     .dose-name {
       font-family: 'Cormorant Garamond', Georgia, serif;
       font-size: 17px;
@@ -440,12 +417,12 @@ export async function GET(
       display: flex;
       justify-content: space-between;
       align-items: baseline;
-      padding-left: 36px;
       margin-top: 2px;
       gap: 8px;
     }
     .dose-experience {
-      font-size: 12px;
+      font-size: 13px;
+      font-weight: 500;
       font-style: italic;
       color: var(--ink-muted);
       line-height: 1.4;
@@ -454,7 +431,8 @@ export async function GET(
       text-overflow: ellipsis;
     }
     .dose-secondary {
-      font-size: 11px;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--ink-muted);
       font-style: italic;
       white-space: nowrap;
@@ -473,7 +451,7 @@ export async function GET(
     }
     .wisdom-title {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 700;
       letter-spacing: 2.5px;
       text-transform: uppercase;
@@ -484,7 +462,8 @@ export async function GET(
       display: flex;
       align-items: flex-start;
       gap: 10px;
-      font-size: 13px;
+      font-size: 14px;
+      font-weight: 500;
       color: var(--ink-light);
       line-height: 1.5;
     }
@@ -502,10 +481,11 @@ export async function GET(
       margin-top: 12px;
       padding-top: 10px;
       border-top: 1px solid rgba(44,24,16,0.08);
-      font-size: 10px;
+      font-size: 12px;
+      font-weight: 500;
       color: var(--ink-muted);
       line-height: 1.5;
-      opacity: 0.7;
+      opacity: 0.8;
     }
 
     /* === FOOTER === */
@@ -517,15 +497,17 @@ export async function GET(
     }
     .powered {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 12px;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--ink-light);
       letter-spacing: 1.5px;
     }
     .save-hint {
       margin-top: 10px;
-      font-size: 11px;
+      font-size: 13px;
+      font-weight: 500;
       color: var(--ink-light);
-      opacity: 0.7;
+      opacity: 0.8;
       letter-spacing: 0.3px;
     }
 
