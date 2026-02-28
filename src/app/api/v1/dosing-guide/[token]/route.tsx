@@ -110,14 +110,15 @@ export async function GET(
   const esc = (s: string) =>
     s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
-  // Build dose rows
+  // Build dose rows with escalating intensity indicators
+  const doseIntensity = ["I", "II", "III", "IV", "V", "VI"];
   const doseRowsHtml = doseRanges
     .map(
-      (range) => `
-      <div class="dose-row">
+      (range, i) => `
+      <div class="dose-row" style="animation-delay: ${0.3 + i * 0.08}s">
         <div class="dose-header">
           <div class="dose-left">
-            <span class="dose-dot"></span>
+            <span class="dose-numeral">${doseIntensity[i] || (i + 1)}</span>
             <span class="dose-name">${esc(range.name)}</span>
           </div>
           <span class="dose-value">${esc(range.display.primary)}</span>
@@ -133,89 +134,213 @@ export async function GET(
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="default">
-  <title>${esc(strain.name)} – Dosing Guide</title>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#2c1810">
+  <title>${esc(strain.name)} \u2013 Dosing Guide</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --parchment: #faf6f1;
+      --parchment-deep: #f0e6d8;
+      --ink: #2c1810;
+      --ink-light: #5c4033;
+      --ink-muted: #8b7355;
+      --gold: #d4a574;
+      --gold-light: #e8c9a0;
+      --gold-dim: rgba(212,165,116,0.25);
+      --violet: #8b5cf6;
+      --violet-dim: rgba(139,92,246,0.12);
+      --moss: #4d7c5a;
+    }
+
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: #e8e0d4;
-      color: #3a3226;
+      font-family: 'Lora', Georgia, serif;
+      background: var(--ink);
+      color: var(--ink);
       min-height: 100dvh;
       display: flex;
       justify-content: center;
-      padding: 16px;
+      align-items: flex-start;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+      /* Subtle radial glow behind card */
+      background: radial-gradient(ellipse at 50% 30%, #3d2a1e 0%, #2c1810 50%, #1a0f09 100%);
     }
-    .card {
-      background: #f5f0e8;
-      border-radius: 20px;
-      padding: 36px 28px;
-      max-width: 420px;
+
+    /* === SACRED SCROLL CARD === */
+    .scroll {
+      max-width: 440px;
       width: 100%;
-      box-shadow: 0 4px 24px rgba(58,50,38,0.10);
-      display: flex;
-      flex-direction: column;
-      align-self: flex-start;
+      min-height: 100dvh;
+      position: relative;
+      background: var(--parchment);
+      /* Parchment texture via layered gradients */
+      background-image:
+        repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 28px,
+          rgba(44,24,16,0.018) 28px,
+          rgba(44,24,16,0.018) 29px
+        ),
+        radial-gradient(ellipse at 20% 50%, rgba(212,165,116,0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(139,92,246,0.04) 0%, transparent 40%),
+        radial-gradient(ellipse at 50% 80%, rgba(212,165,116,0.06) 0%, transparent 50%),
+        linear-gradient(180deg, #faf6f1 0%, #f5efe5 40%, #f0e6d8 100%);
+      box-shadow:
+        0 0 60px rgba(212,165,116,0.15),
+        0 0 120px rgba(44,24,16,0.3);
+      overflow: hidden;
     }
-    .retailer-header {
+
+    /* Decorative top border — golden compass line */
+    .scroll::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg,
+        transparent 0%,
+        var(--gold-dim) 15%,
+        var(--gold) 35%,
+        var(--gold-light) 50%,
+        var(--gold) 65%,
+        var(--gold-dim) 85%,
+        transparent 100%
+      );
+    }
+
+    .scroll-inner {
+      padding: 40px 32px 32px;
+    }
+
+    /* === ORNAMENTAL DIVIDERS === */
+    .ornament {
       display: flex;
-      flex-direction: column;
       align-items: center;
-      margin-bottom: 24px;
+      justify-content: center;
+      gap: 12px;
+      margin: 24px 0;
+      opacity: 0.5;
+    }
+    .ornament::before,
+    .ornament::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--ink-muted), transparent);
+    }
+    .ornament-diamond {
+      width: 6px;
+      height: 6px;
+      background: var(--gold);
+      transform: rotate(45deg);
+      flex-shrink: 0;
+    }
+
+    /* === COMPASS ROSE (sacred geometry centerpiece) === */
+    .compass {
+      display: flex;
+      justify-content: center;
+      margin: 8px 0 20px;
+    }
+    .compass svg {
+      width: 44px;
+      height: 44px;
+      opacity: 0.2;
+      animation: slow-spin 120s linear infinite;
+    }
+    @keyframes slow-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* === RETAILER HEADER === */
+    .retailer {
+      text-align: center;
+      animation: fade-up 0.6s ease-out both;
     }
     .retailer-logo {
-      max-width: 120px;
-      max-height: 120px;
+      max-width: 100px;
+      max-height: 100px;
       object-fit: contain;
-      margin-bottom: 12px;
-      border-radius: 8px;
+      margin: 0 auto 14px;
+      display: block;
+      border-radius: 6px;
+      filter: sepia(0.05) contrast(1.02);
     }
     .retailer-name {
-      font-size: 20px;
-      font-weight: 700;
-      text-align: center;
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--ink-light);
     }
-    .retailer-info {
-      font-size: 13px;
-      color: #6b5c4d;
-      text-align: center;
-      margin-top: 4px;
+    .retailer-detail {
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-top: 3px;
+      letter-spacing: 0.3px;
     }
-    .divider {
-      width: 100%;
-      height: 1px;
-      background: #d4c9b8;
-      margin: 20px 0;
-    }
-    .strain-section {
+
+    /* === STRAIN SECTION === */
+    .strain {
       text-align: center;
-      margin-bottom: 4px;
+      animation: fade-up 0.6s ease-out both;
+      animation-delay: 0.1s;
     }
     .strain-name {
-      font-size: 26px;
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 32px;
       font-weight: 700;
-      margin-bottom: 8px;
+      color: var(--ink);
+      line-height: 1.15;
+      letter-spacing: -0.5px;
+      margin-bottom: 10px;
     }
     .strain-desc {
       font-size: 14px;
-      color: #6b5c4d;
-      line-height: 1.5;
+      color: var(--ink-muted);
+      line-height: 1.65;
+      max-width: 340px;
+      margin: 0 auto;
+      font-style: italic;
     }
-    .dose-guide-label {
-      font-size: 14px;
-      font-weight: 700;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: #3a3226;
-      margin-bottom: 2px;
+
+    /* === DOSING GUIDE SECTION === */
+    .guide-header {
+      animation: fade-up 0.6s ease-out both;
+      animation-delay: 0.2s;
+      margin-bottom: 20px;
     }
-    .dose-sensitivity {
+    .guide-label {
+      font-family: 'Cormorant Garamond', Georgia, serif;
       font-size: 13px;
-      color: #8a7b6b;
-      margin-bottom: 16px;
+      font-weight: 700;
+      letter-spacing: 3.5px;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-bottom: 4px;
     }
+    .guide-sensitivity {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--ink-light);
+      font-style: italic;
+    }
+
+    /* === DOSE ROWS === */
     .dose-row {
-      margin-bottom: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(44,24,16,0.06);
+      animation: fade-up 0.5s ease-out both;
+    }
+    .dose-row:last-of-type {
+      border-bottom: none;
     }
     .dose-header {
       display: flex;
@@ -225,104 +350,206 @@ export async function GET(
     .dose-left {
       display: flex;
       align-items: center;
+      gap: 12px;
     }
-    .dose-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      border: 2px solid #8a7b6b;
-      margin-right: 10px;
-      flex-shrink: 0;
-    }
-    .dose-name {
-      font-size: 16px;
+    .dose-numeral {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 13px;
       font-weight: 600;
-    }
-    .dose-value {
-      font-size: 16px;
-      font-weight: 700;
-    }
-    .dose-secondary {
-      font-size: 12px;
-      color: #8a7b6b;
-      text-align: right;
-      margin-top: 2px;
-    }
-    .safety {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-bottom: 20px;
-    }
-    .safety-item {
+      color: var(--gold);
+      width: 24px;
+      height: 24px;
       display: flex;
       align-items: center;
-      font-size: 14px;
-      color: #6b5c4d;
+      justify-content: center;
+      border: 1px solid var(--gold-dim);
+      border-radius: 50%;
+      flex-shrink: 0;
+      letter-spacing: 0;
     }
-    .safety-icon {
-      margin-right: 8px;
-      font-size: 16px;
+    .dose-name {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 17px;
+      font-weight: 600;
+      color: var(--ink);
     }
-    .powered-by {
+    .dose-value {
+      font-family: 'Lora', Georgia, serif;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--ink-light);
+      letter-spacing: 0.3px;
+    }
+    .dose-secondary {
+      font-size: 11px;
+      color: var(--ink-muted);
       text-align: right;
+      margin-top: 2px;
+      padding-right: 2px;
+      font-style: italic;
+    }
+
+    /* === SAFETY WISDOM === */
+    .wisdom {
+      background: linear-gradient(135deg, rgba(212,165,116,0.08) 0%, rgba(139,92,246,0.04) 100%);
+      border: 1px solid rgba(212,165,116,0.15);
+      border-radius: 10px;
+      padding: 16px 18px;
+      margin-top: 4px;
+      animation: fade-up 0.6s ease-out both;
+      animation-delay: 0.5s;
+    }
+    .wisdom-title {
+      font-family: 'Cormorant Garamond', Georgia, serif;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--ink-muted);
+      margin-bottom: 10px;
+    }
+    .wisdom-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--ink-light);
+      line-height: 1.5;
+    }
+    .wisdom-item + .wisdom-item {
+      margin-top: 8px;
+    }
+    .wisdom-icon {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      margin-top: 1px;
+      opacity: 0.5;
+    }
+
+    /* === FOOTER === */
+    .footer {
+      margin-top: 28px;
+      text-align: center;
+      animation: fade-up 0.6s ease-out both;
+      animation-delay: 0.6s;
+    }
+    .powered {
+      font-family: 'Cormorant Garamond', Georgia, serif;
       font-size: 12px;
-      color: #a89882;
+      color: var(--ink-muted);
+      letter-spacing: 1.5px;
+      opacity: 0.6;
     }
     .save-hint {
-      text-align: center;
-      font-size: 12px;
-      color: #a89882;
-      margin-top: 16px;
-      padding: 10px;
-      background: rgba(168,152,130,0.08);
-      border-radius: 8px;
+      margin-top: 14px;
+      font-size: 11px;
+      color: var(--ink-muted);
+      opacity: 0.5;
+      letter-spacing: 0.3px;
+    }
+
+    /* === ANIMATIONS === */
+    @keyframes fade-up {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* === DESKTOP CENTERING === */
+    @media (min-width: 480px) {
+      body {
+        padding: 32px 16px;
+        align-items: flex-start;
+      }
+      .scroll {
+        min-height: auto;
+        border-radius: 16px;
+        margin-top: 20px;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    ${retailer.logoUrl ? `<div class="retailer-header">
-      <img class="retailer-logo" src="${esc(retailer.logoUrl)}" alt="${esc(retailer.storeName || "Store logo")}">
-      ${retailer.storeName ? `<div class="retailer-name">${esc(retailer.storeName)}</div>` : ""}
-      ${retailer.address ? `<div class="retailer-info">${esc(retailer.address)}</div>` : ""}
-      ${retailer.phone ? `<div class="retailer-info">${esc(retailer.phone)}</div>` : ""}
-    </div>` : retailer.storeName ? `<div class="retailer-header">
-      <div class="retailer-name">${esc(retailer.storeName)}</div>
-      ${retailer.address ? `<div class="retailer-info">${esc(retailer.address)}</div>` : ""}
-      ${retailer.phone ? `<div class="retailer-info">${esc(retailer.phone)}</div>` : ""}
-    </div>` : ""}
+  <div class="scroll">
+    <div class="scroll-inner">
 
-    <div class="divider"></div>
-
-    <div class="strain-section">
-      <div class="strain-name">${esc(strain.name)}</div>
-      <div class="strain-desc">${esc(strain.description || "")}</div>
-    </div>
-
-    <div class="divider"></div>
-
-    <div class="dose-guide-label">Dosing Guide</div>
-    <div class="dose-sensitivity">${esc(sensitivityLabel[sensitivity] || sensitivity)}</div>
-
-    ${doseRowsHtml}
-
-    <div class="divider"></div>
-
-    <div class="safety">
-      <div class="safety-item">
-        <span class="safety-icon">&#9888;&#65039;</span>
-        <span>Start low, go slow</span>
+      ${retailer.logoUrl || retailer.storeName ? `<div class="retailer">
+        ${retailer.logoUrl ? `<img class="retailer-logo" src="${esc(retailer.logoUrl)}" alt="${esc(retailer.storeName || "")}" onerror="this.style.display='none'">` : ""}
+        ${retailer.storeName ? `<div class="retailer-name">${esc(retailer.storeName)}</div>` : ""}
+        ${retailer.address ? `<div class="retailer-detail">${esc(retailer.address)}</div>` : ""}
+        ${retailer.phone ? `<div class="retailer-detail">${esc(retailer.phone)}</div>` : ""}
       </div>
-      ${strain.onsetTime ? `<div class="safety-item">
-        <span class="safety-icon">&#9888;&#65039;</span>
-        <span>Allow ${esc(String(strain.onsetTime))} for onset</span>
-      </div>` : ""}
+      <div class="ornament"><span class="ornament-diamond"></span></div>` : ""}
+
+      <!-- Compass Rose -->
+      <div class="compass">
+        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="50" cy="50" r="48" stroke="currentColor" stroke-width="0.5" opacity="0.3"/>
+          <circle cx="50" cy="50" r="35" stroke="currentColor" stroke-width="0.5" opacity="0.2"/>
+          <circle cx="50" cy="50" r="20" stroke="currentColor" stroke-width="0.5" opacity="0.15"/>
+          <!-- Cardinal points -->
+          <line x1="50" y1="2" x2="50" y2="98" stroke="currentColor" stroke-width="0.4" opacity="0.2"/>
+          <line x1="2" y1="50" x2="98" y2="50" stroke="currentColor" stroke-width="0.4" opacity="0.2"/>
+          <!-- Diagonal lines -->
+          <line x1="15" y1="15" x2="85" y2="85" stroke="currentColor" stroke-width="0.3" opacity="0.12"/>
+          <line x1="85" y1="15" x2="15" y2="85" stroke="currentColor" stroke-width="0.3" opacity="0.12"/>
+          <!-- North arrow -->
+          <polygon points="50,8 46,22 50,18 54,22" fill="currentColor" opacity="0.25"/>
+          <!-- Center dot -->
+          <circle cx="50" cy="50" r="2" fill="currentColor" opacity="0.3"/>
+        </svg>
+      </div>
+
+      <!-- Strain -->
+      <div class="strain">
+        <div class="strain-name">${esc(strain.name)}</div>
+        ${strain.description ? `<div class="strain-desc">${esc(strain.description)}</div>` : ""}
+      </div>
+
+      <div class="ornament"><span class="ornament-diamond"></span></div>
+
+      <!-- Dosing Guide -->
+      <div class="guide-header">
+        <div class="guide-label">Dosing Guide</div>
+        <div class="guide-sensitivity">${esc(sensitivityLabel[sensitivity] || sensitivity)}</div>
+      </div>
+
+      ${doseRowsHtml}
+
+      <div class="ornament"><span class="ornament-diamond"></span></div>
+
+      <!-- Safety Wisdom -->
+      <div class="wisdom">
+        <div class="wisdom-title">For the Journey</div>
+        <div class="wisdom-item">
+          <svg class="wisdom-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12,6 12,12 16,14"/>
+          </svg>
+          <span>Start low, go slow \u2014 you can always take more</span>
+        </div>
+        ${strain.onsetTime ? `<div class="wisdom-item">
+          <svg class="wisdom-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M12 2L12 6M12 18L12 22M2 12L6 12M18 12L22 12"/>
+            <circle cx="12" cy="12" r="4"/>
+          </svg>
+          <span>Allow ${esc(String(strain.onsetTime))} for onset before redosing</span>
+        </div>` : ""}
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <div class="powered">powered by tripd.ar</div>
+        <div class="save-hint">Screenshot to save this guide</div>
+      </div>
+
     </div>
-
-    <div class="powered-by">powered by tripd.ar</div>
-
-    <div class="save-hint">Screenshot to save this guide to your phone</div>
   </div>
 </body>
 </html>`;
