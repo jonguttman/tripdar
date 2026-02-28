@@ -18,6 +18,24 @@
     -webkit-font-smoothing: antialiased;
 }
 
+.tripdar-rec__back-btn {
+    background: none;
+    border: none;
+    font-family: var(--tripdar-font-body);
+    font-size: 0.95rem;
+    color: var(--tripdar-ink-light, #6b5c4d);
+    cursor: pointer;
+    padding: var(--tripdar-space-xs) 0;
+    margin-bottom: var(--tripdar-space-sm);
+    display: inline-block;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.tripdar-rec__back-btn:hover {
+    opacity: 1;
+}
+
 .tripdar-rec__title {
     font-family: var(--tripdar-font-display);
     font-size: 2rem;
@@ -821,4 +839,105 @@
     --tripdar-violet-dark: #4c1d95;
     --tripdar-violet-light: #7c3aed;
     --tripdar-border-color: #e5e5e5;
+}
+
+/* =========================================================================
+   Dose Card Button
+   ========================================================================= */
+
+.tripdar-rec__get-dose-card {
+    display: block;
+    width: 100%;
+    padding: var(--tripdar-space-sm) var(--tripdar-space-md);
+    margin-top: var(--tripdar-space-md);
+    background: var(--tripdar-cream, #f5f0e8);
+    border: 2px solid var(--tripdar-ink-light, #6b5c4d);
+    border-radius: var(--tripdar-radius, 12px);
+    font-family: var(--tripdar-font-body);
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--tripdar-ink, #3a3226);
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    text-align: center;
+}
+
+.tripdar-rec__get-dose-card:hover {
+    background: var(--tripdar-ink-light, #6b5c4d);
+    color: var(--tripdar-cream, #f5f0e8);
+}
+
+.tripdar-rec__get-dose-card:active {
+    transform: scale(0.98);
+}
+
+.tripdar-rec__get-dose-card:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.tripdar-rec__loading-spinner-small {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: tripdar-spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+/* =========================================================================
+   QR Popover
+   ========================================================================= */
+
+.tripdar-rec__qr-popover {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 100;
+    margin-bottom: 10px;
+}
+
+.tripdar-rec__qr-popover-inner {
+    background: var(--tripdar-cream, #f5f0e8);
+    border: 2px solid var(--tripdar-ink-light, #6b5c4d);
+    border-radius: var(--tripdar-radius, 12px);
+    padding: var(--tripdar-space-md);
+    text-align: center;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    min-width: 260px;
+    position: relative;
+}
+
+.tripdar-rec__qr-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--tripdar-ink-light, #6b5c4d);
+    line-height: 1;
+}
+
+.tripdar-rec__qr-popover img {
+    display: block;
+    margin: 0 auto var(--tripdar-space-sm);
+}
+
+.tripdar-rec__qr-popover p {
+    font-family: var(--tripdar-font-body);
+    font-size: 0.9rem;
+    color: var(--tripdar-ink-light, #6b5c4d);
+    margin: 0 0 var(--tripdar-space-xs);
+}
+
+.tripdar-rec__qr-download {
+    font-family: var(--tripdar-font-body);
+    font-size: 0.85rem;
+    color: var(--tripdar-accent, #c17f3a);
 }

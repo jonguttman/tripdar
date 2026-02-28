@@ -34,9 +34,10 @@
         }
 
         async init() {
-            await this.loadConfig();
             this.bindEvents();
             this.checkConsent();
+            // Load config in background — UI is already interactive
+            this.loadConfig();
         }
 
         // =====================================================================
@@ -105,6 +106,14 @@
             if (signalsSubmit) {
                 signalsSubmit.addEventListener('click', () => this.submitSignals());
             }
+
+            // Back buttons
+            this.container.querySelectorAll('.tripdar-rec__back-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    var target = btn.dataset.back;
+                    this.showSection(target);
+                });
+            });
 
             // Restart buttons
             var restart = document.getElementById('tripdar-rec-restart');
@@ -538,10 +547,22 @@
                     html += '</div>';
                 }
 
+                // Dose card button
+                if (typeof tripdarRec !== 'undefined' && tripdarRec.dosingGuideEnabled) {
+                    html += '<button type="button" class="tripdar-rec__get-dose-card" data-strain-slug="' + this.escapeHtml(result.strainSlug) + '">'
+                        + '\ud83d\udcf2 Get Your Dose Card'
+                        + '</button>';
+                }
+
                 html += '</div>';
             }.bind(this));
 
             resultsEl.innerHTML = html;
+
+            // Bind dose card buttons
+            this.container.querySelectorAll('.tripdar-rec__get-dose-card').forEach(function(btn) {
+                btn.addEventListener('click', function() { this.requestDoseCard(btn); }.bind(this));
+            }.bind(this));
 
             // Stepped path notice
             if (data.steppedPath) {
@@ -680,6 +701,83 @@
         }
 
         // =====================================================================
+        // Dose Card
+        // =====================================================================
+
+        async requestDoseCard(btn) {
+            var strainSlug = btn.dataset.strainSlug;
+            var sessionToken = this.sessionToken;
+
+            if (!sessionToken || !strainSlug) return;
+
+            var originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="tripdar-rec__loading-spinner-small"></span> Creating...';
+            btn.disabled = true;
+
+            try {
+                var response = await this.ajax('tripdar_rec_dosing_guide', {
+                    sessionToken: sessionToken,
+                    strainSlug: strainSlug,
+                });
+
+                if (response.success && response.data && response.data.url) {
+                    var url = response.data.url;
+                    var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                    var forceQr = typeof tripdarRec !== 'undefined' && tripdarRec.forceQr;
+
+                    if (isMobile && !forceQr) {
+                        this.triggerDownload(url, strainSlug);
+                        btn.innerHTML = '&#10003; Saved!';
+                        setTimeout(function() { btn.innerHTML = originalText; btn.disabled = false; }, 3000);
+                    } else {
+                        this.showQrPopover(btn, url, strainSlug);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }
+                } else {
+                    btn.innerHTML = 'Try Again';
+                    btn.disabled = false;
+                    setTimeout(function() { btn.innerHTML = originalText; }, 3000);
+                }
+            } catch (e) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        triggerDownload(url, strainSlug) {
+            var a = document.createElement('a');
+            a.href = url;
+            a.download = strainSlug + '-dose-card.png';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        showQrPopover(btn, url, strainSlug) {
+            var existing = this.container.querySelector('.tripdar-rec__qr-popover');
+            if (existing) existing.remove();
+
+            var popover = document.createElement('div');
+            popover.className = 'tripdar-rec__qr-popover';
+            popover.innerHTML = '<div class="tripdar-rec__qr-popover-inner">'
+                + '<button type="button" class="tripdar-rec__qr-close">&times;</button>'
+                + '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url) + '" '
+                + 'alt="QR Code" width="200" height="200">'
+                + '<p>Scan to save your dose card</p>'
+                + '<a href="' + url + '" download="' + strainSlug + '-dose-card.png" class="tripdar-rec__qr-download">Or download here</a>'
+                + '</div>';
+
+            btn.parentNode.style.position = 'relative';
+            btn.parentNode.appendChild(popover);
+
+            popover.querySelector('.tripdar-rec__qr-close').addEventListener('click', function() {
+                popover.remove();
+            });
+        }
+
+        // =====================================================================
         // Navigation & Utilities
         // =====================================================================
 
@@ -775,11 +873,21 @@
         }
     }
 
-    // Initialize when DOM ready
-    document.addEventListener('DOMContentLoaded', function() {
+    // Make class globally accessible for inline fallback
+    window.TripdarRecommendationEngine = TripdarRecommendationEngine;
+
+    // Initialize — handle both cases: DOM ready or already loaded
+    function tripdarRecInit() {
         var container = document.querySelector('.tripdar-rec');
-        if (container) {
+        if (container && !container.dataset.initialized) {
+            container.dataset.initialized = 'true';
             new TripdarRecommendationEngine(container);
         }
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', tripdarRecInit);
+    } else {
+        tripdarRecInit();
+    }
 })();

@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Recommendation Engine
  * Plugin URI: https://tripd.ar
  * Description: Dose recommendation engine with three-layer scoring, feedback loop, and admin controls.
- * Version: 1.0.0
+ * Version: 1.0.7
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -16,15 +16,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Require tripdar-core
-if (!function_exists('tripdar_core_loaded')) {
-    add_action('admin_notices', function() {
-        echo '<div class="notice notice-error"><p><strong>Tripdar Recommendation Engine</strong> requires the <strong>Tripdar Core</strong> plugin to be installed and activated.</p></div>';
-    });
-    return;
-}
-
-define('TRIPDAR_REC_VERSION', '1.0.0');
+define('TRIPDAR_REC_VERSION', '1.0.7');
 define('TRIPDAR_REC_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_REC_URL', plugin_dir_url(__FILE__));
 
@@ -75,6 +67,9 @@ class Tripdar_Recommendation_Engine {
 
         add_action('wp_ajax_tripdar_rec_signals', [$this, 'handle_submit_signals']);
         add_action('wp_ajax_nopriv_tripdar_rec_signals', [$this, 'handle_submit_signals']);
+
+        add_action('wp_ajax_tripdar_rec_dosing_guide', [$this, 'handle_create_dosing_guide']);
+        add_action('wp_ajax_nopriv_tripdar_rec_dosing_guide', [$this, 'handle_create_dosing_guide']);
     }
 
     public function activate() {
@@ -127,6 +122,8 @@ class Tripdar_Recommendation_Engine {
         wp_localize_script('tripdar-recommendation-engine', 'tripdarRec', [
             'ajaxUrl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('tripdar_rec_nonce'),
+            'dosingGuideEnabled' => (bool) get_option('tripdar_rec_dosing_guide_enabled', false),
+            'forceQr' => (bool) get_option('tripdar_rec_force_qr', false),
         ]);
     }
 
@@ -213,10 +210,45 @@ class Tripdar_Recommendation_Engine {
             wp_send_json_error($response['error'] ?? ['message' => 'Signal submission failed']);
         }
     }
+
+    public function handle_create_dosing_guide() {
+        check_ajax_referer('tripdar_rec_nonce', 'nonce');
+
+        $session_token = isset($_POST['sessionToken']) ? sanitize_text_field($_POST['sessionToken']) : '';
+        $strain_slug = isset($_POST['strainSlug']) ? sanitize_text_field($_POST['strainSlug']) : '';
+
+        if (empty($session_token) || empty($strain_slug)) {
+            wp_send_json_error(['message' => 'Missing required fields']);
+        }
+
+        $retailer_branding = [
+            'logoUrl' => get_option('tripdar_rec_store_logo', ''),
+            'storeName' => get_option('tripdar_rec_store_name', ''),
+            'address' => get_option('tripdar_rec_store_address', ''),
+            'phone' => get_option('tripdar_rec_store_phone', ''),
+        ];
+
+        $response = $this->api->create_dosing_guide($session_token, $strain_slug, $retailer_branding);
+
+        if ($response && isset($response['success']) && $response['success']) {
+            wp_send_json_success($response['data']);
+        } else {
+            wp_send_json_error($response['error'] ?? ['message' => 'Failed to create dosing guide']);
+        }
+    }
 }
 
 function tripdar_recommendation_engine() {
     return Tripdar_Recommendation_Engine::get_instance();
 }
 
-tripdar_recommendation_engine();
+// Defer initialization until all plugins are loaded (ensures tripdar-core is available)
+add_action('plugins_loaded', function() {
+    if (!function_exists('tripdar_core_loaded')) {
+        add_action('admin_notices', function() {
+            echo '<div class="notice notice-error"><p><strong>Tripdar Recommendation Engine</strong> requires the <strong>Tripdar Core</strong> plugin to be installed and activated.</p></div>';
+        });
+        return;
+    }
+    tripdar_recommendation_engine();
+});
