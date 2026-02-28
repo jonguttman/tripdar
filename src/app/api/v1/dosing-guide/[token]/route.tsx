@@ -98,14 +98,19 @@ export async function GET(
     phone?: string;
   };
 
-  // Fetch retailer logo if provided
+  // Fetch retailer logo if provided (Satori supports PNG, JPEG, GIF, SVG only)
   let logoSrc: string | null = null;
   if (retailer.logoUrl) {
     try {
       const logoRes = await fetch(retailer.logoUrl);
       if (logoRes.ok) {
-        const buf = await logoRes.arrayBuffer();
-        logoSrc = `data:image/png;base64,${Buffer.from(buf).toString("base64")}`;
+        const contentType = logoRes.headers.get("content-type") || "";
+        const supportedTypes = ["image/png", "image/jpeg", "image/jpg", "image/gif", "image/svg+xml"];
+        if (supportedTypes.some(t => contentType.includes(t))) {
+          const buf = await logoRes.arrayBuffer();
+          logoSrc = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
+        }
+        // Skip unsupported formats (avif, webp, etc.) — render without logo
       }
     } catch {
       // continue without logo
@@ -121,6 +126,7 @@ export async function GET(
   };
 
   // Generate image with @vercel/og
+  try {
   return new ImageResponse(
     (
       <div
@@ -374,4 +380,17 @@ export async function GET(
       },
     }
   );
+  } catch (renderError) {
+    console.error("Dose card render error:", renderError);
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "RENDER_FAILED",
+          message: "Failed to generate dose card image.",
+        },
+      },
+      { status: 500 }
+    );
+  }
 }
