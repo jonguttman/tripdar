@@ -912,10 +912,51 @@
     position: relative;
 }
 
+/* QR Overlay */
+.tripdar-rec__qr-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10000002;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tripdar-rec__qr-overlay-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(44, 24, 16, 0.6);
+    backdrop-filter: blur(4px);
+}
+
+.tripdar-rec__qr-overlay-inner {
+    position: relative;
+    background: var(--tripdar-parchment, #faf6f1);
+    border-radius: 16px;
+    padding: 32px;
+    text-align: center;
+    box-shadow: 0 20px 60px rgba(44, 24, 16, 0.3);
+    max-width: 320px;
+    width: 90%;
+}
+
+.tripdar-rec__qr-overlay-inner h4 {
+    font-family: var(--tripdar-font-display);
+    font-size: 1.2rem;
+    color: var(--tripdar-ink, #2c1810);
+    margin: 0 0 16px;
+}
+
 .tripdar-rec__qr-close {
     position: absolute;
-    top: 8px;
-    right: 12px;
+    top: 12px;
+    right: 16px;
     background: none;
     border: none;
     font-size: 1.5rem;
@@ -924,16 +965,17 @@
     line-height: 1;
 }
 
-.tripdar-rec__qr-popover img {
+.tripdar-rec__qr-overlay-inner img {
     display: block;
-    margin: 0 auto var(--tripdar-space-sm);
+    margin: 0 auto 12px;
+    border-radius: 8px;
 }
 
-.tripdar-rec__qr-popover p {
+.tripdar-rec__qr-overlay-inner p {
     font-family: var(--tripdar-font-body);
     font-size: 0.9rem;
-    color: var(--tripdar-ink-light, #6b5c4d);
-    margin: 0 0 var(--tripdar-space-xs);
+    color: var(--tripdar-ink-muted, #8b7355);
+    margin: 0 0 12px;
 }
 
 .tripdar-rec__qr-download {
