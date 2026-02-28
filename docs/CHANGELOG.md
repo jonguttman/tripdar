@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.8.2] - 2026-02-28
+
+### Fixed
+- **Dose card layout**: Removed gap between "Dosing Guide" label and strain name by positioning compass rose as a background element behind the strain name instead of between them
+
 ## [1.8.1] - 2026-02-28
 
 ### Fixed

@@ -245,12 +245,17 @@ export async function GET(
     .compass {
       display: flex;
       justify-content: center;
-      margin: 0 0 2px;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 0;
+      pointer-events: none;
     }
     .compass svg {
-      width: 44px;
-      height: 44px;
-      opacity: 0.2;
+      width: 64px;
+      height: 64px;
+      opacity: 0.18;
       animation: slow-spin 120s linear infinite;
     }
     @keyframes slow-spin {
@@ -291,6 +296,7 @@ export async function GET(
       text-align: center;
       animation: fade-up 0.6s ease-out both;
       animation-delay: 0.1s;
+      position: relative;
     }
     .strain-name {
       font-family: 'Cormorant Garamond', Georgia, serif;
@@ -300,6 +306,8 @@ export async function GET(
       line-height: 1.15;
       letter-spacing: -0.5px;
       margin-bottom: 10px;
+      position: relative;
+      z-index: 1;
     }
     .strain-desc {
       font-size: 14px;
@@ -489,27 +497,26 @@ export async function GET(
       <!-- Dosing Guide label -->
       <div class="guide-label-top">Dosing Guide</div>
 
-      <!-- Compass Rose -->
-      <div class="compass">
-        <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="50" cy="50" r="48" stroke="currentColor" stroke-width="0.5" opacity="0.3"/>
-          <circle cx="50" cy="50" r="35" stroke="currentColor" stroke-width="0.5" opacity="0.2"/>
-          <circle cx="50" cy="50" r="20" stroke="currentColor" stroke-width="0.5" opacity="0.15"/>
-          <!-- Cardinal points -->
-          <line x1="50" y1="2" x2="50" y2="98" stroke="currentColor" stroke-width="0.4" opacity="0.2"/>
-          <line x1="2" y1="50" x2="98" y2="50" stroke="currentColor" stroke-width="0.4" opacity="0.2"/>
-          <!-- Diagonal lines -->
-          <line x1="15" y1="15" x2="85" y2="85" stroke="currentColor" stroke-width="0.3" opacity="0.12"/>
-          <line x1="85" y1="15" x2="15" y2="85" stroke="currentColor" stroke-width="0.3" opacity="0.12"/>
-          <!-- North arrow -->
-          <polygon points="50,8 46,22 50,18 54,22" fill="currentColor" opacity="0.25"/>
-          <!-- Center dot -->
-          <circle cx="50" cy="50" r="2" fill="currentColor" opacity="0.3"/>
-        </svg>
-      </div>
-
       <!-- Strain + Sensitivity -->
       <div class="strain">
+        <!-- Compass Rose (behind strain name) -->
+        <div class="compass">
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="48" stroke="currentColor" stroke-width="0.5" opacity="0.3"/>
+            <circle cx="50" cy="50" r="35" stroke="currentColor" stroke-width="0.5" opacity="0.2"/>
+            <circle cx="50" cy="50" r="20" stroke="currentColor" stroke-width="0.5" opacity="0.15"/>
+            <!-- Cardinal points -->
+            <line x1="50" y1="2" x2="50" y2="98" stroke="currentColor" stroke-width="0.4" opacity="0.2"/>
+            <line x1="2" y1="50" x2="98" y2="50" stroke="currentColor" stroke-width="0.4" opacity="0.2"/>
+            <!-- Diagonal lines -->
+            <line x1="15" y1="15" x2="85" y2="85" stroke="currentColor" stroke-width="0.3" opacity="0.12"/>
+            <line x1="85" y1="15" x2="15" y2="85" stroke="currentColor" stroke-width="0.3" opacity="0.12"/>
+            <!-- North arrow -->
+            <polygon points="50,8 46,22 50,18 54,22" fill="currentColor" opacity="0.25"/>
+            <!-- Center dot -->
+            <circle cx="50" cy="50" r="2" fill="currentColor" opacity="0.3"/>
+          </svg>
+        </div>
         <div class="strain-name">${esc(strain.name)}</div>
         <div class="guide-sensitivity">${esc(sensitivityLabel[sensitivity] || sensitivity)}</div>
         ${strain.description ? `<div class="strain-desc">${esc(strain.description)}</div>` : ""}
