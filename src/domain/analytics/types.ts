@@ -10,7 +10,9 @@ export type EventType =
   | "review"
   | "report"
   | "strain_tried"
-  | "strain_view";
+  | "strain_view"
+  | "dosing_guide_created"
+  | "dosing_guide_downloaded";
 
 export type Period = "daily" | "weekly" | "monthly";
 

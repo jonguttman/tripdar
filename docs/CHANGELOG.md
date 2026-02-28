@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.3] - 2026-02-27
+
+### Added
+- `POST /api/v1/dosing-guide/create` endpoint: creates dosing guide tokens from recommendation sessions, returns public URL for branded dose card image
+- Added `/api/v1/dosing-guide` to middleware `postAllowedPaths` for POST method support
+- `dosing_guide_created` and `dosing_guide_downloaded` event types added to `EventType` union in analytics domain
+
 ## [1.6.2] - 2026-02-27
 
 ### Added
