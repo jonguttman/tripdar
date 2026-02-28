@@ -550,7 +550,7 @@
                 // Dose card button
                 if (typeof tripdarRec !== 'undefined' && tripdarRec.dosingGuideEnabled) {
                     html += '<button type="button" class="tripdar-rec__get-dose-card" data-strain-slug="' + this.escapeHtml(result.strainSlug) + '">'
-                        + '\ud83d\udcf2 Get Your Dose Card'
+                        + 'Map Your Journey'
                         + '</button>';
                 }
 
@@ -706,9 +706,9 @@
 
         async requestDoseCard(btn) {
             var strainSlug = btn.dataset.strainSlug;
-            var sessionToken = this.sessionToken;
+            var sessionToken = this.sessionToken || '';
 
-            if (!sessionToken || !strainSlug) return;
+            if (!strainSlug) return;
 
             var originalText = btn.innerHTML;
             btn.innerHTML = '<span class="tripdar-rec__loading-spinner-small"></span> Creating...';

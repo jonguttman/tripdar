@@ -3520,3 +3520,104 @@
     }
 
 }
+
+/* =============================================================================
+   Dose Card / Map Your Journey Button
+   ============================================================================= */
+
+.tripdar-strain-detail__dose-card {
+    padding: var(--tripdar-space-md) var(--tripdar-space-lg);
+    text-align: center;
+}
+
+.tripdar-dose-card-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 28px;
+    background: linear-gradient(135deg, var(--tripdar-violet) 0%, var(--tripdar-violet-dark) 100%);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(107, 40, 217, 0.25);
+}
+
+.tripdar-dose-card-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(107, 40, 217, 0.35);
+}
+
+.tripdar-dose-card-btn:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.tripdar-loading-spinner-small {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: tripdar-spin 0.6s linear infinite;
+}
+
+@keyframes tripdar-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* QR Popover */
+.tripdar-qr-popover {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10000001;
+    margin-bottom: 12px;
+}
+
+.tripdar-qr-popover__inner {
+    background: var(--tripdar-parchment);
+    border: 1px solid var(--tripdar-parchment-dark);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    box-shadow: 0 8px 32px rgba(44, 24, 16, 0.2);
+    min-width: 240px;
+}
+
+.tripdar-qr-popover__inner img {
+    border-radius: 8px;
+    margin-bottom: 8px;
+}
+
+.tripdar-qr-popover__inner p {
+    margin: 0 0 8px;
+    color: var(--tripdar-ink-light);
+    font-size: 0.875rem;
+}
+
+.tripdar-qr-popover__close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: none;
+    border: none;
+    font-size: 1.25rem;
+    cursor: pointer;
+    color: var(--tripdar-ink-muted);
+    line-height: 1;
+    padding: 4px;
+}
+
+.tripdar-qr-popover__download {
+    display: inline-block;
+    color: var(--tripdar-violet);
+    font-size: 0.8rem;
+    text-decoration: underline;
+}

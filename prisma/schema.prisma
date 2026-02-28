@@ -312,8 +312,8 @@ model RecommendationSignal {
 model DosingGuideToken {
   id            String    @id @default(cuid())
   token         String    @unique
-  sessionId     String
-  session       RecommendationSession @relation(fields: [sessionId], references: [id])
+  sessionId     String?
+  session       RecommendationSession? @relation(fields: [sessionId], references: [id])
   strainSlug    String
   partnerId     String
   retailerData  Json

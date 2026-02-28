@@ -14,6 +14,15 @@ if (!defined('ABSPATH')) exit;
 
     <p class="description">Configure product mapping, dose overrides, and intent matching for each strain. Strains without product mapping will show mg ranges instead of product units.</p>
 
+    <div class="card" style="max-width: 600px; margin: 15px 0;">
+        <h3 style="margin-top: 0;">Shortcode</h3>
+        <p>Add the recommendation engine to any page or post:</p>
+        <p><code>[tripdar_recommendation_engine]</code></p>
+        <p class="description" style="margin-bottom: 0;">
+            Optional attributes: <code>theme="parchment|dark|minimal"</code> &nbsp; <code>show_consent="yes|no"</code>
+        </p>
+    </div>
+
     <?php if (empty($strains)): ?>
         <div class="notice notice-warning">
             <p>No strains loaded. Check your API connection in <a href="<?php echo esc_url(admin_url('admin.php?page=tripdar-settings')); ?>">Tripdar Settings</a>.</p>

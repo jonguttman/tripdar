@@ -250,6 +250,12 @@
                     if (feedbackContainer && typeof TripdarFeedback !== 'undefined') {
                         new TripdarFeedback(feedbackContainer);
                     }
+
+                    // Initialize dose card button in modal
+                    const doseCardBtn = modal.querySelector('.tripdar-dose-card-btn');
+                    if (doseCardBtn) {
+                        doseCardBtn.addEventListener('click', () => this.requestDoseCard(doseCardBtn));
+                    }
                 } else {
                     modal.querySelector('.tripdar-modal__content').innerHTML = `
                         <div class="tripdar-error">
@@ -340,6 +346,85 @@
                         this.openStrainModal(slug);
                     }
                 });
+            });
+        }
+
+        async requestDoseCard(btn) {
+            const strainSlug = btn.dataset.strainSlug;
+            if (!strainSlug) return;
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="tripdar-loading-spinner-small"></span> Creating...';
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(tripdarExplorer.ajaxUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        action: 'tripdar_dosing_guide',
+                        nonce: tripdarExplorer.nonce,
+                        strainSlug: strainSlug,
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.data && data.data.url) {
+                    const url = data.data.url;
+                    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+                    const forceQr = tripdarExplorer.forceQr;
+
+                    if (isMobile && !forceQr) {
+                        this.triggerDownload(url, strainSlug);
+                        btn.innerHTML = '\u2713 Saved!';
+                        setTimeout(() => { btn.innerHTML = originalText; btn.disabled = false; }, 3000);
+                    } else {
+                        this.showQrPopover(btn, url, strainSlug);
+                        btn.innerHTML = originalText;
+                        btn.disabled = false;
+                    }
+                } else {
+                    btn.innerHTML = 'Try Again';
+                    btn.disabled = false;
+                    setTimeout(() => { btn.innerHTML = originalText; }, 3000);
+                }
+            } catch (e) {
+                console.error('Dose card request failed:', e);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        triggerDownload(url, strainSlug) {
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = strainSlug + '-dose-card.png';
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        showQrPopover(btn, url, strainSlug) {
+            const existing = document.querySelector('.tripdar-qr-popover');
+            if (existing) existing.remove();
+
+            const popover = document.createElement('div');
+            popover.className = 'tripdar-qr-popover';
+            popover.innerHTML = '<div class="tripdar-qr-popover__inner">'
+                + '<button type="button" class="tripdar-qr-popover__close">&times;</button>'
+                + '<img src="https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(url) + '" '
+                + 'alt="QR Code" width="200" height="200">'
+                + '<p>Scan to save your dose card</p>'
+                + '<a href="' + url + '" download="' + strainSlug + '-dose-card.png" class="tripdar-qr-popover__download">Or download here</a>'
+                + '</div>';
+
+            btn.parentNode.style.position = 'relative';
+            btn.parentNode.appendChild(popover);
+
+            popover.querySelector('.tripdar-qr-popover__close').addEventListener('click', () => {
+                popover.remove();
             });
         }
 

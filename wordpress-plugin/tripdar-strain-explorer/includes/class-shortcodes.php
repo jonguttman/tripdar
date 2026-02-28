@@ -1104,6 +1104,14 @@ class Tripdar_Shortcodes {
             </div>
             <?php endif; ?>
 
+            <?php if (get_option('tripdar_rec_dosing_guide_enabled', false)): ?>
+            <div class="tripdar-strain-detail__dose-card">
+                <button type="button" class="tripdar-dose-card-btn" data-strain-slug="<?php echo esc_attr($strain['slug']); ?>">
+                    Map Your Journey
+                </button>
+            </div>
+            <?php endif; ?>
+
             <?php if ($show_feedback): ?>
             <div class="tripdar-strain-detail__feedback">
                 <?php echo $this->render_feedback_widget($strain['slug'], $strain['name'] ?? ''); ?>

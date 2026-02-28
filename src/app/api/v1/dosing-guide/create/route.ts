@@ -42,13 +42,6 @@ export async function POST(request: NextRequest) {
       retailerBranding?: { logoUrl?: string; storeName?: string; address?: string; phone?: string };
     };
 
-    if (!sessionToken || typeof sessionToken !== "string") {
-      return NextResponse.json<ApiErrorResponse>(
-        { success: false, error: { code: "MISSING_SESSION_TOKEN", message: "sessionToken is required." } },
-        { status: 400 }
-      );
-    }
-
     if (!strainSlug || typeof strainSlug !== "string") {
       return NextResponse.json<ApiErrorResponse>(
         { success: false, error: { code: "MISSING_STRAIN_SLUG", message: "strainSlug is required." } },
@@ -56,16 +49,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify session exists and belongs to this partner
-    const session = await prisma.recommendationSession.findUnique({
-      where: { sessionToken },
-    });
+    // If sessionToken provided, verify it belongs to this partner
+    let sessionId: string | null = null;
+    if (sessionToken && typeof sessionToken === "string") {
+      const session = await prisma.recommendationSession.findUnique({
+        where: { sessionToken },
+      });
 
-    if (!session || session.partnerId !== partner.id) {
-      return NextResponse.json<ApiErrorResponse>(
-        { success: false, error: { code: "SESSION_NOT_FOUND", message: "Recommendation session not found." } },
-        { status: 404 }
-      );
+      if (!session || session.partnerId !== partner.id) {
+        return NextResponse.json<ApiErrorResponse>(
+          { success: false, error: { code: "SESSION_NOT_FOUND", message: "Recommendation session not found." } },
+          { status: 404 }
+        );
+      }
+      sessionId = session.id;
     }
 
     const token = generateDosingGuideToken();
@@ -73,7 +70,7 @@ export async function POST(request: NextRequest) {
     await prisma.dosingGuideToken.create({
       data: {
         token,
-        sessionId: session.id,
+        sessionId,
         strainSlug,
         partnerId: partner.id,
         retailerData: retailerBranding || {},
