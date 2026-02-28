@@ -286,30 +286,36 @@ export async function GET(
 
     /* === RETAILER HEADER === */
     .retailer {
-      text-align: center;
+      display: flex;
+      align-items: center;
+      gap: 12px;
       animation: fade-up 0.6s ease-out both;
+      margin-bottom: 12px;
     }
     .retailer-logo {
-      max-width: 100px;
-      max-height: 100px;
+      width: 40px;
+      height: 40px;
       object-fit: contain;
-      margin: 0 auto 14px;
-      display: block;
       border-radius: 6px;
+      flex-shrink: 0;
       filter: sepia(0.05) contrast(1.02);
+    }
+    .retailer-info {
+      min-width: 0;
     }
     .retailer-name {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 18px;
+      font-size: 15px;
       font-weight: 600;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
       color: var(--ink-light);
+      line-height: 1.2;
     }
     .retailer-detail {
-      font-size: 12px;
+      font-size: 11px;
       color: var(--ink-muted);
-      margin-top: 3px;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.2px;
+      line-height: 1.3;
     }
 
     /* === STRAIN SECTION === */
@@ -554,11 +560,11 @@ export async function GET(
 
       ${retailer.logoUrl || retailer.storeName ? `<div class="retailer">
         ${retailer.logoUrl ? `<img class="retailer-logo" src="${esc(retailer.logoUrl)}" alt="${esc(retailer.storeName || "")}" onerror="this.style.display='none'">` : ""}
-        ${retailer.storeName ? `<div class="retailer-name">${esc(retailer.storeName)}</div>` : ""}
-        ${retailer.address ? `<div class="retailer-detail">${esc(retailer.address)}</div>` : ""}
-        ${retailer.phone ? `<div class="retailer-detail">${esc(retailer.phone)}</div>` : ""}
-      </div>
-      <div class="ornament"><span class="ornament-diamond"></span></div>` : ""}
+        <div class="retailer-info">
+          ${retailer.storeName ? `<div class="retailer-name">${esc(retailer.storeName)}</div>` : ""}
+          ${retailer.address || retailer.phone ? `<div class="retailer-detail">${[retailer.address, retailer.phone].filter(Boolean).map(s => esc(s!)).join(" \u00b7 ")}</div>` : ""}
+        </div>
+      </div>` : ""}
 
       <!-- Dosing Guide label -->
       <div class="guide-label-top">Dosing Guide</div>
