@@ -369,12 +369,12 @@ export async function GET(
     }
     .dose-watermark {
       position: absolute;
-      top: 50%;
+      top: 0;
       left: 50%;
-      transform: translate(-50%, -50%);
-      width: 80%;
-      max-height: 90%;
-      object-fit: contain;
+      transform: translateX(-50%);
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
       opacity: 0.13;
       pointer-events: none;
       z-index: 0;
