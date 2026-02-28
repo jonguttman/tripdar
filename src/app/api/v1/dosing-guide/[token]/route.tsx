@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { loadStrainData } from "@/domain/strain/blob-store";
+import { getStrainById } from "@/domain/strain/data";
 import { mapDoseSensitivity } from "@/domain/recommendation-engine/strain-profiles";
 import { calculateAllDoseRanges } from "@/domain/dosing-guide/utils";
 
@@ -112,7 +113,8 @@ export async function GET(
 
   // Build dose rows with escalating intensity indicators
   const doseIntensity = ["I", "II", "III", "IV", "V", "VI"];
-  const experiences = strain.doseExperiences || [];
+  const fallbackStrain = getStrainById(strain.id);
+  const experiences = strain.doseExperiences || fallbackStrain?.doseExperiences || [];
   const doseRowsHtml = doseRanges
     .map(
       (range, i) => `
