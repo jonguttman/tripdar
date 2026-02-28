@@ -372,13 +372,12 @@ export async function GET(
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      width: 65%;
-      max-height: 85%;
+      width: 80%;
+      max-height: 90%;
       object-fit: contain;
-      opacity: 0.06;
+      opacity: 0.13;
       pointer-events: none;
       z-index: 0;
-      filter: grayscale(0.3);
     }
 
     /* === DOSE ROWS === */
