@@ -283,13 +283,16 @@ class Tripdar_Rec_Admin {
             update_option('tripdar_rec_force_qr', $_POST['forceQr'] === '1');
         }
 
-        $response = $this->api->update_settings($settings);
+        // Only call the API if there are API-bound settings to save
+        if (!empty($settings)) {
+            $response = $this->api->update_settings($settings);
 
-        if ($response && isset($response['success']) && $response['success']) {
-            wp_send_json_success(['message' => 'Settings saved successfully']);
-        } else {
-            wp_send_json_error($response['error'] ?? ['message' => 'Failed to save settings']);
+            if (!$response || !isset($response['success']) || !$response['success']) {
+                wp_send_json_error($response['error'] ?? ['message' => 'Failed to save settings']);
+            }
         }
+
+        wp_send_json_success(['message' => 'Settings saved successfully']);
     }
 
     public function ajax_load_dashboard() {
