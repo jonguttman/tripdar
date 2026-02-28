@@ -14,7 +14,7 @@ class Tripdar_Shortcodes {
     private $api_client;
 
     public function __construct() {
-        $this->api_client = new Tripdar_API_Client();
+        $this->api_client = new Tripdar_Strain_API_Client();
     }
 
     /**
