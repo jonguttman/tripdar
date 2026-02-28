@@ -496,7 +496,7 @@
                     html += '<div class="tripdar-rec__result-badge tripdar-rec__result-badge--alt">Also Fits</div>';
                 }
 
-                html += '<h3 class="tripdar-rec__result-name">' + this.escapeHtml(result.strainName) + '</h3>';
+                html += '<h3 class="tripdar-rec__result-name"><a href="#" class="tripdar-rec__strain-link" data-slug="' + this.escapeHtml(result.strainSlug) + '">' + this.escapeHtml(result.strainName) + '</a></h3>';
 
                 // Match score
                 if (result.matchScore !== undefined) {
@@ -547,6 +547,9 @@
                     html += '</div>';
                 }
 
+                // Explore link
+                html += '<a href="#" class="tripdar-rec__explore-link" data-slug="' + this.escapeHtml(result.strainSlug) + '">Explore this strain &rarr;</a>';
+
                 // Dose card button
                 if (typeof tripdarRec !== 'undefined' && tripdarRec.dosingGuideEnabled) {
                     html += '<button type="button" class="tripdar-rec__get-dose-card" data-strain-slug="' + this.escapeHtml(result.strainSlug) + '">'
@@ -558,6 +561,17 @@
             }.bind(this));
 
             resultsEl.innerHTML = html;
+
+            // Bind strain links (open strain explorer modal)
+            this.container.querySelectorAll('.tripdar-rec__strain-link, .tripdar-rec__explore-link').forEach(function(link) {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    var slug = link.dataset.slug;
+                    if (slug) {
+                        document.dispatchEvent(new CustomEvent('tripdar:view-strain', { detail: { slug: slug } }));
+                    }
+                });
+            });
 
             // Bind dose card buttons
             this.container.querySelectorAll('.tripdar-rec__get-dose-card').forEach(function(btn) {
