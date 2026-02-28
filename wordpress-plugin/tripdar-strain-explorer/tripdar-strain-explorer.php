@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.5.4
+ * Version: 1.5.6
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -17,16 +17,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-// Require tripdar-core
-if (!function_exists('tripdar_core_loaded')) {
-    add_action('admin_notices', function() {
-        echo '<div class="notice notice-error"><p><strong>Tripdar Strain Explorer</strong> requires the <strong>Tripdar Core</strong> plugin to be installed and activated.</p></div>';
-    });
-    return;
-}
-
 // Plugin constants
-define('TRIPDAR_VERSION', '1.5.4');
+define('TRIPDAR_VERSION', '1.5.6');
 define('TRIPDAR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_PLUGIN_URL', plugin_dir_url(__FILE__));
 define('TRIPDAR_GITHUB_USER', 'jonguttman');
@@ -724,5 +716,13 @@ function tripdar_strain_explorer() {
     return Tripdar_Strain_Explorer::get_instance();
 }
 
-// Start the plugin
-tripdar_strain_explorer();
+// Defer initialization until all plugins are loaded (ensures tripdar-core is available)
+add_action('plugins_loaded', function() {
+    if (!function_exists('tripdar_core_loaded')) {
+        add_action('admin_notices', function() {
+            echo '<div class="notice notice-error"><p><strong>Tripdar Strain Explorer</strong> requires the <strong>Tripdar Core</strong> plugin to be installed and activated.</p></div>';
+        });
+        return;
+    }
+    tripdar_strain_explorer();
+});
