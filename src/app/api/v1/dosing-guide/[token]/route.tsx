@@ -7,6 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { list } from "@vercel/blob";
 import { loadStrainData } from "@/domain/strain/blob-store";
 import { getStrainById } from "@/domain/strain/data";
 import { mapDoseSensitivity } from "@/domain/recommendation-engine/strain-profiles";
@@ -87,6 +88,20 @@ export async function GET(
     );
   }
 
+  // Look up strain visualization image
+  let visualizationUrl = "";
+  try {
+    const normalizedName = strain.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const { blobs } = await list({ prefix: "Strain_Graphics/" });
+    const match = blobs.find((b) => {
+      const fname = b.pathname.replace("Strain_Graphics/", "").replace(/\.(png|jpg|jpeg|webp|gif)$/i, "");
+      return fname.toLowerCase().replace(/[^a-z0-9]/g, "") === normalizedName;
+    });
+    if (match) visualizationUrl = match.url;
+  } catch {
+    // Non-critical — card renders fine without watermark
+  }
+
   // Calculate dose ranges
   const sensitivity = mapDoseSensitivity(strain.potency, strain.name);
   const doseRanges = calculateAllDoseRanges(sensitivity);
@@ -126,8 +141,10 @@ export async function GET(
           </div>
           <span class="dose-value">${esc(range.display.primary)}</span>
         </div>
-        ${experiences[i] ? `<div class="dose-experience">${esc(experiences[i])}</div>` : ""}
-        ${range.display.secondary ? `<div class="dose-secondary">${esc(range.display.secondary)}</div>` : ""}
+        ${experiences[i] || range.display.secondary ? `<div class="dose-detail">
+          ${experiences[i] ? `<span class="dose-experience">${esc(experiences[i])}</span>` : "<span></span>"}
+          ${range.display.secondary ? `<span class="dose-secondary">${esc(range.display.secondary)}</span>` : ""}
+        </div>` : ""}
       </div>`
     )
     .join("\n");
@@ -345,8 +362,29 @@ export async function GET(
       margin-bottom: 8px;
     }
 
+    /* === DOSE SECTION WITH WATERMARK === */
+    .dose-section {
+      position: relative;
+      overflow: hidden;
+    }
+    .dose-watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 65%;
+      max-height: 85%;
+      object-fit: contain;
+      opacity: 0.06;
+      pointer-events: none;
+      z-index: 0;
+      filter: grayscale(0.3);
+    }
+
     /* === DOSE ROWS === */
     .dose-row {
+      position: relative;
+      z-index: 1;
       padding: 10px 0;
       border-bottom: 1px solid rgba(44,24,16,0.06);
       animation: fade-up 0.5s ease-out both;
@@ -392,26 +430,29 @@ export async function GET(
       color: var(--ink-light);
       letter-spacing: 0.3px;
     }
+    .dose-detail {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding-left: 36px;
+      margin-top: 2px;
+      gap: 8px;
+    }
     .dose-experience {
       font-size: 12px;
       font-style: italic;
       color: var(--ink-muted);
-      padding-left: 36px;
-      max-width: 70%;
       line-height: 1.4;
-      margin-top: 2px;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
+      white-space: nowrap;
       overflow: hidden;
+      text-overflow: ellipsis;
     }
     .dose-secondary {
       font-size: 11px;
       color: var(--ink-muted);
-      text-align: right;
-      margin-top: 2px;
-      padding-right: 2px;
       font-style: italic;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     /* === SAFETY WISDOM === */
@@ -550,7 +591,10 @@ export async function GET(
 
       <div class="ornament"><span class="ornament-diamond"></span></div>
 
-      ${doseRowsHtml}
+      <div class="dose-section">
+        ${visualizationUrl ? `<img class="dose-watermark" src="${esc(visualizationUrl)}" alt="" />` : ""}
+        ${doseRowsHtml}
+      </div>
 
       <div class="ornament"><span class="ornament-diamond"></span></div>
 
