@@ -223,7 +223,7 @@ export async function GET(
       align-items: center;
       justify-content: center;
       gap: 12px;
-      margin: 24px 0;
+      margin: 16px 0;
       opacity: 0.5;
     }
     .ornament::before,
@@ -245,7 +245,7 @@ export async function GET(
     .compass {
       display: flex;
       justify-content: center;
-      margin: 8px 0 20px;
+      margin: 0 0 8px;
     }
     .compass svg {
       width: 44px;
@@ -437,15 +437,14 @@ export async function GET(
     .powered {
       font-family: 'Cormorant Garamond', Georgia, serif;
       font-size: 12px;
-      color: var(--ink-muted);
+      color: var(--ink-light);
       letter-spacing: 1.5px;
-      opacity: 0.6;
     }
     .save-hint {
-      margin-top: 14px;
+      margin-top: 10px;
       font-size: 11px;
-      color: var(--ink-muted);
-      opacity: 0.5;
+      color: var(--ink-light);
+      opacity: 0.7;
       letter-spacing: 0.3px;
     }
 
