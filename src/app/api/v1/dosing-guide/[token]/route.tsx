@@ -11,7 +11,6 @@ import { prisma } from "@/lib/prisma";
 import { loadStrainData } from "@/domain/strain/blob-store";
 import { mapDoseSensitivity } from "@/domain/recommendation-engine/strain-profiles";
 import { calculateAllDoseRanges } from "@/domain/dosing-guide/utils";
-import sharp from "sharp";
 
 export const runtime = "nodejs";
 
@@ -99,16 +98,46 @@ export async function GET(
     phone?: string;
   };
 
-  // Fetch retailer logo and convert to PNG for Satori compatibility
+  // Fetch retailer logo (Satori supports PNG, JPEG, GIF, SVG only)
+  // WordPress may auto-convert uploads to AVIF/WebP, so try the PNG original first
   let logoSrc: string | null = null;
   if (retailer.logoUrl) {
     try {
-      const logoRes = await fetch(retailer.logoUrl);
-      if (logoRes.ok) {
-        const buf = Buffer.from(await logoRes.arrayBuffer());
-        // Convert any format (AVIF, WebP, etc.) to PNG via sharp
-        const pngBuf = await sharp(buf).png().toBuffer();
-        logoSrc = `data:image/png;base64,${pngBuf.toString("base64")}`;
+      let logoUrl = retailer.logoUrl;
+      // If URL ends with .avif or .webp, try .png first (WordPress keeps originals)
+      if (/\.(avif|webp)$/i.test(logoUrl)) {
+        const pngUrl = logoUrl.replace(/\.(avif|webp)$/i, ".png");
+        const pngRes = await fetch(pngUrl);
+        if (pngRes.ok) {
+          const contentType = pngRes.headers.get("content-type") || "";
+          if (contentType.includes("image/png") || contentType.includes("image/jpeg")) {
+            const buf = await pngRes.arrayBuffer();
+            logoSrc = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
+          }
+        }
+        // If PNG fallback didn't work, try .jpg
+        if (!logoSrc) {
+          const jpgUrl = logoUrl.replace(/\.(avif|webp)$/i, ".jpg");
+          const jpgRes = await fetch(jpgUrl);
+          if (jpgRes.ok) {
+            const ct = jpgRes.headers.get("content-type") || "";
+            if (ct.includes("image/jpeg") || ct.includes("image/png")) {
+              const buf = await jpgRes.arrayBuffer();
+              logoSrc = `data:${ct};base64,${Buffer.from(buf).toString("base64")}`;
+            }
+          }
+        }
+      } else {
+        // URL is already a supported format
+        const logoRes = await fetch(logoUrl);
+        if (logoRes.ok) {
+          const contentType = logoRes.headers.get("content-type") || "";
+          const supported = ["image/png", "image/jpeg", "image/gif", "image/svg+xml"];
+          if (supported.some(t => contentType.includes(t))) {
+            const buf = await logoRes.arrayBuffer();
+            logoSrc = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
+          }
+        }
       }
     } catch {
       // continue without logo
