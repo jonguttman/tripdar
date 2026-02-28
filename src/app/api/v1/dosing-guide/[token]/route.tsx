@@ -310,27 +310,27 @@ export async function GET(
       font-style: italic;
     }
 
-    /* === DOSING GUIDE SECTION === */
-    .guide-header {
-      animation: fade-up 0.6s ease-out both;
-      animation-delay: 0.2s;
-      margin-bottom: 20px;
-    }
-    .guide-label {
+    /* === DOSING GUIDE LABEL (above compass) === */
+    .guide-label-top {
       font-family: 'Cormorant Garamond', Georgia, serif;
       font-size: 13px;
       font-weight: 700;
       letter-spacing: 3.5px;
       text-transform: uppercase;
       color: var(--ink-muted);
-      margin-bottom: 4px;
+      text-align: center;
+      margin-bottom: 8px;
+      animation: fade-up 0.6s ease-out both;
+      animation-delay: 0.1s;
     }
     .guide-sensitivity {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 20px;
+      font-size: 18px;
       font-weight: 600;
       color: var(--ink-light);
       font-style: italic;
+      margin-top: 4px;
+      margin-bottom: 8px;
     }
 
     /* === DOSE ROWS === */
@@ -486,6 +486,9 @@ export async function GET(
       </div>
       <div class="ornament"><span class="ornament-diamond"></span></div>` : ""}
 
+      <!-- Dosing Guide label -->
+      <div class="guide-label-top">Dosing Guide</div>
+
       <!-- Compass Rose -->
       <div class="compass">
         <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -505,19 +508,14 @@ export async function GET(
         </svg>
       </div>
 
-      <!-- Strain -->
+      <!-- Strain + Sensitivity -->
       <div class="strain">
         <div class="strain-name">${esc(strain.name)}</div>
+        <div class="guide-sensitivity">${esc(sensitivityLabel[sensitivity] || sensitivity)}</div>
         ${strain.description ? `<div class="strain-desc">${esc(strain.description)}</div>` : ""}
       </div>
 
       <div class="ornament"><span class="ornament-diamond"></span></div>
-
-      <!-- Dosing Guide -->
-      <div class="guide-header">
-        <div class="guide-label">Dosing Guide</div>
-        <div class="guide-sensitivity">${esc(sensitivityLabel[sensitivity] || sensitivity)}</div>
-      </div>
 
       ${doseRowsHtml}
 
