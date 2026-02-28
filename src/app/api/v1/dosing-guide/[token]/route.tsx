@@ -245,7 +245,7 @@ export async function GET(
     .compass {
       display: flex;
       justify-content: center;
-      margin: 0 0 8px;
+      margin: 0 0 2px;
     }
     .compass svg {
       width: 44px;
@@ -319,7 +319,7 @@ export async function GET(
       text-transform: uppercase;
       color: var(--ink-muted);
       text-align: center;
-      margin-bottom: 8px;
+      margin-bottom: 0;
       animation: fade-up 0.6s ease-out both;
       animation-delay: 0.1s;
     }
