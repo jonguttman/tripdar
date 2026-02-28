@@ -13,6 +13,7 @@ import { mapDoseSensitivity } from "@/domain/recommendation-engine/strain-profil
 import { calculateAllDoseRanges } from "@/domain/dosing-guide/utils";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 export async function GET(
   request: NextRequest,
@@ -153,19 +154,20 @@ export async function GET(
   };
 
   // Generate image with @vercel/og
+  // Use 720x1280 (HD 9:16) — 1080x1920 exceeds Satori/Resvg WASM memory limits
   try {
   return new ImageResponse(
     (
       <div
         style={{
-          width: "1080px",
-          height: "1920px",
+          width: "720px",
+          height: "1280px",
           display: "flex",
           flexDirection: "column",
           backgroundColor: "#f5f0e8",
           fontFamily: "sans-serif",
           color: "#3a3226",
-          padding: "60px",
+          padding: "40px",
         }}
       >
         {/* Retailer Header */}
@@ -174,21 +176,21 @@ export async function GET(
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            marginBottom: "40px",
+            marginBottom: "28px",
           }}
         >
           {logoSrc && (
             <img
               src={logoSrc}
-              width={200}
-              height={200}
-              style={{ objectFit: "contain", marginBottom: "20px" }}
+              width={130}
+              height={130}
+              style={{ objectFit: "contain", marginBottom: "14px" }}
             />
           )}
           {retailer.storeName && (
             <div
               style={{
-                fontSize: "36px",
+                fontSize: "24px",
                 fontWeight: "bold",
                 textAlign: "center",
               }}
@@ -199,10 +201,10 @@ export async function GET(
           {retailer.address && (
             <div
               style={{
-                fontSize: "22px",
+                fontSize: "15px",
                 color: "#6b5c4d",
                 textAlign: "center",
-                marginTop: "8px",
+                marginTop: "6px",
               }}
             >
               {retailer.address}
@@ -211,10 +213,10 @@ export async function GET(
           {retailer.phone && (
             <div
               style={{
-                fontSize: "22px",
+                fontSize: "15px",
                 color: "#6b5c4d",
                 textAlign: "center",
-                marginTop: "4px",
+                marginTop: "3px",
               }}
             >
               {retailer.phone}
@@ -228,7 +230,7 @@ export async function GET(
             width: "100%",
             height: "2px",
             backgroundColor: "#d4c9b8",
-            marginBottom: "40px",
+            marginBottom: "28px",
           }}
         />
 
@@ -238,12 +240,12 @@ export async function GET(
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            marginBottom: "40px",
+            marginBottom: "28px",
           }}
         >
           <div
             style={{
-              fontSize: "42px",
+              fontSize: "28px",
               fontWeight: "bold",
               textAlign: "center",
             }}
@@ -252,11 +254,11 @@ export async function GET(
           </div>
           <div
             style={{
-              fontSize: "22px",
+              fontSize: "15px",
               color: "#6b5c4d",
               textAlign: "center",
-              marginTop: "8px",
-              maxWidth: "800px",
+              marginTop: "6px",
+              maxWidth: "540px",
             }}
           >
             {strain.description}
@@ -269,7 +271,7 @@ export async function GET(
             width: "100%",
             height: "2px",
             backgroundColor: "#d4c9b8",
-            marginBottom: "30px",
+            marginBottom: "20px",
           }}
         />
 
@@ -277,19 +279,19 @@ export async function GET(
         <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
           <div
             style={{
-              fontSize: "28px",
+              fontSize: "19px",
               fontWeight: "bold",
-              marginBottom: "6px",
-              letterSpacing: "2px",
+              marginBottom: "4px",
+              letterSpacing: "1px",
             }}
           >
             DOSING GUIDE
           </div>
           <div
             style={{
-              fontSize: "20px",
+              fontSize: "14px",
               color: "#8a7b6b",
-              marginBottom: "24px",
+              marginBottom: "16px",
             }}
           >
             {sensitivityLabel[sensitivity] || sensitivity}
@@ -301,7 +303,7 @@ export async function GET(
               style={{
                 display: "flex",
                 flexDirection: "column",
-                marginBottom: "16px",
+                marginBottom: "11px",
               }}
             >
               <div
@@ -314,25 +316,25 @@ export async function GET(
                 <div style={{ display: "flex", alignItems: "center" }}>
                   <div
                     style={{
-                      width: "12px",
-                      height: "12px",
+                      width: "8px",
+                      height: "8px",
                       borderRadius: "50%",
                       border: "2px solid #8a7b6b",
-                      marginRight: "12px",
+                      marginRight: "8px",
                     }}
                   />
-                  <span style={{ fontSize: "26px", fontWeight: 600 }}>
+                  <span style={{ fontSize: "17px", fontWeight: 600 }}>
                     {range.name}
                   </span>
                 </div>
-                <span style={{ fontSize: "26px", fontWeight: "bold" }}>
+                <span style={{ fontSize: "17px", fontWeight: "bold" }}>
                   {range.display.primary}
                 </span>
               </div>
               {range.display.secondary && (
                 <div
                   style={{
-                    fontSize: "18px",
+                    fontSize: "12px",
                     color: "#8a7b6b",
                     textAlign: "right",
                     marginTop: "2px",
@@ -351,8 +353,8 @@ export async function GET(
             width: "100%",
             height: "2px",
             backgroundColor: "#d4c9b8",
-            marginTop: "20px",
-            marginBottom: "20px",
+            marginTop: "14px",
+            marginBottom: "14px",
           }}
         />
 
@@ -361,29 +363,29 @@ export async function GET(
           style={{
             display: "flex",
             flexDirection: "column",
-            marginBottom: "30px",
+            marginBottom: "20px",
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              marginBottom: "8px",
+              marginBottom: "6px",
             }}
           >
-            <span style={{ fontSize: "22px", marginRight: "8px" }}>
+            <span style={{ fontSize: "15px", marginRight: "6px" }}>
               &#9888;
             </span>
-            <span style={{ fontSize: "22px", color: "#6b5c4d" }}>
+            <span style={{ fontSize: "15px", color: "#6b5c4d" }}>
               Start low, go slow
             </span>
           </div>
           {strain.onsetTime && (
             <div style={{ display: "flex", alignItems: "center" }}>
-              <span style={{ fontSize: "22px", marginRight: "8px" }}>
+              <span style={{ fontSize: "15px", marginRight: "6px" }}>
                 &#9888;
               </span>
-              <span style={{ fontSize: "22px", color: "#6b5c4d" }}>
+              <span style={{ fontSize: "15px", color: "#6b5c4d" }}>
                 Allow {strain.onsetTime} for onset
               </span>
             </div>
@@ -392,15 +394,15 @@ export async function GET(
 
         {/* Powered By */}
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
-          <span style={{ fontSize: "18px", color: "#a89882" }}>
+          <span style={{ fontSize: "12px", color: "#a89882" }}>
             powered by tripd.ar
           </span>
         </div>
       </div>
     ),
     {
-      width: 1080,
-      height: 1920,
+      width: 720,
+      height: 1280,
       headers: {
         "Content-Disposition": `attachment; filename="${guide.strainSlug}-dose-card.png"`,
         "Cache-Control": "public, max-age=86400, immutable",
