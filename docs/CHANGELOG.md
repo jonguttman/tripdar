@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.8.1] - 2026-02-28
+
+### Fixed
+- **Dose card rendering**: Replaced `@vercel/og` image generation (incompatible with Next.js 16, caused "failed to pipe response" 500 errors) with mobile-optimized HTML page
+
+### Changed
+- **Dose card redesign**: Sacred scroll aesthetic with compass rose, Cormorant Garamond/Lora typography, parchment textures, gold accent ornamental dividers, staggered fade-in animations, and "For the Journey" wisdom section
+
 ## [1.8.0] - 2026-02-27
 
 ### Added — "Map Your Journey" Dose Card in Strain Explorer (Strain Explorer v1.6.0, Rec Engine v1.2.0)
