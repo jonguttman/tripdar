@@ -17,7 +17,7 @@ class Tripdar_Rec_Admin {
     }
 
     public function register() {
-        add_action('admin_menu', [$this, 'add_admin_menu']);
+        add_action('admin_menu', [$this, 'add_admin_menu'], 20);
         add_action('admin_init', [$this, 'register_settings']);
         add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_assets']);
         add_action('wp_dashboard_setup', [$this, 'register_dashboard_widget']);
@@ -64,6 +64,36 @@ class Tripdar_Rec_Admin {
             'sanitize_callback' => 'sanitize_text_field',
             'default' => 'parchment',
         ]);
+        register_setting('tripdar_rec_settings', 'tripdar_rec_dosing_guide_enabled', [
+            'type' => 'boolean',
+            'sanitize_callback' => 'rest_sanitize_boolean',
+            'default' => false,
+        ]);
+        register_setting('tripdar_rec_settings', 'tripdar_rec_store_logo', [
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+            'default' => '',
+        ]);
+        register_setting('tripdar_rec_settings', 'tripdar_rec_store_name', [
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '',
+        ]);
+        register_setting('tripdar_rec_settings', 'tripdar_rec_store_address', [
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_textarea_field',
+            'default' => '',
+        ]);
+        register_setting('tripdar_rec_settings', 'tripdar_rec_store_phone', [
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '',
+        ]);
+        register_setting('tripdar_rec_settings', 'tripdar_rec_force_qr', [
+            'type' => 'boolean',
+            'sanitize_callback' => 'rest_sanitize_boolean',
+            'default' => false,
+        ]);
     }
 
     // =========================================================================
@@ -74,6 +104,8 @@ class Tripdar_Rec_Admin {
         if (strpos($hook, 'tripdar-rec') === false) {
             return;
         }
+
+        wp_enqueue_media();
 
         wp_enqueue_style(
             'tripdar-rec-admin',
@@ -229,6 +261,26 @@ class Tripdar_Rec_Admin {
         }
         if (isset($_POST['theme'])) {
             $settings['theme'] = sanitize_text_field($_POST['theme']);
+        }
+
+        // Save dosing guide settings (WordPress-local options)
+        if (isset($_POST['dosingGuideEnabled'])) {
+            update_option('tripdar_rec_dosing_guide_enabled', $_POST['dosingGuideEnabled'] === '1');
+        }
+        if (isset($_POST['storeLogo'])) {
+            update_option('tripdar_rec_store_logo', esc_url_raw($_POST['storeLogo']));
+        }
+        if (isset($_POST['storeName'])) {
+            update_option('tripdar_rec_store_name', sanitize_text_field($_POST['storeName']));
+        }
+        if (isset($_POST['storeAddress'])) {
+            update_option('tripdar_rec_store_address', sanitize_textarea_field($_POST['storeAddress']));
+        }
+        if (isset($_POST['storePhone'])) {
+            update_option('tripdar_rec_store_phone', sanitize_text_field($_POST['storePhone']));
+        }
+        if (isset($_POST['forceQr'])) {
+            update_option('tripdar_rec_force_qr', $_POST['forceQr'] === '1');
         }
 
         $response = $this->api->update_settings($settings);

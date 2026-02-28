@@ -107,6 +107,30 @@
     // Settings Page
     // =========================================================================
 
+    // Logo upload via WP Media Library
+    $('#tripdar-upload-logo').on('click', function(e) {
+        e.preventDefault();
+        var frame = wp.media({ title: 'Select Store Logo', multiple: false, library: { type: 'image' } });
+        frame.on('select', function() {
+            var attachment = frame.state().get('selection').first().toJSON();
+            $('#tripdar-store-logo').val(attachment.url);
+            $('#tripdar-logo-preview').html('<img src="' + attachment.url + '" style="max-width: 200px; max-height: 200px;">');
+            // Show remove button if hidden
+            if ($('#tripdar-remove-logo').length === 0) {
+                $('#tripdar-upload-logo').after(' <button type="button" class="button" id="tripdar-remove-logo">Remove</button>');
+            }
+            $('#tripdar-remove-logo').show();
+        });
+        frame.open();
+    });
+
+    $(document).on('click', '#tripdar-remove-logo', function(e) {
+        e.preventDefault();
+        $('#tripdar-store-logo').val('');
+        $('#tripdar-logo-preview').html('');
+        $(this).hide();
+    });
+
     $('#tripdar-rec-settings-form').on('submit', function(e) {
         e.preventDefault();
 
@@ -126,7 +150,14 @@
             enableDeepDive: $('[name="enableDeepDive"]').is(':checked') ? '1' : '0',
             feedbackPromptDelayHours: $('#feedbackPromptDelayHours').val(),
             consentGateText: $('#consentGateText').val(),
-            theme: $('#theme').val()
+            theme: $('#theme').val(),
+            // Dosing guide settings (WordPress-local options)
+            dosingGuideEnabled: $('[name="dosingGuideEnabled"]').is(':checked') ? '1' : '0',
+            storeLogo: $('#tripdar-store-logo').val(),
+            storeName: $('#storeName').val(),
+            storeAddress: $('#storeAddress').val(),
+            storePhone: $('#storePhone').val(),
+            forceQr: $('[name="forceQr"]').is(':checked') ? '1' : '0'
         };
 
         $.post(tripdarRecAdmin.ajaxUrl, data)

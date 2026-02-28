@@ -114,6 +114,67 @@ $settings = array_merge($defaults, $settings);
             </tbody>
         </table>
 
+        <h2 class="title">Dosing Guide Settings</h2>
+        <table class="form-table">
+            <tr>
+                <th scope="row">Enable Dosing Guide</th>
+                <td>
+                    <label>
+                        <input type="checkbox" name="dosingGuideEnabled" value="1"
+                            <?php checked(get_option('tripdar_rec_dosing_guide_enabled', false)); ?>>
+                        Show "Get Your Dose Card" button on result cards
+                    </label>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Store Logo</th>
+                <td>
+                    <?php $logo_url = get_option('tripdar_rec_store_logo', ''); ?>
+                    <div id="tripdar-logo-preview" style="margin-bottom: 10px;">
+                        <?php if ($logo_url): ?>
+                            <img src="<?php echo esc_url($logo_url); ?>" style="max-width: 200px; max-height: 200px;">
+                        <?php endif; ?>
+                    </div>
+                    <input type="hidden" name="storeLogo" id="tripdar-store-logo" value="<?php echo esc_attr($logo_url); ?>">
+                    <button type="button" class="button" id="tripdar-upload-logo">Upload Logo</button>
+                    <?php if ($logo_url): ?>
+                        <button type="button" class="button" id="tripdar-remove-logo">Remove</button>
+                    <?php endif; ?>
+                    <p class="description">PNG recommended. This appears at the top of the dose card.</p>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Store Name</th>
+                <td>
+                    <input type="text" name="storeName" id="storeName" class="regular-text"
+                        value="<?php echo esc_attr(get_option('tripdar_rec_store_name', '')); ?>">
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Store Address</th>
+                <td>
+                    <textarea name="storeAddress" id="storeAddress" class="large-text" rows="2"><?php echo esc_textarea(get_option('tripdar_rec_store_address', '')); ?></textarea>
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Store Phone</th>
+                <td>
+                    <input type="text" name="storePhone" id="storePhone" class="regular-text"
+                        value="<?php echo esc_attr(get_option('tripdar_rec_store_phone', '')); ?>">
+                </td>
+            </tr>
+            <tr>
+                <th scope="row">Always Show QR Code</th>
+                <td>
+                    <label>
+                        <input type="checkbox" name="forceQr" value="1"
+                            <?php checked(get_option('tripdar_rec_force_qr', false)); ?>>
+                        Show QR code on all devices (useful for in-store kiosks)
+                    </label>
+                </td>
+            </tr>
+        </table>
+
         <h2>Shortcode Reference</h2>
         <table class="form-table">
             <tbody>
