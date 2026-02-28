@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1] - 2026-02-27
+
+### Added
+- `DosingGuideToken` Prisma model for tracking dosing guide PDF generation and downloads (token-based access, download counting, retailer data)
+- `dosingGuides` relation on `RecommendationSession` model
+- `dosing_guide_created` and `dosing_guide_downloaded` analytics event types
+
 ## [1.6.0] - 2026-02-24
 
 ### Added
