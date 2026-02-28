@@ -288,13 +288,13 @@ export async function GET(
     .retailer {
       display: flex;
       align-items: center;
-      gap: 12px;
+      justify-content: center;
+      gap: 14px;
       animation: fade-up 0.6s ease-out both;
-      margin-bottom: 12px;
     }
     .retailer-logo {
-      width: 40px;
-      height: 40px;
+      width: 52px;
+      height: 52px;
       object-fit: contain;
       border-radius: 6px;
       flex-shrink: 0;
@@ -305,7 +305,7 @@ export async function GET(
     }
     .retailer-name {
       font-family: 'Cormorant Garamond', Georgia, serif;
-      font-size: 15px;
+      font-size: 16px;
       font-weight: 600;
       letter-spacing: 0.3px;
       color: var(--ink-light);
@@ -316,6 +316,7 @@ export async function GET(
       color: var(--ink-muted);
       letter-spacing: 0.2px;
       line-height: 1.3;
+      margin-top: 2px;
     }
 
     /* === STRAIN SECTION === */
@@ -564,7 +565,8 @@ export async function GET(
           ${retailer.storeName ? `<div class="retailer-name">${esc(retailer.storeName)}</div>` : ""}
           ${retailer.address || retailer.phone ? `<div class="retailer-detail">${[retailer.address, retailer.phone].filter(Boolean).map(s => esc(s!)).join(" \u00b7 ")}</div>` : ""}
         </div>
-      </div>` : ""}
+      </div>
+      <div class="ornament"><span class="ornament-diamond"></span></div>` : ""}
 
       <!-- Dosing Guide label -->
       <div class="guide-label-top">Dosing Guide</div>
