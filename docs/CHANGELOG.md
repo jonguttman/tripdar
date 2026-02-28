@@ -11,6 +11,7 @@
 ### Changed
 - `InternalStrain` type now includes optional `doseExperiences?: string[]` field (backward compatible)
 - Dose experience descriptions and secondary mg values now render on the same line
+- **Homepage**: Replaced placeholder page with elegant "Coming Soon" landing page
 
 ## [1.8.2] - 2026-02-28
 
