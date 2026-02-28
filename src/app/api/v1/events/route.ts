@@ -25,6 +25,8 @@ const ALLOWED_EVENT_TYPES = [
   "rating",
   "review",
   "report",
+  "dosing_guide_created",
+  "dosing_guide_downloaded",
 ] as const;
 type AllowedEventType = (typeof ALLOWED_EVENT_TYPES)[number];
 

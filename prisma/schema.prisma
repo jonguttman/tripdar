@@ -253,6 +253,7 @@ model RecommendationSession {
   createdAt       DateTime @default(now())
 
   results         RecommendationResult[]
+  dosingGuides    DosingGuideToken[]
 
   @@index([partnerId, createdAt])
   @@index([sessionToken])
@@ -306,6 +307,24 @@ model RecommendationSignal {
 
   @@index([feedbackId])
   @@index([dimensionId])
+}
+
+model DosingGuideToken {
+  id            String    @id @default(cuid())
+  token         String    @unique
+  sessionId     String
+  session       RecommendationSession @relation(fields: [sessionId], references: [id])
+  strainSlug    String
+  partnerId     String
+  retailerData  Json
+  createdAt     DateTime  @default(now())
+  downloadedAt  DateTime?
+  downloadCount Int       @default(0)
+  metadata      Json?
+
+  @@index([partnerId, createdAt])
+  @@index([token])
+  @@index([sessionId])
 }
 
 model StrainRecommendationConfig {
