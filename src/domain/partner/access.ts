@@ -375,7 +375,7 @@ export function getSignalAggregates(): Map<string, number> {
 // Register TheMushroomTop.com as the first partner
 // Uses TRIPDAR_PARTNER_KEY env var for persistence across deploys
 if (partners.size === 0) {
-  const envApiKey = process.env.TRIPDAR_PARTNER_KEY;
+  const envApiKey = process.env.TRIPDAR_PARTNER_KEY?.trim();
 
   if (envApiKey) {
     // Use the persistent key from environment

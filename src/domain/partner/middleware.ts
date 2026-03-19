@@ -49,9 +49,9 @@ export function authenticateRequest(
 ): AuthenticatedRequest | NextResponse<ApiErrorResponse> {
   // Extract API key from header
   const authHeader = request.headers.get("authorization");
-  const apiKey = authHeader?.startsWith("Bearer ")
+  const apiKey = (authHeader?.startsWith("Bearer ")
     ? authHeader.slice(7)
-    : request.headers.get("x-api-key");
+    : request.headers.get("x-api-key"))?.trim();
 
   if (!apiKey) {
     return errorResponse(
