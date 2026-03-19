@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.9.1] - 2026-03-19
+
+### Added
+- **Strain image URLs in API**: `/api/v1/strains` and `/api/v1/strains/:slug` now include `imageUrl` field with direct blob storage URL for strain photos, enabling WordPress plugin to display strain images
+- **Shared image matching utility**: Extracted blob filename matching logic into `src/domain/strain/images.ts` for reuse across endpoints
+
 ## [1.9.0] - 2026-02-28
 
 ### Added

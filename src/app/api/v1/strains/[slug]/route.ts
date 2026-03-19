@@ -20,7 +20,9 @@ import {
   ApiSuccessResponse,
   ApiErrorResponse,
 } from "@/domain/partner";
+import { list } from "@vercel/blob";
 import { loadStrainData } from "@/domain/strain/blob-store";
+import { findStrainImageUrl, filterImageBlobs } from "@/domain/strain/images";
 
 export async function GET(
   request: NextRequest,
@@ -52,6 +54,15 @@ export async function GET(
         { status: 404 }
       );
       return addPartnerHeaders(response, partner, context);
+    }
+
+    // Look up image URL from blob storage
+    try {
+      const { blobs } = await list({ prefix: "Strain_Graphics/" });
+      const imageBlobs = filterImageBlobs(blobs);
+      strain.imageUrl = findStrainImageUrl(strain.name, imageBlobs) ?? undefined;
+    } catch (error) {
+      console.error("Error fetching strain image:", error);
     }
 
     // Transform to public view

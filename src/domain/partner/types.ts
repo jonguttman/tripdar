@@ -43,6 +43,8 @@ export interface StrainPublicView {
   confidenceTier: "emerging" | "developing" | "established" | "high-confidence";
   /** Reference to visualization asset (short-lived URL) */
   visualizationRef?: string;
+  /** Direct URL to strain image in blob storage */
+  imageUrl?: string | null;
   /** Experiential profile (Feature 6) */
   experienceProfile?: {
     onsetTime: string | null;

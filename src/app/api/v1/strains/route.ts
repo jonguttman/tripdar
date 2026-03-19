@@ -20,6 +20,7 @@ import {
   ApiSuccessResponse,
 } from "@/domain/partner";
 import { loadStrainData } from "@/domain/strain/blob-store";
+import { findStrainImageUrl, filterImageBlobs } from "@/domain/strain/images";
 
 // Maximum page size to prevent bulk extraction
 const MAX_PAGE_SIZE = 20;
@@ -107,15 +108,12 @@ export async function GET(request: NextRequest) {
     // Slice for current page
     const pageStrains = strains.slice(startIndex, endIndex);
 
-    // Fetch blob list once and build visualization URL lookup
+    // Fetch blob list once for visualization URLs and image URLs
+    let imageBlobs: { pathname: string; url: string }[] = [];
     let visualizationMap: Map<string, string> = new Map();
     try {
       const { blobs } = await list({ prefix: "Strain_Graphics/" });
-      const imageBlobs = blobs.filter(blob =>
-        blob.pathname &&
-        !blob.pathname.endsWith('/') &&
-        /\.(png|jpg|jpeg|webp|gif)$/i.test(blob.pathname)
-      );
+      imageBlobs = filterImageBlobs(blobs);
 
       // Build lookup by normalized strain name
       for (const blob of imageBlobs) {
@@ -134,6 +132,11 @@ export async function GET(request: NextRequest) {
       const normalizedName = strain.name.toLowerCase().replace(/[^a-z0-9]/g, "");
       return visualizationMap.get(normalizedName);
     };
+
+    // Attach imageUrl to each strain before mapping to public view
+    for (const strain of pageStrains) {
+      strain.imageUrl = findStrainImageUrl(strain.name, imageBlobs) ?? undefined;
+    }
 
     // Transform to public views with visualization URLs
     const publicStrains = toPublicViewList(pageStrains, getVisualizationUrl);

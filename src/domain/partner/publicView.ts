@@ -39,6 +39,8 @@ interface InternalStrain {
   emotionalCharacter?: string[];
   comeUpIntensity?: string;
   peakCharacter?: string;
+  // Image URL from blob storage (populated at runtime)
+  imageUrl?: string;
   // Future internal fields that should NEVER be exposed:
   // rawScores?: Record<string, number>;
   // modelVersion?: string;
@@ -180,6 +182,7 @@ export function toPublicView(
     vibes: sanitizeVibes(internal.vibe),
     confidenceTier: mapConfidenceTier(internal.confidence),
     visualizationRef,
+    imageUrl: internal.imageUrl || null,
     // Experiential profile (Feature 6)
     experienceProfile: {
       onsetTime: internal.onsetTime || null,

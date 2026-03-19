@@ -36,6 +36,9 @@ export interface InternalStrain {
 
   // Dose experience descriptions (6-element array, one per dose level)
   doseExperiences?: string[];
+
+  // Image URL from blob storage (populated at runtime, not stored)
+  imageUrl?: string;
 }
 
 /**
