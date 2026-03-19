@@ -42,3 +42,4 @@ out/
 
 # Plugin build artifacts
 *.zip
+.vercel
