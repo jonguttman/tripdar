@@ -693,7 +693,7 @@ class Tripdar_Shortcodes {
             'species' => isset($strain['species']) ? $strain['species'] : 'Psilocybe cubensis',
             'origin' => isset($strain['origin']) ? $strain['origin'] : '',
             'confidenceTier' => isset($strain['confidenceTier']) ? $strain['confidenceTier'] : '',
-            'visualizationUrl' => isset($strain['visualizationRef']) ? $strain['visualizationRef'] : (isset($strain['visualizationUrl']) ? $strain['visualizationUrl'] : ''),
+            'visualizationUrl' => isset($strain['imageUrl']) && $strain['imageUrl'] ? $strain['imageUrl'] : (isset($strain['visualizationRef']) ? $strain['visualizationRef'] : (isset($strain['visualizationUrl']) ? $strain['visualizationUrl'] : '')),
         ];
     }
 
