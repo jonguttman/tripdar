@@ -3,7 +3,7 @@
  * Plugin Name: Tripdar Strain Explorer
  * Plugin URI: https://tripd.ar
  * Description: A mystical storybook-style strain explorer with quiz journey and feedback collection.
- * Version: 1.6.2
+ * Version: 1.6.3
  * Author: Tripdar
  * Author URI: https://tripd.ar
  * License: GPL v2 or later
@@ -766,20 +766,4 @@ add_action('plugins_loaded', function() {
     tripdar_strain_explorer();
 });
 
-// TEMP: one-time REST endpoint to set API key — remove after use
-add_action('rest_api_init', function() {
-    register_rest_route('tripdar-setup/v1', '/set-key', [
-        'methods' => 'POST',
-        'callback' => function($req) {
-            $secret = $req->get_param('secret');
-            if ($secret !== 'mush2026setup') {
-                return new WP_Error('unauthorized', 'Invalid secret', ['status' => 401]);
-            }
-            $key = $req->get_param('api_key');
-            if (!$key) return new WP_Error('missing', 'api_key required', ['status' => 400]);
-            update_option('tripdar_api_key', sanitize_text_field($key));
-            return ['success' => true, 'stored' => get_option('tripdar_api_key')];
-        },
-        'permission_callback' => '__return_true',
-    ]);
-});
+
