@@ -358,3 +358,18 @@ model FeedbackAggregate {
   @@unique([strainSlug, intentCategory])
   @@index([strainSlug])
 }
+
+model Partner {
+  id             String    @id @default(cuid())
+  name           String
+  apiKeyHash     String    @unique
+  allowedDomains String    // JSON array stored as string
+  rateLimit      Int       @default(60)
+  active         Boolean   @default(true)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  lastActiveAt   DateTime?
+
+  @@index([apiKeyHash])
+  @@index([active])
+}

@@ -15,7 +15,7 @@ if (defined('TRIPDAR_CORE_VERSION')) return;
 define('TRIPDAR_CORE_VERSION', '1.0.0');
 define('TRIPDAR_CORE_DIR', plugin_dir_path(__FILE__));
 define('TRIPDAR_CORE_URL', plugin_dir_url(__FILE__));
-define('TRIPDAR_API_BASE', 'https://www.tripd.ar/api/v1');
+define('TRIPDAR_API_BASE', get_option('tripdar_api_base_url', 'https://tripdar.vercel.app/api/v1'));
 
 // Load classes
 require_once TRIPDAR_CORE_DIR . 'includes/class-cache.php';
@@ -67,3 +67,19 @@ function tripdar_core_enqueue_base_styles() {
 function tripdar_core_loaded() {
     return true;
 }
+
+/**
+ * Register Tripdar options as writable via WP REST API
+ */
+add_action('rest_api_init', function() {
+    register_setting('options', 'tripdar_api_key', [
+        'type'         => 'string',
+        'show_in_rest' => true,
+        'default'      => '',
+    ]);
+    register_setting('options', 'tripdar_api_base_url', [
+        'type'         => 'string',
+        'show_in_rest' => true,
+        'default'      => 'https://tripdar.vercel.app/api/v1',
+    ]);
+});
