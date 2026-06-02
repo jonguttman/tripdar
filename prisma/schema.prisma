@@ -375,6 +375,7 @@ model Partner {
   lastActiveAt       DateTime?
 
   catalogItems StoreProductCatalog[]
+  adminUsers   User[]
 
   @@index([apiKeyHash])
   @@index([active])
@@ -562,8 +563,12 @@ model User {
   email         String?   @unique
   emailVerified DateTime?
   image         String?
+  partnerId     String?
+  partner       Partner?  @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   accounts      Account[]
   sessions      Session[]
+
+  @@index([partnerId])
 }
 
 model VerificationToken {

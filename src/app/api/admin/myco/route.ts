@@ -53,15 +53,31 @@ function parsePositiveInt(value: unknown): number | null {
   return Math.round(parsed);
 }
 
-async function getSelectedPartner(partnerId: string | null) {
-  if (partnerId) {
-    return prisma.partner.findUnique({ where: { id: partnerId } });
+async function resolvePartnerForUser(email: string, requestedPartnerId: string | null) {
+  if (requestedPartnerId) {
+    return prisma.partner.findUnique({ where: { id: requestedPartnerId } });
   }
 
-  return prisma.partner.findFirst({
+  const user = await prisma.user.findUnique({ where: { email } });
+
+  if (user?.partnerId) {
+    return prisma.partner.findUnique({ where: { id: user.partnerId } });
+  }
+
+  // Auto-assign to first active partner on first access
+  const defaultPartner = await prisma.partner.findFirst({
     where: { active: true },
     orderBy: { createdAt: "asc" },
   });
+
+  if (defaultPartner && user) {
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { partnerId: defaultPartner.id },
+    });
+  }
+
+  return defaultPartner;
 }
 
 export async function GET(request: NextRequest) {
@@ -70,7 +86,7 @@ export async function GET(request: NextRequest) {
 
   try {
     const partnerId = request.nextUrl.searchParams.get("partnerId");
-    const selectedPartner = await getSelectedPartner(partnerId);
+    const selectedPartner = await resolvePartnerForUser(auth.user!.email!, partnerId);
     const partners = await prisma.partner.findMany({
       orderBy: { name: "asc" },
       select: {
