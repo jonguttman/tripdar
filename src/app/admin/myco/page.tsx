@@ -28,10 +28,10 @@ function formatDose(mg: number | null | undefined): string {
 const PHOTO_TAGS: PhotoTag[] = ["stock", "package_front", "package_back", "lifestyle", "other"];
 
 const VIBE_DIMENSIONS: { key: VibeKey; label: string }[] = [
-  { key: "clarity_cognition", label: "Clarity / Cognition" },
-  { key: "mood_social", label: "Mood / Social" },
-  { key: "visual_pattern", label: "Visual / Pattern" },
-  { key: "somatic", label: "Somatic / Body" },
+  { key: "clarity_cognition", label: "Mind: Scattered ↔ Focused" },
+  { key: "mood_social", label: "Mood: Inward ↔ Social" },
+  { key: "visual_pattern", label: "Visuals: Subtle ↔ Vivid" },
+  { key: "somatic", label: "Body: Light ↔ Heavy" },
   { key: "energy_direction", label: "Energy: Calm ↔ Energetic" },
   { key: "depth_direction", label: "Depth: Clear ↔ Dreamy" },
 ];
