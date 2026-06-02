@@ -1,14 +1,12 @@
 /**
  * Store-facing Myco admin API.
- *
- * Uses the existing authenticated Tripdar admin shell until dedicated
- * PARTNER_ADMIN/PARTNER_OPERATOR sessions exist in the app.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
+import { getUserRole } from "@/domain/auth/role";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -37,19 +35,27 @@ function cleanText(value: unknown): string | undefined {
 
 function parseFormat(value: unknown): ProductFormat | null {
   return typeof value === "string" && VALID_FORMATS.includes(value as ProductFormat)
-    ? value as ProductFormat
+    ? (value as ProductFormat)
     : null;
 }
 
 function parseOffset(value: unknown): StrengthOffset {
   return typeof value === "string" && VALID_OFFSETS.includes(value as StrengthOffset)
-    ? value as StrengthOffset
+    ? (value as StrengthOffset)
     : "standard";
 }
 
 function parsePositiveInt(value: unknown): number | null {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed);
+}
+
+function parsePositiveIntOrNull(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  if (value === undefined || value === "") return undefined;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   return Math.round(parsed);
 }
 
@@ -64,7 +70,6 @@ async function resolvePartnerForUser(email: string, requestedPartnerId: string |
     return prisma.partner.findUnique({ where: { id: user.partnerId } });
   }
 
-  // Auto-assign to first active partner on first access
   const defaultPartner = await prisma.partner.findFirst({
     where: { active: true },
     orderBy: { createdAt: "asc" },
@@ -85,24 +90,32 @@ export async function GET(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
+    const email = auth.user!.email!;
+    const userRole = await getUserRole(email);
     const partnerId = request.nextUrl.searchParams.get("partnerId");
-    const selectedPartner = await resolvePartnerForUser(auth.user!.email!, partnerId);
-    const partners = await prisma.partner.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        subdomain: true,
-        contactInfo: true,
-        mycoWelcomeMessage: true,
-        active: true,
-      },
-    });
+    const selectedPartner = await resolvePartnerForUser(email, partnerId);
+    const [partners, brands] = await Promise.all([
+      prisma.partner.findMany({
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          subdomain: true,
+          contactInfo: true,
+          mycoWelcomeMessage: true,
+          active: true,
+        },
+      }),
+      prisma.brand.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, slug: true },
+      }),
+    ]);
 
     if (!selectedPartner) {
       return NextResponse.json({
         success: true,
-        data: { partners, partner: null, products: [] },
+        data: { partners, partner: null, products: [], brands, userRole },
       });
     }
 
@@ -120,14 +133,19 @@ export async function GET(request: NextRequest) {
       }),
       prisma.storeProductCatalog.findMany({
         where: { partnerId: selectedPartner.id },
-        include: { strengthOffset: true },
+        include: {
+          strengthOffset: true,
+          vibeProfile: true,
+          photos: { orderBy: { sortOrder: "asc" } },
+          brandRef: true,
+        },
         orderBy: [{ active: "desc" }, { updatedAt: "desc" }],
       }),
     ]);
 
     return NextResponse.json({
       success: true,
-      data: { partners, partner, products },
+      data: { partners, partner, products, brands, userRole },
     });
   } catch (error) {
     console.error("Error loading Myco admin data:", error);
@@ -143,6 +161,17 @@ export async function PATCH(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
+    const role = await getUserRole(auth.user!.email!);
+    if (role === "partner_admin") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: "Read-only — contact Tripdar to update store settings" },
+        },
+        { status: 403 }
+      );
+    }
+
     const body = await request.json();
     const partnerId = cleanText(body.partnerId);
 
@@ -158,7 +187,8 @@ export async function PATCH(request: NextRequest) {
       data: {
         name: cleanText(body.name),
         subdomain: cleanText(body.subdomain) ?? null,
-        contactInfo: body.contactInfo && typeof body.contactInfo === "object" ? body.contactInfo : null,
+        contactInfo:
+          body.contactInfo && typeof body.contactInfo === "object" ? body.contactInfo : null,
         mycoWelcomeMessage: cleanText(body.mycoWelcomeMessage) ?? null,
       },
       select: {
@@ -193,19 +223,35 @@ export async function POST(request: NextRequest) {
     const productUnitMg = parsePositiveInt(body.productUnitMg);
     const offset = parseOffset(body.strengthOffset);
     const rationale = cleanText(body.strengthRationale);
+    const brandId = cleanText(body.brandId) ?? null;
+    const unitsPerPack = parsePositiveIntOrNull(body.unitsPerPack);
+    let totalDoseMg = parsePositiveIntOrNull(body.totalDoseMg);
 
     if (!partnerId || !productName || !format || !productUnitMg) {
       return NextResponse.json(
-        { success: false, error: { message: "partnerId, productName, format, and productUnitMg are required" } },
+        {
+          success: false,
+          error: {
+            message: "partnerId, productName, format, and productUnitMg are required",
+          },
+        },
         { status: 400 }
       );
     }
 
     if (offset !== "standard" && !rationale) {
       return NextResponse.json(
-        { success: false, error: { message: "Strength rationale is required when offset is not Standard" } },
+        {
+          success: false,
+          error: { message: "Strength rationale is required when offset is not Standard" },
+        },
         { status: 400 }
       );
+    }
+
+    // Auto-compute totalDoseMg if not given
+    if ((totalDoseMg === undefined || totalDoseMg === null) && unitsPerPack && productUnitMg) {
+      totalDoseMg = productUnitMg * unitsPerPack;
     }
 
     const product = await prisma.storeProductCatalog.create({
@@ -214,8 +260,11 @@ export async function POST(request: NextRequest) {
         productName,
         format,
         brand: cleanText(body.brand) ?? null,
+        brandId,
         strainSlug: cleanText(body.strainSlug) ?? null,
         productUnitMg,
+        unitsPerPack: unitsPerPack ?? null,
+        totalDoseMg: totalDoseMg ?? null,
         photoUrl: cleanText(body.photoUrl) ?? null,
         active: typeof body.active === "boolean" ? body.active : true,
         strengthOffset: {
@@ -225,7 +274,12 @@ export async function POST(request: NextRequest) {
           },
         },
       },
-      include: { strengthOffset: true },
+      include: {
+        strengthOffset: true,
+        vibeProfile: true,
+        photos: { orderBy: { sortOrder: "asc" } },
+        brandRef: true,
+      },
     });
 
     return NextResponse.json({ success: true, data: { product } }, { status: 201 });

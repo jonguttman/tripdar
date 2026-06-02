@@ -420,26 +420,55 @@ model MycoMessage {
 // ============================================================================
 
 model StoreProductCatalog {
-  id            String   @id @default(cuid())
-  partnerId     String
-  productName   String
-  format        String // capsule, edible, dried, tincture, other
-  brand         String?
-  strainSlug    String?
-  productUnitMg Int?
-  photoUrl      String?
-  active        Boolean  @default(true)
-  notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  partnerId      String
+  productName    String
+  format         String // capsule, edible, dried, tincture, other
+  brand          String? // legacy free-text (kept for back-compat)
+  brandId        String? // FK to Brand (new)
+  strainSlug     String? // legacy free-text (kept for back-compat)
+  productUnitMg  Int? // mg of psilocybin per single unit
+  unitsPerPack   Int? // # of units in the package
+  totalDoseMg    Int? // computed total mg for the package
+  photoUrl       String? // legacy single photo (kept for back-compat)
+  active         Boolean  @default(true)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   partner        Partner                @relation(fields: [partnerId], references: [id])
+  brandRef       Brand?                 @relation(fields: [brandId], references: [id])
+  photos         ProductPhoto[]
   vibeProfile    ProductVibeProfile?
   strengthOffset ProductStrengthOffset?
   outcomeReports UserOutcomeReport[]
 
   @@index([partnerId, active])
   @@index([strainSlug])
+  @@index([brandId])
+}
+
+model Brand {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  products StoreProductCatalog[]
+}
+
+model ProductPhoto {
+  id            String   @id @default(cuid())
+  catalogItemId String
+  url           String
+  tag           String // stock, package_front, package_back, lifestyle, other
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId])
 }
 
 model ProductVibeProfile {
