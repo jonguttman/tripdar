@@ -231,6 +231,18 @@ export async function POST(request: NextRequest) {
     const brandId = cleanText(body.brandId) ?? null;
     const unitsPerPack = parsePositiveIntOrNull(body.unitsPerPack);
     let totalDoseMg = parsePositiveIntOrNull(body.totalDoseMg);
+    const onsetMinutes = parsePositiveIntOrNull(body.onsetMinutes);
+    const durationMinutes = parsePositiveIntOrNull(body.durationMinutes);
+    const brandMicroUnits = parsePositiveIntOrNull(body.brandMicroUnits);
+    const brandMiniUnits = parsePositiveIntOrNull(body.brandMiniUnits);
+    const brandMacroUnits = parsePositiveIntOrNull(body.brandMacroUnits);
+    const ingredients = Array.isArray(body.ingredients)
+      ? body.ingredients
+          .filter((i: unknown): i is string => typeof i === "string")
+          .map((i: string) => i.trim())
+          .filter((i: string) => i.length > 0)
+          .slice(0, 25)
+      : [];
 
     if (!partnerId || !productName || !format || !productUnitMg) {
       return NextResponse.json(
@@ -270,6 +282,12 @@ export async function POST(request: NextRequest) {
         productUnitMg,
         unitsPerPack: unitsPerPack ?? null,
         totalDoseMg: totalDoseMg ?? null,
+        ingredients,
+        onsetMinutes: onsetMinutes ?? null,
+        durationMinutes: durationMinutes ?? null,
+        brandMicroUnits: brandMicroUnits ?? null,
+        brandMiniUnits: brandMiniUnits ?? null,
+        brandMacroUnits: brandMacroUnits ?? null,
         photoUrl: cleanText(body.photoUrl) ?? null,
         active: typeof body.active === "boolean" ? body.active : true,
         strengthOffset: {

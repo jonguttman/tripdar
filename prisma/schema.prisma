@@ -430,6 +430,12 @@ model StoreProductCatalog {
   productUnitMg  Int? // mg of psilocybin per single unit
   unitsPerPack   Int? // # of units in the package
   totalDoseMg    Int? // computed total mg for the package
+  ingredients    String[] // stacked ingredients/nootropics (Lion's Mane, Cordyceps, etc.)
+  onsetMinutes   Int? // time-to-effect in minutes
+  durationMinutes Int? // experience duration in minutes
+  brandMicroUnits Int? // brand-recommended units for a microdose
+  brandMiniUnits  Int? // brand-recommended units for a mini-dose
+  brandMacroUnits Int? // brand-recommended units for a macro dose
   photoUrl       String? // legacy single photo (kept for back-compat)
   active         Boolean  @default(true)
   archivedAt     DateTime?

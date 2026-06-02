@@ -17,6 +17,12 @@ interface EditDraft {
   totalDoseMg: string;
   totalDoseInUnit: DoseUnit;
   totalDoseOverride: boolean;
+  ingredients: string[];
+  onsetMinutes: string;
+  durationMinutes: string;
+  brandMicroUnits: string;
+  brandMiniUnits: string;
+  brandMacroUnits: string;
 }
 type SortKey = "productName" | "format" | "brand" | "active" | "updatedAt";
 type PhotoTag = "stock" | "package_front" | "package_back" | "lifestyle" | "other";
@@ -37,6 +43,17 @@ function formatDose(mg: number | null | undefined): string {
   }
   return `${mg} mg`;
 }
+
+function formatDuration(minutes: number | null | undefined): string {
+  if (!minutes || minutes <= 0) return "—";
+  if (minutes >= 60) {
+    const hrs = minutes / 60;
+    return `${hrs % 1 === 0 ? hrs.toFixed(0) : hrs.toFixed(1)} hrs`;
+  }
+  return `${minutes} min`;
+}
+
+const COMMON_INGREDIENTS = ["Lion's Mane", "Cordyceps", "Chaga", "Reishi", "L-Theanine", "Niacin"];
 
 const PHOTO_TAGS: PhotoTag[] = ["stock", "package_front", "package_back", "lifestyle", "other"];
 
@@ -136,6 +153,12 @@ interface Product {
   vibeProfile: {
     scores: Record<string, number>;
   } | null;
+  ingredients: string[];
+  onsetMinutes: number | null;
+  durationMinutes: number | null;
+  brandMicroUnits: number | null;
+  brandMiniUnits: number | null;
+  brandMacroUnits: number | null;
 }
 
 interface PendingPhoto {
@@ -158,6 +181,12 @@ const emptyProduct = {
   totalDoseOverride: false,
   strengthOffset: "standard" as StrengthOffset,
   strengthRationale: "",
+  ingredients: [] as string[],
+  onsetMinutes: "",
+  durationMinutes: "",
+  brandMicroUnits: "",
+  brandMiniUnits: "",
+  brandMacroUnits: "",
 };
 
 export default function MycoAdminPage() {
@@ -188,6 +217,10 @@ export default function MycoAdminPage() {
   const [pendingPhotoTag, setPendingPhotoTag] = useState<PhotoTag>("stock");
   const [newVibe, setNewVibe] = useState<VibeScores>(emptyVibe());
   const [newVibeOpen, setNewVibeOpen] = useState(false);
+  const [newIngredientInput, setNewIngredientInput] = useState("");
+  const [newBrandTiersOpen, setNewBrandTiersOpen] = useState(false);
+  const [editIngredientInput, setEditIngredientInput] = useState("");
+  const [editBrandTiersOpen, setEditBrandTiersOpen] = useState(false);
   const [rowDrafts, setRowDrafts] = useState<
     Record<
       string,
@@ -431,6 +464,12 @@ export default function MycoAdminPage() {
           totalDoseMg,
           strengthOffset: newProduct.strengthOffset,
           strengthRationale: newProduct.strengthRationale,
+          ingredients: newProduct.ingredients,
+          onsetMinutes: newProduct.onsetMinutes ? Number(newProduct.onsetMinutes) : null,
+          durationMinutes: newProduct.durationMinutes ? Number(newProduct.durationMinutes) : null,
+          brandMicroUnits: newProduct.brandMicroUnits ? Number(newProduct.brandMicroUnits) : null,
+          brandMiniUnits: newProduct.brandMiniUnits ? Number(newProduct.brandMiniUnits) : null,
+          brandMacroUnits: newProduct.brandMacroUnits ? Number(newProduct.brandMacroUnits) : null,
         }),
       });
       const data = await res.json();
@@ -480,6 +519,8 @@ export default function MycoAdminPage() {
       setPendingPhotos([]);
       setNewVibe(emptyVibe());
       setNewVibeOpen(false);
+      setNewIngredientInput("");
+      setNewBrandTiersOpen(false);
       setMessage("Product added");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create product");
@@ -548,6 +589,12 @@ export default function MycoAdminPage() {
         : "",
       totalDoseInUnit,
       totalDoseOverride: !!product.totalDoseMg,
+      ingredients: product.ingredients ?? [],
+      onsetMinutes: product.onsetMinutes ? String(product.onsetMinutes) : "",
+      durationMinutes: product.durationMinutes ? String(product.durationMinutes) : "",
+      brandMicroUnits: product.brandMicroUnits ? String(product.brandMicroUnits) : "",
+      brandMiniUnits: product.brandMiniUnits ? String(product.brandMiniUnits) : "",
+      brandMacroUnits: product.brandMacroUnits ? String(product.brandMacroUnits) : "",
     });
   }
 
@@ -577,6 +624,12 @@ export default function MycoAdminPage() {
         productUnitMg,
         unitsPerPack,
         totalDoseMg,
+        ingredients: editDraft.ingredients,
+        onsetMinutes: editDraft.onsetMinutes ? Number(editDraft.onsetMinutes) : null,
+        durationMinutes: editDraft.durationMinutes ? Number(editDraft.durationMinutes) : null,
+        brandMicroUnits: editDraft.brandMicroUnits ? Number(editDraft.brandMicroUnits) : null,
+        brandMiniUnits: editDraft.brandMiniUnits ? Number(editDraft.brandMiniUnits) : null,
+        brandMacroUnits: editDraft.brandMacroUnits ? Number(editDraft.brandMacroUnits) : null,
       },
       "Product updated"
     );
@@ -1062,6 +1115,171 @@ export default function MycoAdminPage() {
           </div>
         </div>
 
+        {/* Ingredients & Stacks */}
+        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
+          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Ingredients & Stacks</strong>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
+            {newProduct.ingredients.length === 0 && (
+              <span style={styles.meta}>No ingredients added yet</span>
+            )}
+            {newProduct.ingredients.map((ing) => (
+              <span key={ing} style={styles.ingredientPill}>
+                {ing}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewProduct({
+                      ...newProduct,
+                      ingredients: newProduct.ingredients.filter((i) => i !== ing),
+                    })
+                  }
+                  style={styles.pillRemoveButton}
+                  aria-label={`Remove ${ing}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.6rem" }}>
+            {COMMON_INGREDIENTS.map((quick) => {
+              const alreadyAdded = newProduct.ingredients.some(
+                (i) => i.toLowerCase() === quick.toLowerCase()
+              );
+              return (
+                <button
+                  key={quick}
+                  type="button"
+                  disabled={alreadyAdded}
+                  onClick={() =>
+                    setNewProduct({
+                      ...newProduct,
+                      ingredients: [...newProduct.ingredients, quick],
+                    })
+                  }
+                  style={{
+                    ...styles.quickPickButton,
+                    opacity: alreadyAdded ? 0.4 : 1,
+                    cursor: alreadyAdded ? "default" : "pointer",
+                  }}
+                >
+                  + {quick}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", alignItems: "center" }}>
+            <input
+              value={newIngredientInput}
+              onChange={(e) => setNewIngredientInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const val = newIngredientInput.trim();
+                  if (val && !newProduct.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
+                    setNewProduct({ ...newProduct, ingredients: [...newProduct.ingredients, val] });
+                  }
+                  setNewIngredientInput("");
+                }
+              }}
+              placeholder="Add an ingredient…"
+              style={{ ...styles.input, maxWidth: "280px" }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const val = newIngredientInput.trim();
+                if (val && !newProduct.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
+                  setNewProduct({ ...newProduct, ingredients: [...newProduct.ingredients, val] });
+                }
+                setNewIngredientInput("");
+              }}
+              style={styles.secondaryButton}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
+        {/* Onset & Duration */}
+        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
+          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Onset & Duration</strong>
+          <div style={{ ...styles.productGrid, marginTop: "0.5rem" }}>
+            <label style={styles.field}>
+              Onset (minutes)
+              <input
+                type="number"
+                min="0"
+                value={newProduct.onsetMinutes}
+                onChange={(e) => setNewProduct({ ...newProduct, onsetMinutes: e.target.value })}
+                style={styles.input}
+              />
+              <span style={styles.meta}>How long until effects start?</span>
+            </label>
+            <label style={styles.field}>
+              Duration (minutes)
+              <input
+                type="number"
+                min="0"
+                value={newProduct.durationMinutes}
+                onChange={(e) => setNewProduct({ ...newProduct, durationMinutes: e.target.value })}
+                style={styles.input}
+              />
+              <span style={styles.meta}>Total experience length</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Brand's Recommended Dose Tiers */}
+        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
+          <button
+            type="button"
+            onClick={() => setNewBrandTiersOpen((v) => !v)}
+            style={styles.linkButton}
+          >
+            {newBrandTiersOpen ? "Hide" : "Show"} Brand Dose Tiers
+          </button>
+          {newBrandTiersOpen && (
+            <>
+              <p style={{ ...styles.meta, margin: "0.5rem 0" }}>
+                Use the brand&apos;s own packaging guidance. e.g. 1 cap microdose, 3 caps mini-dose, 5 caps macro.
+              </p>
+              <div style={styles.productGrid}>
+                <label style={styles.field}>
+                  Microdose units
+                  <input
+                    type="number"
+                    min="0"
+                    value={newProduct.brandMicroUnits}
+                    onChange={(e) => setNewProduct({ ...newProduct, brandMicroUnits: e.target.value })}
+                    style={styles.input}
+                  />
+                </label>
+                <label style={styles.field}>
+                  Mini-dose units
+                  <input
+                    type="number"
+                    min="0"
+                    value={newProduct.brandMiniUnits}
+                    onChange={(e) => setNewProduct({ ...newProduct, brandMiniUnits: e.target.value })}
+                    style={styles.input}
+                  />
+                </label>
+                <label style={styles.field}>
+                  Macro-dose units
+                  <input
+                    type="number"
+                    min="0"
+                    value={newProduct.brandMacroUnits}
+                    onChange={(e) => setNewProduct({ ...newProduct, brandMacroUnits: e.target.value })}
+                    style={styles.input}
+                  />
+                </label>
+              </div>
+            </>
+          )}
+        </div>
+
         <div style={{ marginTop: "1rem" }}>
           <button onClick={() => setNewVibeOpen((v) => !v)} style={styles.linkButton}>
             {newVibeOpen ? "Hide" : "Show"} Effect Profile
@@ -1192,6 +1410,37 @@ export default function MycoAdminPage() {
                             ? `${formatDose(computedTotal)} (auto)`
                             : "—"}
                       </div>
+                      {(product.ingredients?.length ||
+                        product.onsetMinutes ||
+                        product.durationMinutes ||
+                        product.brandMicroUnits ||
+                        product.brandMiniUnits ||
+                        product.brandMacroUnits) ? (
+                        <div style={{ ...styles.meta, display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "center" }}>
+                          {product.ingredients?.map((ing) => (
+                            <span key={ing} style={styles.readOnlyPill}>{ing}</span>
+                          ))}
+                          {(product.onsetMinutes || product.durationMinutes) && (
+                            <span>
+                              {product.onsetMinutes ? `Onset: ${formatDuration(product.onsetMinutes)}` : ""}
+                              {product.onsetMinutes && product.durationMinutes ? " • " : ""}
+                              {product.durationMinutes ? `Duration: ${formatDuration(product.durationMinutes)}` : ""}
+                            </span>
+                          )}
+                          {(product.brandMicroUnits || product.brandMiniUnits || product.brandMacroUnits) && (
+                            <span>
+                              Brand:{" "}
+                              {[
+                                product.brandMicroUnits ? `${product.brandMicroUnits} micro` : null,
+                                product.brandMiniUnits ? `${product.brandMiniUnits} mini` : null,
+                                product.brandMacroUnits ? `${product.brandMacroUnits} macro` : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" / ")}
+                            </span>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
@@ -1345,6 +1594,165 @@ export default function MycoAdminPage() {
                             Auto
                           </button>
                         </div>
+                      )}
+                    </div>
+                    {/* Ingredients & Stacks (edit) */}
+                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem" }}>
+                      <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Ingredients & Stacks</strong>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
+                        {editDraft.ingredients.length === 0 && (
+                          <span style={styles.meta}>No ingredients</span>
+                        )}
+                        {editDraft.ingredients.map((ing) => (
+                          <span key={ing} style={styles.ingredientPill}>
+                            {ing}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditDraft({
+                                  ...editDraft,
+                                  ingredients: editDraft.ingredients.filter((i) => i !== ing),
+                                })
+                              }
+                              style={styles.pillRemoveButton}
+                              aria-label={`Remove ${ing}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.5rem" }}>
+                        {COMMON_INGREDIENTS.map((quick) => {
+                          const alreadyAdded = editDraft.ingredients.some(
+                            (i) => i.toLowerCase() === quick.toLowerCase()
+                          );
+                          return (
+                            <button
+                              key={quick}
+                              type="button"
+                              disabled={alreadyAdded}
+                              onClick={() =>
+                                setEditDraft({
+                                  ...editDraft,
+                                  ingredients: [...editDraft.ingredients, quick],
+                                })
+                              }
+                              style={{
+                                ...styles.quickPickButton,
+                                opacity: alreadyAdded ? 0.4 : 1,
+                                cursor: alreadyAdded ? "default" : "pointer",
+                              }}
+                            >
+                              + {quick}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center" }}>
+                        <input
+                          value={editIngredientInput}
+                          onChange={(e) => setEditIngredientInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const val = editIngredientInput.trim();
+                              if (val && !editDraft.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
+                                setEditDraft({ ...editDraft, ingredients: [...editDraft.ingredients, val] });
+                              }
+                              setEditIngredientInput("");
+                            }
+                          }}
+                          placeholder="Add an ingredient…"
+                          style={{ ...styles.input, maxWidth: "280px" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = editIngredientInput.trim();
+                            if (val && !editDraft.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
+                              setEditDraft({ ...editDraft, ingredients: [...editDraft.ingredients, val] });
+                            }
+                            setEditIngredientInput("");
+                          }}
+                          style={styles.secondaryButton}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Onset & Duration (edit) */}
+                    <label style={styles.field}>
+                      Onset (minutes)
+                      <input
+                        type="number"
+                        min="0"
+                        value={editDraft.onsetMinutes}
+                        onChange={(e) => setEditDraft({ ...editDraft, onsetMinutes: e.target.value })}
+                        style={styles.input}
+                      />
+                      <span style={styles.meta}>How long until effects start?</span>
+                    </label>
+                    <label style={styles.field}>
+                      Duration (minutes)
+                      <input
+                        type="number"
+                        min="0"
+                        value={editDraft.durationMinutes}
+                        onChange={(e) => setEditDraft({ ...editDraft, durationMinutes: e.target.value })}
+                        style={styles.input}
+                      />
+                      <span style={styles.meta}>Total experience length</span>
+                    </label>
+
+                    {/* Brand Dose Tiers (edit) */}
+                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem" }}>
+                      <button
+                        type="button"
+                        onClick={() => setEditBrandTiersOpen((v) => !v)}
+                        style={styles.linkButton}
+                      >
+                        {editBrandTiersOpen ? "Hide" : "Show"} Brand Dose Tiers
+                      </button>
+                      {editBrandTiersOpen && (
+                        <>
+                          <p style={{ ...styles.meta, margin: "0.5rem 0" }}>
+                            Use the brand&apos;s own packaging guidance. e.g. 1 cap microdose, 3 caps mini-dose, 5 caps macro.
+                          </p>
+                          <div style={styles.productGrid}>
+                            <label style={styles.field}>
+                              Microdose units
+                              <input
+                                type="number"
+                                min="0"
+                                value={editDraft.brandMicroUnits}
+                                onChange={(e) => setEditDraft({ ...editDraft, brandMicroUnits: e.target.value })}
+                                style={styles.input}
+                              />
+                            </label>
+                            <label style={styles.field}>
+                              Mini-dose units
+                              <input
+                                type="number"
+                                min="0"
+                                value={editDraft.brandMiniUnits}
+                                onChange={(e) => setEditDraft({ ...editDraft, brandMiniUnits: e.target.value })}
+                                style={styles.input}
+                              />
+                            </label>
+                            <label style={styles.field}>
+                              Macro-dose units
+                              <input
+                                type="number"
+                                min="0"
+                                value={editDraft.brandMacroUnits}
+                                onChange={(e) => setEditDraft({ ...editDraft, brandMacroUnits: e.target.value })}
+                                style={styles.input}
+                              />
+                            </label>
+                          </div>
+                        </>
                       )}
                     </div>
                     <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
@@ -1662,6 +2070,46 @@ const styles: Record<string, CSSProperties> = {
   },
   productName: { fontWeight: 800 },
   meta: { color: "#6b7280", fontSize: "0.8rem", marginTop: "0.15rem" },
+  ingredientPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.3rem",
+    padding: "0.3rem 0.6rem",
+    background: "#eef2ff",
+    color: "#4338ca",
+    borderRadius: "999px",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+  },
+  pillRemoveButton: {
+    background: "transparent",
+    border: "none",
+    color: "#4338ca",
+    cursor: "pointer",
+    fontSize: "1rem",
+    lineHeight: 1,
+    padding: 0,
+    fontWeight: 700,
+  },
+  quickPickButton: {
+    padding: "0.25rem 0.55rem",
+    background: "#f3f4f6",
+    color: "#374151",
+    border: "1px solid #e5e7eb",
+    borderRadius: "999px",
+    fontSize: "0.75rem",
+    cursor: "pointer",
+  },
+  readOnlyPill: {
+    display: "inline-flex",
+    alignItems: "center",
+    padding: "0.15rem 0.5rem",
+    background: "#eef2ff",
+    color: "#4338ca",
+    borderRadius: "999px",
+    fontSize: "0.72rem",
+    fontWeight: 600,
+  },
   switch: { display: "flex", alignItems: "center", justifyContent: "center" },
   photoGrid: {
     display: "grid",

@@ -133,6 +133,35 @@ export async function PATCH(
     if ("strainSlug" in body) data.strainSlug = cleanText(body.strainSlug) ?? null;
     if ("photoUrl" in body) data.photoUrl = cleanText(body.photoUrl) ?? null;
     if ("notes" in body) data.notes = cleanText(body.notes) ?? null;
+    if ("onsetMinutes" in body) {
+      const v = parsePositiveInt(body.onsetMinutes);
+      data.onsetMinutes = v === undefined ? null : v;
+    }
+    if ("durationMinutes" in body) {
+      const v = parsePositiveInt(body.durationMinutes);
+      data.durationMinutes = v === undefined ? null : v;
+    }
+    if ("brandMicroUnits" in body) {
+      const v = parsePositiveInt(body.brandMicroUnits);
+      data.brandMicroUnits = v === undefined ? null : v;
+    }
+    if ("brandMiniUnits" in body) {
+      const v = parsePositiveInt(body.brandMiniUnits);
+      data.brandMiniUnits = v === undefined ? null : v;
+    }
+    if ("brandMacroUnits" in body) {
+      const v = parsePositiveInt(body.brandMacroUnits);
+      data.brandMacroUnits = v === undefined ? null : v;
+    }
+    if ("ingredients" in body) {
+      data.ingredients = Array.isArray(body.ingredients)
+        ? body.ingredients
+            .filter((i: unknown): i is string => typeof i === "string")
+            .map((i: string) => i.trim())
+            .filter((i: string) => i.length > 0)
+            .slice(0, 25)
+        : [];
+    }
 
     // Auto-recompute totalDoseMg when not explicitly provided but both
     // productUnitMg and unitsPerPack are present (incoming or existing).
