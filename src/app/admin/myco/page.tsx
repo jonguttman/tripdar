@@ -824,6 +824,8 @@ export default function MycoAdminPage() {
 
       <section style={styles.panel}>
         <h2 style={styles.sectionTitle}>Add Product</h2>
+
+        {/* Row 1: Identity */}
         <div style={styles.productGrid}>
           <label style={styles.field}>
             Product name
@@ -855,17 +857,6 @@ export default function MycoAdminPage() {
               ))}
               <option value="__new__">+ New brand…</option>
             </select>
-            {showNewBrand && (
-              <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.4rem" }}>
-                <input
-                  value={newBrandName}
-                  onChange={(e) => setNewBrandName(e.target.value)}
-                  placeholder="Brand name"
-                  style={styles.input}
-                />
-                <button onClick={createBrand} style={styles.secondaryButton}>Create</button>
-              </div>
-            )}
           </label>
           <label style={styles.field}>
             Format
@@ -894,21 +885,39 @@ export default function MycoAdminPage() {
               ))}
             </select>
           </label>
+        </div>
+
+        {/* Inline "new brand" creator (full-width, below row 1) */}
+        {showNewBrand && (
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", alignItems: "center" }}>
+            <input
+              value={newBrandName}
+              onChange={(e) => setNewBrandName(e.target.value)}
+              placeholder="New brand name"
+              style={{ ...styles.input, maxWidth: "280px" }}
+            />
+            <button onClick={createBrand} style={styles.secondaryButton}>Create brand</button>
+            <button onClick={() => { setShowNewBrand(false); setNewBrandName(""); }} style={styles.linkButton}>Cancel</button>
+          </div>
+        )}
+
+        {/* Row 2: Dose */}
+        <div style={{ ...styles.productGrid, marginTop: "1rem" }}>
           <label style={styles.field}>
             Dose per unit
-            <div style={{ display: "flex", gap: "0.4rem" }}>
+            <div style={styles.inlineRow}>
               <input
                 type="number"
                 min="0"
                 step="any"
                 value={newProduct.productUnitMg}
                 onChange={(e) => setNewProduct({ ...newProduct, productUnitMg: e.target.value })}
-                style={{ ...styles.input, flex: 1 }}
+                style={{ ...styles.input, flex: 1, minWidth: 0 }}
               />
               <select
                 value={newProduct.productUnitInUnit}
                 onChange={(e) => setNewProduct({ ...newProduct, productUnitInUnit: e.target.value as DoseUnit })}
-                style={{ ...styles.select, minWidth: "70px" }}
+                style={styles.unitSelect}
               >
                 <option value="mg">mg</option>
                 <option value="g">g</option>
@@ -928,10 +937,8 @@ export default function MycoAdminPage() {
           <div style={styles.field}>
             <span>Total dose</span>
             {!newProduct.totalDoseOverride ? (
-              <div>
-                <div style={{ padding: "0.65rem 0", fontWeight: 700 }}>
-                  {formatDose(computedNewTotal)}
-                </div>
+              <div style={styles.totalBox}>
+                <span style={styles.totalValue}>{formatDose(computedNewTotal)}</span>
                 <button
                   onClick={() =>
                     setNewProduct({
@@ -943,11 +950,11 @@ export default function MycoAdminPage() {
                   }
                   style={styles.linkButton}
                 >
-                  Edit total
+                  Edit
                 </button>
               </div>
             ) : (
-              <div style={{ display: "flex", gap: "0.4rem" }}>
+              <div style={styles.inlineRow}>
                 <input
                   type="number"
                   min="0"
@@ -966,12 +973,12 @@ export default function MycoAdminPage() {
                           : e.target.value,
                     })
                   }
-                  style={{ ...styles.input, flex: 1 }}
+                  style={{ ...styles.input, flex: 1, minWidth: 0 }}
                 />
                 <select
                   value={newProduct.totalDoseInUnit}
                   onChange={(e) => setNewProduct({ ...newProduct, totalDoseInUnit: e.target.value as DoseUnit })}
-                  style={{ ...styles.select, minWidth: "70px" }}
+                  style={styles.unitSelect}
                 >
                   <option value="mg">mg</option>
                   <option value="g">g</option>
@@ -1001,21 +1008,25 @@ export default function MycoAdminPage() {
               <option value="lighter">Hits Lighter</option>
             </select>
           </label>
-          {newProduct.strengthOffset !== "standard" && (
-            <label style={styles.field}>
+        </div>
+
+        {newProduct.strengthOffset !== "standard" && (
+          <div style={{ marginTop: "0.75rem" }}>
+            <label style={{ ...styles.field, maxWidth: "560px" }}>
               Rationale
               <input
                 value={newProduct.strengthRationale}
                 onChange={(e) => setNewProduct({ ...newProduct, strengthRationale: e.target.value })}
+                placeholder="e.g. dense caps, hits harder than the printed dose"
                 style={styles.input}
               />
             </label>
-          )}
-        </div>
+          </div>
+        )}
 
-        <div style={{ marginTop: "1rem" }}>
-          <strong style={{ fontSize: "0.85rem" }}>Photos</strong>
-          <div style={styles.photoGrid}>
+        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
+          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Photos</strong>
+          <div style={{ ...styles.photoGrid, marginTop: "0.5rem" }}>
             {pendingPhotos.map((pp) => (
               <div key={pp.id} style={styles.photoCard}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -1027,14 +1038,14 @@ export default function MycoAdminPage() {
               </div>
             ))}
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+          <div style={styles.uploadRow}>
             <select
               value={pendingPhotoTag}
               onChange={(e) => setPendingPhotoTag(e.target.value as PhotoTag)}
-              style={styles.select}
+              style={{ ...styles.select, width: "auto", minWidth: "140px" }}
             >
               {PHOTO_TAGS.map((t) => (
-                <option key={t} value={t}>{t}</option>
+                <option key={t} value={t}>{t.replace("_", " ")}</option>
               ))}
             </select>
             <input
@@ -1047,7 +1058,7 @@ export default function MycoAdminPage() {
               }}
               style={styles.fileInput}
             />
-            <span style={styles.meta}>Photos upload after product is created</span>
+            <span style={{ ...styles.meta, marginLeft: "auto" }}>Photos upload after product is created</span>
           </div>
         </div>
 
@@ -1505,13 +1516,13 @@ const styles: Record<string, CSSProperties> = {
   sectionTitle: { fontSize: "1.1rem", margin: 0 },
   settingsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
     gap: "1rem",
   },
   productGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-    gap: "0.75rem",
+    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gap: "1rem 1rem",
     alignItems: "start",
   },
   field: {
@@ -1542,12 +1553,59 @@ const styles: Record<string, CSSProperties> = {
     color: "#111827",
   },
   select: {
-    minWidth: "140px",
+    width: "100%",
+    minWidth: 0,
     padding: "0.55rem 0.7rem",
     border: "1px solid #d1d5db",
     borderRadius: "6px",
     background: "white",
     color: "#111827",
+    fontSize: "0.9rem",
+    boxSizing: "border-box",
+  },
+  unitSelect: {
+    width: "70px",
+    flex: "0 0 70px",
+    padding: "0.55rem 0.5rem",
+    border: "1px solid #d1d5db",
+    borderRadius: "6px",
+    background: "white",
+    color: "#111827",
+    fontSize: "0.9rem",
+    boxSizing: "border-box",
+  },
+  inlineRow: {
+    display: "flex",
+    gap: "0.4rem",
+    alignItems: "center",
+    width: "100%",
+  },
+  totalBox: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.6rem",
+    padding: "0.55rem 0.7rem",
+    border: "1px dashed #d1d5db",
+    borderRadius: "6px",
+    background: "#f9fafb",
+    minHeight: "calc(0.9rem + 1.1rem + 2px)",
+  },
+  totalValue: {
+    fontWeight: 700,
+    fontSize: "0.95rem",
+    color: "#111827",
+    flex: 1,
+  },
+  uploadRow: {
+    display: "flex",
+    gap: "0.6rem",
+    marginTop: "0.75rem",
+    alignItems: "center",
+    flexWrap: "wrap",
+    padding: "0.6rem 0.75rem",
+    background: "#f9fafb",
+    border: "1px dashed #e5e7eb",
+    borderRadius: "6px",
   },
   fileInput: { fontSize: "0.85rem" },
   primaryButton: {
