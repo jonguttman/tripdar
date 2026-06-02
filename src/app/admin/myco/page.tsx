@@ -466,7 +466,7 @@ export default function MycoAdminPage() {
           strengthRationale: newProduct.strengthRationale,
           ingredients: newProduct.ingredients,
           onsetMinutes: newProduct.onsetMinutes ? Number(newProduct.onsetMinutes) : null,
-          durationMinutes: newProduct.durationMinutes ? Number(newProduct.durationMinutes) : null,
+          durationMinutes: newProduct.durationMinutes ? Math.round(Number(newProduct.durationMinutes) * 60) : null,
           brandMicroUnits: newProduct.brandMicroUnits ? Number(newProduct.brandMicroUnits) : null,
           brandMiniUnits: newProduct.brandMiniUnits ? Number(newProduct.brandMiniUnits) : null,
           brandMacroUnits: newProduct.brandMacroUnits ? Number(newProduct.brandMacroUnits) : null,
@@ -591,7 +591,7 @@ export default function MycoAdminPage() {
       totalDoseOverride: !!product.totalDoseMg,
       ingredients: product.ingredients ?? [],
       onsetMinutes: product.onsetMinutes ? String(product.onsetMinutes) : "",
-      durationMinutes: product.durationMinutes ? String(product.durationMinutes) : "",
+      durationMinutes: product.durationMinutes ? String(product.durationMinutes / 60) : "",
       brandMicroUnits: product.brandMicroUnits ? String(product.brandMicroUnits) : "",
       brandMiniUnits: product.brandMiniUnits ? String(product.brandMiniUnits) : "",
       brandMacroUnits: product.brandMacroUnits ? String(product.brandMacroUnits) : "",
@@ -626,7 +626,7 @@ export default function MycoAdminPage() {
         totalDoseMg,
         ingredients: editDraft.ingredients,
         onsetMinutes: editDraft.onsetMinutes ? Number(editDraft.onsetMinutes) : null,
-        durationMinutes: editDraft.durationMinutes ? Number(editDraft.durationMinutes) : null,
+        durationMinutes: editDraft.durationMinutes ? Math.round(Number(editDraft.durationMinutes) * 60) : null,
         brandMicroUnits: editDraft.brandMicroUnits ? Number(editDraft.brandMicroUnits) : null,
         brandMiniUnits: editDraft.brandMiniUnits ? Number(editDraft.brandMiniUnits) : null,
         brandMacroUnits: editDraft.brandMacroUnits ? Number(editDraft.brandMacroUnits) : null,
@@ -1217,10 +1217,11 @@ export default function MycoAdminPage() {
               <span style={styles.meta}>How long until effects start?</span>
             </label>
             <label style={styles.field}>
-              Duration (minutes)
+              Duration (hours)
               <input
                 type="number"
                 min="0"
+                step="0.25"
                 value={newProduct.durationMinutes}
                 onChange={(e) => setNewProduct({ ...newProduct, durationMinutes: e.target.value })}
                 style={styles.input}
@@ -1695,10 +1696,11 @@ export default function MycoAdminPage() {
                       <span style={styles.meta}>How long until effects start?</span>
                     </label>
                     <label style={styles.field}>
-                      Duration (minutes)
+                      Duration (hours)
                       <input
                         type="number"
                         min="0"
+                        step="0.25"
                         value={editDraft.durationMinutes}
                         onChange={(e) => setEditDraft({ ...editDraft, durationMinutes: e.target.value })}
                         style={styles.input}
@@ -1972,14 +1974,14 @@ const styles: Record<string, CSSProperties> = {
     boxSizing: "border-box",
   },
   unitSelect: {
-    width: "70px",
-    flex: "0 0 70px",
-    padding: "0.55rem 0.5rem",
+    width: "58px",
+    flex: "0 0 58px",
+    padding: "0.55rem 0.25rem 0.55rem 0.4rem",
     border: "1px solid #d1d5db",
     borderRadius: "6px",
     background: "white",
     color: "#111827",
-    fontSize: "0.9rem",
+    fontSize: "0.85rem",
     boxSizing: "border-box",
   },
   inlineRow: {
