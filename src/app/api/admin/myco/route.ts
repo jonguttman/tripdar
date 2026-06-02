@@ -119,6 +119,8 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    const includeArchived = request.nextUrl.searchParams.get("includeArchived") === "1";
+
     const [partner, products] = await Promise.all([
       prisma.partner.findUnique({
         where: { id: selectedPartner.id },
@@ -132,7 +134,10 @@ export async function GET(request: NextRequest) {
         },
       }),
       prisma.storeProductCatalog.findMany({
-        where: { partnerId: selectedPartner.id },
+        where: {
+          partnerId: selectedPartner.id,
+          ...(includeArchived ? {} : { archivedAt: null }),
+        },
         include: {
           strengthOffset: true,
           vibeProfile: true,

@@ -432,6 +432,7 @@ model StoreProductCatalog {
   totalDoseMg    Int? // computed total mg for the package
   photoUrl       String? // legacy single photo (kept for back-compat)
   active         Boolean  @default(true)
+  archivedAt     DateTime?
   notes          String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

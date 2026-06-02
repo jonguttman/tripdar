@@ -4,7 +4,20 @@ import type { ChangeEvent, CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 type StrengthOffset = "standard" | "stronger" | "lighter";
-type ProductFilter = "all" | "active" | "inactive";
+type ProductFilter = "all" | "active" | "inactive" | "archived";
+
+interface EditDraft {
+  productName: string;
+  brandId: string;
+  strainSlug: string;
+  format: string;
+  productUnitMg: string;
+  productUnitInUnit: DoseUnit;
+  unitsPerPack: string;
+  totalDoseMg: string;
+  totalDoseInUnit: DoseUnit;
+  totalDoseOverride: boolean;
+}
 type SortKey = "productName" | "format" | "brand" | "active" | "updatedAt";
 type PhotoTag = "stock" | "package_front" | "package_back" | "lifestyle" | "other";
 type UserRole = "super_admin" | "partner_admin";
@@ -114,6 +127,7 @@ interface Product {
   photoUrl: string | null;
   photos: ProductPhoto[];
   active: boolean;
+  archivedAt: string | null;
   updatedAt: string;
   strengthOffset: {
     offset: StrengthOffset;
@@ -185,6 +199,8 @@ export default function MycoAdminPage() {
       }
     >
   >({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState<EditDraft | null>(null);
 
   useEffect(() => {
     loadData();
@@ -211,12 +227,16 @@ export default function MycoAdminPage() {
     }
   }
 
-  async function loadData(partnerId?: string) {
+  async function loadData(partnerId?: string, viewArchivedOnly?: boolean) {
     setLoading(true);
     setError(null);
 
     try {
-      const url = partnerId ? `/api/admin/myco?partnerId=${partnerId}` : "/api/admin/myco";
+      const params = new URLSearchParams();
+      if (partnerId) params.set("partnerId", partnerId);
+      if (viewArchivedOnly) params.set("includeArchived", "1");
+      const qs = params.toString();
+      const url = qs ? `/api/admin/myco?${qs}` : "/api/admin/myco";
       const res = await fetch(url);
       const data = await res.json();
 
@@ -268,6 +288,8 @@ export default function MycoAdminPage() {
 
   const visibleProducts = useMemo(() => {
     const filtered = products.filter((product) => {
+      if (filter === "archived") return product.archivedAt != null;
+      if (product.archivedAt != null) return false;
       if (filter === "active") return product.active;
       if (filter === "inactive") return !product.active;
       return true;
@@ -499,6 +521,76 @@ export default function MycoAdminPage() {
       },
     }));
     setMessage(successText);
+  }
+
+  function startEdit(product: Product) {
+    const unitMg = product.productUnitMg ?? 0;
+    const totalMg = product.totalDoseMg ?? 0;
+    const productUnitInUnit: DoseUnit = unitMg >= 1000 ? "g" : "mg";
+    const totalDoseInUnit: DoseUnit = totalMg >= 1000 ? "g" : "mg";
+    setEditingId(product.id);
+    setEditDraft({
+      productName: product.productName ?? "",
+      brandId: product.brandId ?? "",
+      strainSlug: product.strainSlug ?? "",
+      format: product.format || "capsule",
+      productUnitMg: unitMg
+        ? productUnitInUnit === "g"
+          ? String(unitMg / 1000)
+          : String(unitMg)
+        : "",
+      productUnitInUnit,
+      unitsPerPack: product.unitsPerPack ? String(product.unitsPerPack) : "",
+      totalDoseMg: totalMg
+        ? totalDoseInUnit === "g"
+          ? String(totalMg / 1000)
+          : String(totalMg)
+        : "",
+      totalDoseInUnit,
+      totalDoseOverride: !!product.totalDoseMg,
+    });
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditDraft(null);
+  }
+
+  async function saveEdit(productId: string) {
+    if (!editDraft) return;
+    const productUnitMg = toMg(editDraft.productUnitMg, editDraft.productUnitInUnit);
+    if (!productUnitMg) {
+      setError("Dose per unit is required");
+      return;
+    }
+    const unitsPerPack = editDraft.unitsPerPack ? Number(editDraft.unitsPerPack) : null;
+    const totalDoseMg = editDraft.totalDoseOverride && editDraft.totalDoseMg
+      ? toMg(editDraft.totalDoseMg, editDraft.totalDoseInUnit)
+      : null;
+    await patchProduct(
+      productId,
+      {
+        productName: editDraft.productName,
+        brandId: editDraft.brandId || null,
+        strainSlug: editDraft.strainSlug || null,
+        format: editDraft.format,
+        productUnitMg,
+        unitsPerPack,
+        totalDoseMg,
+      },
+      "Product updated"
+    );
+    setEditingId(null);
+    setEditDraft(null);
+  }
+
+  async function archiveProduct(productId: string) {
+    if (!confirm("Archive this product? It will be hidden from the catalog.")) return;
+    await patchProduct(productId, { archived: true }, "Product archived");
+  }
+
+  async function unarchiveProduct(productId: string) {
+    await patchProduct(productId, { archived: false }, "Product unarchived");
   }
 
   function updateDraft(
@@ -998,10 +1090,19 @@ export default function MycoAdminPage() {
         <div style={styles.panelHeader}>
           <h2 style={styles.sectionTitle}>Product Catalog</h2>
           <div style={styles.toolbar}>
-            <select value={filter} onChange={(e) => setFilter(e.target.value as ProductFilter)} style={styles.select}>
+            <select
+              value={filter}
+              onChange={(e) => {
+                const next = e.target.value as ProductFilter;
+                setFilter(next);
+                loadData(partner.id, next === "archived");
+              }}
+              style={styles.select}
+            >
               <option value="all">All</option>
               <option value="active">On</option>
               <option value="inactive">Off</option>
+              <option value="archived">Archived</option>
             </select>
             <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} style={styles.select}>
               <option value="updatedAt">Recently updated</option>
@@ -1025,6 +1126,13 @@ export default function MycoAdminPage() {
               product.productUnitMg && product.unitsPerPack
                 ? product.productUnitMg * product.unitsPerPack
                 : null;
+            const isEditing = editingId === product.id && editDraft;
+            const isArchived = product.archivedAt != null;
+            const editUnitMg = isEditing ? toMg(editDraft!.productUnitMg, editDraft!.productUnitInUnit) : null;
+            const editComputedTotal =
+              editUnitMg && Number(editDraft?.unitsPerPack) > 0
+                ? editUnitMg * Number(editDraft!.unitsPerPack)
+                : null;
             return (
               <div key={product.id} style={styles.card}>
                 <div style={styles.cardTop}>
@@ -1032,6 +1140,7 @@ export default function MycoAdminPage() {
                     <input
                       type="checkbox"
                       checked={product.active}
+                      disabled={isArchived}
                       onChange={(e) =>
                         patchProduct(
                           product.id,
@@ -1049,8 +1158,15 @@ export default function MycoAdminPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={product.photoUrl} alt="" style={styles.thumbnail} />
                     ) : null}
-                    <div>
-                      <div style={styles.productName}>{product.productName}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={styles.productName}>
+                        {product.productName}
+                        {isArchived && (
+                          <span style={{ marginLeft: "0.5rem", fontSize: "0.7rem", color: "#92400e", background: "#fef3c7", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
+                            Archived
+                          </span>
+                        )}
+                      </div>
                       <div style={styles.meta}>
                         {brandName} • {product.format}
                         {product.strainSlug ? ` • ${product.strainSlug}` : ""}
@@ -1067,7 +1183,165 @@ export default function MycoAdminPage() {
                       </div>
                     </div>
                   </div>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                    {isArchived ? (
+                      <button onClick={() => unarchiveProduct(product.id)} style={styles.secondaryButton}>
+                        Unarchive
+                      </button>
+                    ) : isEditing ? null : (
+                      <>
+                        <button onClick={() => startEdit(product)} style={styles.secondaryButton}>
+                          Edit
+                        </button>
+                        <button onClick={() => archiveProduct(product.id)} style={styles.secondaryButton}>
+                          Archive
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
+
+                {isEditing && editDraft && (
+                  <div style={{ ...styles.productGrid, marginTop: "0.75rem", padding: "0.75rem", background: "white", border: "1px solid #e5e7eb", borderRadius: "6px" }}>
+                    <label style={styles.field}>
+                      Product name
+                      <input
+                        value={editDraft.productName}
+                        onChange={(e) => setEditDraft({ ...editDraft, productName: e.target.value })}
+                        style={styles.input}
+                      />
+                    </label>
+                    <label style={styles.field}>
+                      Brand
+                      <select
+                        value={editDraft.brandId}
+                        onChange={(e) => setEditDraft({ ...editDraft, brandId: e.target.value })}
+                        style={styles.select}
+                      >
+                        <option value="">— Unspecified —</option>
+                        {brands.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={styles.field}>
+                      Format
+                      <select
+                        value={editDraft.format}
+                        onChange={(e) => setEditDraft({ ...editDraft, format: e.target.value })}
+                        style={styles.select}
+                      >
+                        <option value="capsule">Capsule</option>
+                        <option value="edible">Edible</option>
+                        <option value="dried">Dried</option>
+                        <option value="tincture">Tincture</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </label>
+                    <label style={styles.field}>
+                      Strain
+                      <select
+                        value={editDraft.strainSlug}
+                        onChange={(e) => setEditDraft({ ...editDraft, strainSlug: e.target.value })}
+                        style={styles.select}
+                      >
+                        <option value="">Unspecified</option>
+                        {strains.map((s) => (
+                          <option key={s.id} value={s.slug}>{s.name}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label style={styles.field}>
+                      Dose per unit
+                      <div style={{ display: "flex", gap: "0.4rem" }}>
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={editDraft.productUnitMg}
+                          onChange={(e) => setEditDraft({ ...editDraft, productUnitMg: e.target.value })}
+                          style={{ ...styles.input, flex: 1 }}
+                        />
+                        <select
+                          value={editDraft.productUnitInUnit}
+                          onChange={(e) => setEditDraft({ ...editDraft, productUnitInUnit: e.target.value as DoseUnit })}
+                          style={{ ...styles.select, minWidth: "70px" }}
+                        >
+                          <option value="mg">mg</option>
+                          <option value="g">g</option>
+                        </select>
+                      </div>
+                    </label>
+                    <label style={styles.field}>
+                      Units per package
+                      <input
+                        type="number"
+                        min="1"
+                        value={editDraft.unitsPerPack}
+                        onChange={(e) => setEditDraft({ ...editDraft, unitsPerPack: e.target.value })}
+                        style={styles.input}
+                      />
+                    </label>
+                    <div style={styles.field}>
+                      <span>Total dose</span>
+                      {!editDraft.totalDoseOverride ? (
+                        <div>
+                          <div style={{ padding: "0.65rem 0", fontWeight: 700 }}>
+                            {formatDose(editComputedTotal)}
+                          </div>
+                          <button
+                            onClick={() =>
+                              setEditDraft({
+                                ...editDraft,
+                                totalDoseOverride: true,
+                                totalDoseMg: editComputedTotal
+                                  ? editComputedTotal >= 1000
+                                    ? String(editComputedTotal / 1000)
+                                    : String(editComputedTotal)
+                                  : "",
+                                totalDoseInUnit: editComputedTotal && editComputedTotal >= 1000 ? "g" : "mg",
+                              })
+                            }
+                            style={styles.linkButton}
+                          >
+                            Edit total
+                          </button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: "0.4rem" }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="any"
+                            value={editDraft.totalDoseMg}
+                            onChange={(e) => setEditDraft({ ...editDraft, totalDoseMg: e.target.value })}
+                            style={{ ...styles.input, flex: 1 }}
+                          />
+                          <select
+                            value={editDraft.totalDoseInUnit}
+                            onChange={(e) => setEditDraft({ ...editDraft, totalDoseInUnit: e.target.value as DoseUnit })}
+                            style={{ ...styles.select, minWidth: "70px" }}
+                          >
+                            <option value="mg">mg</option>
+                            <option value="g">g</option>
+                          </select>
+                          <button
+                            onClick={() =>
+                              setEditDraft({ ...editDraft, totalDoseOverride: false, totalDoseMg: "" })
+                            }
+                            style={styles.linkButton}
+                          >
+                            Auto
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                      <button onClick={cancelEdit} style={styles.secondaryButton}>Cancel</button>
+                      <button onClick={() => saveEdit(product.id)} style={styles.primaryButton}>Save</button>
+                    </div>
+                  </div>
+                )}
 
                 <div style={styles.strengthRow}>
                   <select

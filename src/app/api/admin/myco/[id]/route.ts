@@ -120,6 +120,14 @@ export async function PATCH(
     if (productUnitMg !== undefined) data.productUnitMg = productUnitMg;
     if (unitsPerPack !== undefined) data.unitsPerPack = unitsPerPack;
     if ("active" in body && typeof body.active === "boolean") data.active = body.active;
+    if ("archived" in body && typeof body.archived === "boolean") {
+      if (body.archived) {
+        data.archivedAt = new Date();
+        data.active = false;
+      } else {
+        data.archivedAt = null;
+      }
+    }
     if ("brand" in body) data.brand = cleanText(body.brand) ?? null;
     if ("brandId" in body) data.brandId = cleanText(body.brandId) ?? null;
     if ("strainSlug" in body) data.strainSlug = cleanText(body.strainSlug) ?? null;
