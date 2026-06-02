@@ -127,6 +127,9 @@ export interface ScoredRecommendation {
     url: string;
     suggestedUnits: string;
     format: string;
+    photoUrl?: string;
+    strengthOffset?: "standard" | "stronger" | "lighter";
+    strengthRationale?: string;
   };
   description: string;
   tags: {
@@ -135,6 +138,7 @@ export interface ScoredRecommendation {
     beginnerFriendly: string;
   };
   cautions: string[];
+  doseGuidanceNote?: string;
   steppedPathNotice?: string;
 }
 

@@ -190,6 +190,9 @@ export interface ScoreOptions {
     productUrl?: string;
     productUnitMg?: number;
     productFormat?: string;
+    productPhotoUrl?: string;
+    strengthOffset?: "standard" | "stronger" | "lighter";
+    strengthRationale?: string;
   }>;
 }
 
@@ -220,8 +223,17 @@ export function scoreStrains(options: ScoreOptions): ScoredRecommendation[] {
     const matchScore = Math.max(0, Math.min(100, baseScore + feedbackMod + adminMod));
 
     // Dose calculation
-    const doseRange = calculateDoseRange(targetDoseLevel, profile.doseSensitivity);
+    const baseDoseRange = calculateDoseRange(targetDoseLevel, profile.doseSensitivity);
     const doseInfo = CANONICAL_DOSE_LEVELS.find(d => d.level === targetDoseLevel);
+    const strengthOffset = adminConfig?.strengthOffset ?? "standard";
+    const strengthMultiplier =
+      strengthOffset === "stronger" ? 0.8 :
+      strengthOffset === "lighter" ? 1.15 :
+      1;
+    const doseRange = {
+      lowMg: Math.round(baseDoseRange.lowMg * strengthMultiplier),
+      highMg: Math.round(baseDoseRange.highMg * strengthMultiplier),
+    };
 
     // Product unit calculation
     let product: ScoredRecommendation["product"] | undefined;
@@ -233,12 +245,21 @@ export function scoreStrains(options: ScoreOptions): ScoredRecommendation[] {
         url: adminConfig.productUrl || "",
         suggestedUnits: `${lowUnits}-${highUnits}`,
         format: adminConfig.productFormat || "capsule",
+        photoUrl: adminConfig.productPhotoUrl,
+        strengthOffset,
+        strengthRationale: adminConfig.strengthRationale,
       };
     }
 
     // Cautions
     const adminCautionText = adminConfig?.cautionFlags?.custom;
     const cautions = generateCautions(profile, adminCautionText);
+    const doseGuidanceNote = strengthOffset === "standard"
+      ? undefined
+      : `Community feedback suggests this product hits ${strengthOffset === "stronger" ? "stronger" : "lighter"} than standard guidance. ${adminConfig?.strengthRationale ? `${adminConfig.strengthRationale} ` : ""}Adjust accordingly.`;
+    if (doseGuidanceNote) {
+      cautions.push(doseGuidanceNote);
+    }
 
     // Stepped path
     const steppedPathNotice = detectSteppedPath(experienceLevel, targetDoseLevel, profile.strainName);
@@ -262,6 +283,7 @@ export function scoreStrains(options: ScoreOptions): ScoredRecommendation[] {
         beginnerFriendly: profile.beginnerFriendly,
       },
       cautions,
+      doseGuidanceNote,
       steppedPathNotice,
     };
   });

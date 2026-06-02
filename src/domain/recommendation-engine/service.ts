@@ -31,8 +31,11 @@ export async function generateRecommendations(
     productUrl?: string;
     productUnitMg?: number;
     productFormat?: string;
+    productPhotoUrl?: string;
     availability: string;
     doseSensitivityOverride?: string;
+    strengthOffset?: "standard" | "stronger" | "lighter";
+    strengthRationale?: string;
   };
   const configMap = new Map<string, ConfigEntry>(
     strainConfigs.map((c): [string, ConfigEntry] => [c.strainSlug, {
@@ -47,11 +50,36 @@ export async function generateRecommendations(
     }])
   );
 
+  const catalogItems = await prisma.storeProductCatalog.findMany({
+    where: {
+      partnerId,
+      active: true,
+      strainSlug: { not: null },
+    },
+    include: { strengthOffset: true },
+  });
+  for (const item of catalogItems) {
+    if (!item.strainSlug) continue;
+    configMap.set(item.strainSlug, {
+      ...(configMap.get(item.strainSlug) ?? { availability: "in_stock" }),
+      productName: item.productName,
+      productUrl: "",
+      productUnitMg: item.productUnitMg ?? undefined,
+      productFormat: item.format,
+      productPhotoUrl: item.photoUrl ?? undefined,
+      availability: "in_stock",
+      strengthOffset: (item.strengthOffset?.offset as "standard" | "stronger" | "lighter" | undefined) ?? "standard",
+      strengthRationale: item.strengthOffset?.rationale ?? undefined,
+    });
+  }
+
   // 3. Filter to available strains only
   const availableStrains = allStrains.filter(strain => {
     const slug = strain.id || strain.name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
     const config = configMap.get(slug);
-    // Include if no config (default available) or explicitly in_stock
+    if (catalogItems.length > 0) {
+      return Boolean(config && config.availability === "in_stock");
+    }
     return !config || config.availability === "in_stock";
   });
 
