@@ -91,6 +91,34 @@ export default function AdminLayout({
   const [emailSent, setEmailSent] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
+  const [pwEmail, setPwEmail] = useState("");
+  const [pwPassword, setPwPassword] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState("");
+
+  async function handlePasswordSignIn(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pwEmail.trim() || !pwPassword) return;
+    setPwLoading(true);
+    setPwError("");
+    try {
+      const res = await fetch("/api/admin/password-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: pwEmail.trim(), password: pwPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPwError(data.error || "Sign-in failed");
+        setPwLoading(false);
+        return;
+      }
+      window.location.href = data.redirect || "/admin/myco";
+    } catch (err) {
+      setPwError("Network error — try again");
+      setPwLoading(false);
+    }
+  }
 
   async function handleEmailSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -136,6 +164,34 @@ export default function AdminLayout({
             </div>
           ) : (
             <>
+              <form onSubmit={handlePasswordSignIn} style={styles.emailForm}>
+                <p style={styles.authSubtitle}>Sign in with email and password.</p>
+                <input
+                  type="email"
+                  value={pwEmail}
+                  onChange={(e) => setPwEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  style={styles.emailInput}
+                />
+                <input
+                  type="password"
+                  value={pwPassword}
+                  onChange={(e) => setPwPassword(e.target.value)}
+                  placeholder="Password"
+                  required
+                  style={styles.emailInput}
+                />
+                {pwError && <p style={styles.emailError}>{pwError}</p>}
+                <button type="submit" disabled={pwLoading} style={styles.emailButton}>
+                  {pwLoading ? "Signing in..." : "Sign in"}
+                </button>
+              </form>
+
+              <div style={styles.divider}>
+                <span style={styles.dividerText}>or</span>
+              </div>
+
               <form onSubmit={handleEmailSignIn} style={styles.emailForm}>
                 <p style={styles.authSubtitle}>Enter your email to receive a sign-in link.</p>
                 <input
