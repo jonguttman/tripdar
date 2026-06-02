@@ -8,6 +8,22 @@ type ProductFilter = "all" | "active" | "inactive";
 type SortKey = "productName" | "format" | "brand" | "active" | "updatedAt";
 type PhotoTag = "stock" | "package_front" | "package_back" | "lifestyle" | "other";
 type UserRole = "super_admin" | "partner_admin";
+type DoseUnit = "mg" | "g";
+
+function toMg(value: string | number, unit: DoseUnit): number | null {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return unit === "g" ? Math.round(n * 1000) : Math.round(n);
+}
+
+function formatDose(mg: number | null | undefined): string {
+  if (!mg || mg <= 0) return "—";
+  if (mg >= 1000) {
+    const g = mg / 1000;
+    return `${g % 1 === 0 ? g.toFixed(0) : g.toFixed(g % 0.1 === 0 ? 1 : 2)} g`;
+  }
+  return `${mg} mg`;
+}
 
 const PHOTO_TAGS: PhotoTag[] = ["stock", "package_front", "package_back", "lifestyle", "other"];
 
@@ -121,8 +137,10 @@ const emptyProduct = {
   brandId: "",
   strainSlug: "",
   productUnitMg: "",
+  productUnitInUnit: "mg" as DoseUnit,
   unitsPerPack: "",
   totalDoseMg: "",
+  totalDoseInUnit: "mg" as DoseUnit,
   totalDoseOverride: false,
   strengthOffset: "standard" as StrengthOffset,
   strengthRationale: "",
@@ -365,11 +383,17 @@ export default function MycoAdminPage() {
     setMessage(null);
 
     try {
-      const productUnitMg = Number(newProduct.productUnitMg);
+      const productUnitMg = toMg(newProduct.productUnitMg, newProduct.productUnitInUnit);
       const unitsPerPack = newProduct.unitsPerPack ? Number(newProduct.unitsPerPack) : null;
       const totalDoseMg = newProduct.totalDoseOverride && newProduct.totalDoseMg
         ? Number(newProduct.totalDoseMg)
         : null;
+
+      if (!productUnitMg) {
+        setError("Dose per unit is required");
+        setSaving(false);
+        return;
+      }
 
       const res = await fetch("/api/admin/myco", {
         method: "POST",
@@ -599,9 +623,10 @@ export default function MycoAdminPage() {
     );
   }
 
+  const newUnitMg = toMg(newProduct.productUnitMg, newProduct.productUnitInUnit);
   const computedNewTotal =
-    Number(newProduct.productUnitMg) > 0 && Number(newProduct.unitsPerPack) > 0
-      ? Number(newProduct.productUnitMg) * Number(newProduct.unitsPerPack)
+    newUnitMg && Number(newProduct.unitsPerPack) > 0
+      ? newUnitMg * Number(newProduct.unitsPerPack)
       : null;
 
   return (
@@ -778,14 +803,25 @@ export default function MycoAdminPage() {
             </select>
           </label>
           <label style={styles.field}>
-            Dose per unit (mg)
-            <input
-              type="number"
-              min="1"
-              value={newProduct.productUnitMg}
-              onChange={(e) => setNewProduct({ ...newProduct, productUnitMg: e.target.value })}
-              style={styles.input}
-            />
+            Dose per unit
+            <div style={{ display: "flex", gap: "0.4rem" }}>
+              <input
+                type="number"
+                min="0"
+                step="any"
+                value={newProduct.productUnitMg}
+                onChange={(e) => setNewProduct({ ...newProduct, productUnitMg: e.target.value })}
+                style={{ ...styles.input, flex: 1 }}
+              />
+              <select
+                value={newProduct.productUnitInUnit}
+                onChange={(e) => setNewProduct({ ...newProduct, productUnitInUnit: e.target.value as DoseUnit })}
+                style={{ ...styles.select, minWidth: "70px" }}
+              >
+                <option value="mg">mg</option>
+                <option value="g">g</option>
+              </select>
+            </div>
           </label>
           <label style={styles.field}>
             Units per package
@@ -802,7 +838,7 @@ export default function MycoAdminPage() {
             {!newProduct.totalDoseOverride ? (
               <div>
                 <div style={{ padding: "0.65rem 0", fontWeight: 700 }}>
-                  {computedNewTotal ? `${computedNewTotal} mg` : "—"}
+                  {formatDose(computedNewTotal)}
                 </div>
                 <button
                   onClick={() =>
@@ -810,6 +846,7 @@ export default function MycoAdminPage() {
                       ...newProduct,
                       totalDoseOverride: true,
                       totalDoseMg: computedNewTotal ? String(computedNewTotal) : "",
+                      totalDoseInUnit: computedNewTotal && computedNewTotal >= 1000 ? "g" : "mg",
                     })
                   }
                   style={styles.linkButton}
@@ -821,11 +858,32 @@ export default function MycoAdminPage() {
               <div style={{ display: "flex", gap: "0.4rem" }}>
                 <input
                   type="number"
-                  min="1"
-                  value={newProduct.totalDoseMg}
-                  onChange={(e) => setNewProduct({ ...newProduct, totalDoseMg: e.target.value })}
-                  style={styles.input}
+                  min="0"
+                  step="any"
+                  value={
+                    newProduct.totalDoseInUnit === "g" && newProduct.totalDoseMg
+                      ? String(Number(newProduct.totalDoseMg) / 1000)
+                      : newProduct.totalDoseMg
+                  }
+                  onChange={(e) =>
+                    setNewProduct({
+                      ...newProduct,
+                      totalDoseMg:
+                        newProduct.totalDoseInUnit === "g"
+                          ? String(Number(e.target.value) * 1000)
+                          : e.target.value,
+                    })
+                  }
+                  style={{ ...styles.input, flex: 1 }}
                 />
+                <select
+                  value={newProduct.totalDoseInUnit}
+                  onChange={(e) => setNewProduct({ ...newProduct, totalDoseInUnit: e.target.value as DoseUnit })}
+                  style={{ ...styles.select, minWidth: "70px" }}
+                >
+                  <option value="mg">mg</option>
+                  <option value="g">g</option>
+                </select>
                 <button
                   onClick={() =>
                     setNewProduct({ ...newProduct, totalDoseOverride: false, totalDoseMg: "" })
@@ -998,13 +1056,13 @@ export default function MycoAdminPage() {
                         {product.strainSlug ? ` • ${product.strainSlug}` : ""}
                       </div>
                       <div style={styles.meta}>
-                        Unit: {product.productUnitMg ? `${product.productUnitMg}mg` : "—"}
+                        Unit: {formatDose(product.productUnitMg)}
                         {" • "}Per pack: {product.unitsPerPack ?? "—"}
                         {" • "}Total:{" "}
                         {product.totalDoseMg
-                          ? `${product.totalDoseMg}mg`
+                          ? formatDose(product.totalDoseMg)
                           : computedTotal
-                            ? `${computedTotal}mg (auto)`
+                            ? `${formatDose(computedTotal)} (auto)`
                             : "—"}
                       </div>
                     </div>
