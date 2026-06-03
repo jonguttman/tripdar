@@ -424,9 +424,40 @@ export default function MycoAdminPage() {
     });
   }
 
+  async function resizeImageFile(file: File, maxPx = 1600, quality = 0.85): Promise<File> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const { width, height } = img;
+        const scale = Math.min(1, maxPx / Math.max(width, height));
+        const w = Math.round(width * scale);
+        const h = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(file); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(file); return; }
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+          },
+          "image/jpeg",
+          quality
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); reject(new Error("Could not load image for resizing")); };
+      img.src = objectUrl;
+    });
+  }
+
   async function uploadPhotoToProduct(productId: string, file: File, tag: PhotoTag) {
+    const resized = await resizeImageFile(file);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", resized);
     formData.append("tag", tag);
     const res = await fetch(`/api/admin/myco/${productId}/photos`, {
       method: "POST",
