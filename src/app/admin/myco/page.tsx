@@ -488,8 +488,9 @@ export default function MycoAdminPage() {
 
       const product = data.data.product as Product;
 
-      // Upload any pending photos
+      // Upload any pending photos — surface failures loudly
       const uploaded: ProductPhoto[] = [];
+      const photoErrors: string[] = [];
       for (const pp of pendingPhotos) {
         try {
           const ph = await uploadPhotoToProduct(product.id, pp.file, pp.tag);
@@ -497,9 +498,17 @@ export default function MycoAdminPage() {
           URL.revokeObjectURL(pp.previewUrl);
         } catch (err) {
           console.error("Photo upload failed:", err);
+          photoErrors.push(`${pp.file.name}: ${err instanceof Error ? err.message : "upload failed"}`);
         }
       }
       if (uploaded.length) product.photos = [...(product.photos || []), ...uploaded];
+      if (photoErrors.length) {
+        setError(
+          `Product saved, but ${photoErrors.length} of ${pendingPhotos.length} photo(s) failed to upload:\n` +
+          photoErrors.join("\n") +
+          `\n\nClick Edit on the product to re-upload them.`
+        );
+      }
 
       // Save vibe scores if any non-zero
       const hasVibe = Object.values(newVibe).some((v) => v !== 0);
@@ -1140,7 +1149,7 @@ export default function MycoAdminPage() {
               }}
               style={styles.fileInput}
             />
-            <span style={{ ...styles.meta, marginLeft: "auto" }}>Photos upload after product is created</span>
+            <span style={{ ...styles.meta, marginLeft: "auto", color: "#7c3aed" }}>Photos save when you click Create. If anything fails, you&apos;ll see an error.</span>
           </div>
         </div>
 
@@ -1478,7 +1487,30 @@ export default function MycoAdminPage() {
                     ) : product.photoUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={product.photoUrl} alt="" style={styles.thumbnail} />
-                    ) : null}
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(product)}
+                        title="No photo yet — click to add one"
+                        style={{
+                          ...styles.thumbnail,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          background: "#fef3c7",
+                          border: "2px dashed #f59e0b",
+                          color: "#92400e",
+                          fontSize: "0.7rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          textAlign: "center",
+                          padding: 4,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        📷<br/>Add photo
+                      </button>
+                    )}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={styles.productName}>
                         {product.productName}
