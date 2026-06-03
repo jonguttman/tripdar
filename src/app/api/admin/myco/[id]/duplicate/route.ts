@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function POST(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
@@ -13,8 +13,9 @@ export async function POST(
   }
 
   try {
+    const { id } = await params;
     const source = await prisma.storeProductCatalog.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         strengthOffset: true,
         vibeProfile: true,

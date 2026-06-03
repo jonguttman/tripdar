@@ -25,13 +25,14 @@ function parseTag(value: unknown): PhotoTag | undefined {
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string; photoId?: string } }
+  { params }: { params: Promise<{ id: string; photoId?: string }> }
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
   try {
-    if (!params.photoId) {
+    const { photoId } = await params;
+    if (!photoId) {
       return NextResponse.json(
         { success: false, error: { message: "photoId is required" } },
         { status: 400 }
@@ -47,7 +48,7 @@ export async function PATCH(
     }
 
     const photo = await prisma.productPhoto.update({
-      where: { id: params.photoId },
+      where: { id: photoId },
       data,
     });
 
@@ -63,20 +64,21 @@ export async function PATCH(
 
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string; photoId?: string } }
+  { params }: { params: Promise<{ id: string; photoId?: string }> }
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
   try {
-    if (!params.photoId) {
+    const { photoId } = await params;
+    if (!photoId) {
       return NextResponse.json(
         { success: false, error: { message: "photoId is required" } },
         { status: 400 }
       );
     }
 
-    await prisma.productPhoto.delete({ where: { id: params.photoId } });
+    await prisma.productPhoto.delete({ where: { id: photoId } });
     return NextResponse.json({ success: true, data: { deleted: true } });
   } catch (error) {
     console.error("Error deleting product photo:", error);

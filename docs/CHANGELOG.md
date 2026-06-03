@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.9.2] - 2026-06-03
+
+### Fixed
+- **Myco photo upload broken on Next.js 16**: Photo uploads (and product PATCH/duplicate) returned HTTP 500 "Failed to upload product photo". Root cause: the Myco dynamic API routes used the old synchronous `params` signature, but Next.js 16 made route `params` a Promise. Accessing `params.id` synchronously yielded `undefined`, so `prisma.findUnique({ where: { id: undefined }})` threw a `PrismaClientValidationError`. Fixed all 4 routes (`[id]/photos`, `[id]/photos/[photoId]`, `[id]`, `[id]/duplicate`) to type `params` as a Promise and `await` it. The blob upload, env vars, and schema were all fine — this was purely the params signature.
+
 ## [1.9.1] - 2026-03-19
 
 ### Added

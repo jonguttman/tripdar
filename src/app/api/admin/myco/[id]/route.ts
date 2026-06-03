@@ -76,12 +76,13 @@ function sanitizeVibeScores(value: unknown): Record<string, number> | undefined 
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
   try {
+    const { id } = await params;
     const body = await request.json();
     const offset = parseOffset(body.strengthOffset);
     const rationale = cleanText(body.strengthRationale);
@@ -97,7 +98,7 @@ export async function PATCH(
     }
 
     const existing = await prisma.storeProductCatalog.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { productUnitMg: true, unitsPerPack: true },
     });
 
@@ -191,20 +192,20 @@ export async function PATCH(
     }
 
     const product = await prisma.storeProductCatalog.update({
-      where: { id: params.id },
+      where: { id },
       data,
       include: { strengthOffset: true, vibeProfile: true, photos: { orderBy: { sortOrder: "asc" } }, brandRef: true },
     });
 
     if (offset) {
       await prisma.productStrengthOffset.upsert({
-        where: { catalogItemId: params.id },
+        where: { catalogItemId: id },
         update: {
           offset,
           rationale: offset === "standard" ? null : rationale,
         },
         create: {
-          catalogItemId: params.id,
+          catalogItemId: id,
           offset,
           rationale: offset === "standard" ? null : rationale,
         },
@@ -214,9 +215,9 @@ export async function PATCH(
     const vibeScores = sanitizeVibeScores(body.vibeScores);
     if (vibeScores) {
       await prisma.productVibeProfile.upsert({
-        where: { catalogItemId: params.id },
+        where: { catalogItemId: id },
         update: { scores: vibeScores, source: "admin" },
-        create: { catalogItemId: params.id, scores: vibeScores, source: "admin" },
+        create: { catalogItemId: id, scores: vibeScores, source: "admin" },
       });
     }
 

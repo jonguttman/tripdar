@@ -4,6 +4,36 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-06-03-001: Myco photo upload returns HTTP 500 (Next.js 16 async params)
+
+**Symptoms:**
+- Uploading a product photo in the Myco admin (`/admin/myco`) always failed with a red banner "Failed to upload product photo"
+- Affected both the create-product pending-photo flow and the per-product "Add photo" uploader
+- Zero photos ever made it into the DB across all products
+- Product creation worked fine; only the photo routes (and other dynamic `[id]` routes) failed
+
+**Root Cause:**
+The project was upgraded to Next.js 16 (commit 03069fd, Dec 31), which changed route-handler `params` from a synchronous object to a `Promise`. Most routes were migrated to `params: Promise<{...}>` + `await params`, but the newer Myco routes were written with the OLD synchronous signature `{ params }: { params: { id: string } }`. In Next 16, accessing `params.id` synchronously returns `undefined`, so `prisma.storeProductCatalog.findUnique({ where: { id: undefined } })` threw `PrismaClientValidationError: Argument 'where' needs at least one of 'id' arguments`. The route caught it and returned a generic 500.
+
+**How it was found:**
+Reproduced the upload in a real browser session against production, then captured the actual server exception via `vercel logs <deployment-id>` streamed to a file while triggering the upload. The log showed `id: undefined` in the Prisma call — the decisive clue. (Earlier indirect theories — stale blob token, missing env var, body-size limit — were all disproven: the blob token worked from Node, the env var had existed since Feb, and the full path ran clean locally.)
+
+**Fix:**
+Changed all 4 Myco dynamic routes to `params: Promise<{...}>` and `await params`:
+- `src/app/api/admin/myco/[id]/photos/route.ts`
+- `src/app/api/admin/myco/[id]/photos/[photoId]/route.ts`
+- `src/app/api/admin/myco/[id]/route.ts`
+- `src/app/api/admin/myco/[id]/duplicate/route.ts`
+
+**Prevention:**
+- When adding a new dynamic API route, copy the `params: Promise<...>` + `await params` pattern from an existing route — never the bare sync object.
+- A generic catch-all `catch (error) { return 500 "Failed to..." }` hides the real exception. When debugging, get the actual error from `vercel logs <deployment-id>` (stream to a file — the CLI buffers and won't flush through a pipe) rather than guessing.
+
+**Lesson Learned:**
+A framework major-version upgrade can leave a mix of old/new route signatures. Don't trust "but editing works" as proof a shared mechanism is fine — the working route (product PATCH) read its id differently than the broken one. Always capture the real server-side error before theorizing.
+
+---
+
 ## BUG-2026-02-16-001: WordPress vibe filter showing only 4 vibes instead of 7-9
 
 **Symptoms:**

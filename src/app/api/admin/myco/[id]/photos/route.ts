@@ -26,14 +26,15 @@ function parseTag(value: unknown): PhotoTag {
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string; photoId?: string } }
+  { params }: { params: Promise<{ id: string; photoId?: string }> }
 ) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 
   try {
+    const { id } = await params;
     const product = await prisma.storeProductCatalog.findUnique({
-      where: { id: params.id },
+      where: { id },
       select: { id: true, productName: true },
     });
 
