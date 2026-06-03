@@ -162,6 +162,15 @@ export async function PATCH(
             .slice(0, 25)
         : [];
     }
+    if ("flavors" in body) {
+      data.flavors = Array.isArray(body.flavors)
+        ? body.flavors
+            .filter((i: unknown): i is string => typeof i === "string")
+            .map((i: string) => i.trim())
+            .filter((i: string) => i.length > 0)
+            .slice(0, 25)
+        : [];
+    }
 
     // Auto-recompute totalDoseMg when not explicitly provided but both
     // productUnitMg and unitsPerPack are present (incoming or existing).

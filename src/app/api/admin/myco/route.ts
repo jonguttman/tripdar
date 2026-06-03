@@ -244,6 +244,13 @@ export async function POST(request: NextRequest) {
           .filter((i: string) => i.length > 0)
           .slice(0, 25)
       : [];
+    const flavors = Array.isArray(body.flavors)
+      ? body.flavors
+          .filter((i: unknown): i is string => typeof i === "string")
+          .map((i: string) => i.trim())
+          .filter((i: string) => i.length > 0)
+          .slice(0, 25)
+      : [];
 
     if (!partnerId || !productName || !format || !productUnitMg) {
       return NextResponse.json(
@@ -284,6 +291,7 @@ export async function POST(request: NextRequest) {
         unitsPerPack: unitsPerPack ?? null,
         totalDoseMg: totalDoseMg ?? null,
         ingredients,
+        flavors,
         onsetMinutes: onsetMinutes ?? null,
         durationMinutes: durationMinutes ?? null,
         brandMicroUnits: brandMicroUnits ?? null,

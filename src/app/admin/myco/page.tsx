@@ -18,6 +18,7 @@ interface EditDraft {
   totalDoseInUnit: DoseUnit;
   totalDoseOverride: boolean;
   ingredients: string[];
+  flavors: string[];
   onsetMinutes: string;
   durationMinutes: string;
   brandMicroUnits: string;
@@ -160,6 +161,7 @@ interface Product {
   brandMiniUnits: number | null;
   brandMacroUnits: number | null;
   _count?: { testerVotes: number };
+  flavors: string[];
 }
 
 interface PendingPhoto {
@@ -183,6 +185,7 @@ const emptyProduct = {
   strengthOffset: "standard" as StrengthOffset,
   strengthRationale: "",
   ingredients: [] as string[],
+  flavors: [] as string[],
   onsetMinutes: "",
   durationMinutes: "",
   brandMicroUnits: "",
@@ -219,8 +222,10 @@ export default function MycoAdminPage() {
   const [newVibe, setNewVibe] = useState<VibeScores>(emptyVibe());
   const [newVibeOpen, setNewVibeOpen] = useState(false);
   const [newIngredientInput, setNewIngredientInput] = useState("");
-  const [newBrandTiersOpen, setNewBrandTiersOpen] = useState(false);
+  const [newFlavorInput, setNewFlavorInput] = useState("");
   const [editIngredientInput, setEditIngredientInput] = useState("");
+  const [editFlavorInput, setEditFlavorInput] = useState("");
+  const [newBrandTiersOpen, setNewBrandTiersOpen] = useState(false);
   const [editBrandTiersOpen, setEditBrandTiersOpen] = useState(false);
   const [rowDrafts, setRowDrafts] = useState<
     Record<
@@ -466,6 +471,7 @@ export default function MycoAdminPage() {
           strengthOffset: newProduct.strengthOffset,
           strengthRationale: newProduct.strengthRationale,
           ingredients: newProduct.ingredients,
+          flavors: newProduct.flavors,
           onsetMinutes: newProduct.onsetMinutes ? Number(newProduct.onsetMinutes) : null,
           durationMinutes: newProduct.durationMinutes ? Math.round(Number(newProduct.durationMinutes) * 60) : null,
           brandMicroUnits: newProduct.brandMicroUnits ? Number(newProduct.brandMicroUnits) : null,
@@ -591,6 +597,7 @@ export default function MycoAdminPage() {
       totalDoseInUnit,
       totalDoseOverride: !!product.totalDoseMg,
       ingredients: product.ingredients ?? [],
+      flavors: product.flavors ?? [],
       onsetMinutes: product.onsetMinutes ? String(product.onsetMinutes) : "",
       durationMinutes: product.durationMinutes ? String(product.durationMinutes / 60) : "",
       brandMicroUnits: product.brandMicroUnits ? String(product.brandMicroUnits) : "",
@@ -626,6 +633,7 @@ export default function MycoAdminPage() {
         unitsPerPack,
         totalDoseMg,
         ingredients: editDraft.ingredients,
+        flavors: editDraft.flavors,
         onsetMinutes: editDraft.onsetMinutes ? Number(editDraft.onsetMinutes) : null,
         durationMinutes: editDraft.durationMinutes ? Math.round(Number(editDraft.durationMinutes) * 60) : null,
         brandMicroUnits: editDraft.brandMicroUnits ? Number(editDraft.brandMicroUnits) : null,
@@ -645,6 +653,26 @@ export default function MycoAdminPage() {
 
   async function unarchiveProduct(productId: string) {
     await patchProduct(productId, { archived: false }, "Product unarchived");
+  }
+
+  async function duplicateProduct(productId: string) {
+    if (!confirm("Duplicate this product? You'll get a copy you can rename and adjust.")) return;
+    try {
+      const res = await fetch(`/api/admin/myco/${productId}/duplicate`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        alert(json?.error?.message || "Failed to duplicate product");
+        return;
+      }
+      await loadData(partner?.id, filter === "archived");
+      // Auto-open edit on the new copy
+      if (json.data?.product) {
+        setTimeout(() => startEdit(json.data.product), 300);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to duplicate product");
+    }
   }
 
   function updateDraft(
@@ -1202,6 +1230,68 @@ export default function MycoAdminPage() {
           </div>
         </div>
 
+        {/* Flavors */}
+        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
+          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Flavors (same recipe)</strong>
+          <div style={{ ...styles.meta, marginTop: 4 }}>
+            List flavor variants that share this exact recipe (mint, raspberry, original). If a flavor has a different recipe, create a separate product instead — use the Duplicate button.
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
+            {newProduct.flavors.length === 0 && (
+              <span style={styles.meta}>No flavors added — single-flavor product</span>
+            )}
+            {newProduct.flavors.map((fl) => (
+              <span key={fl} style={styles.ingredientPill}>
+                {fl}
+                <button
+                  type="button"
+                  onClick={() =>
+                    setNewProduct({
+                      ...newProduct,
+                      flavors: newProduct.flavors.filter((f) => f !== fl),
+                    })
+                  }
+                  style={styles.pillRemoveButton}
+                  aria-label={`Remove ${fl}`}
+                >
+                  ×
+                </button>
+              </span>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", alignItems: "center" }}>
+            <input
+              value={newFlavorInput}
+              onChange={(e) => setNewFlavorInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const val = newFlavorInput.trim();
+                  if (val && !newProduct.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
+                    setNewProduct({ ...newProduct, flavors: [...newProduct.flavors, val] });
+                  }
+                  setNewFlavorInput("");
+                }
+              }}
+              placeholder="Add a flavor…"
+              style={{ ...styles.input, maxWidth: "280px" }}
+            />
+            <button
+              type="button"
+              onClick={() => {
+                const val = newFlavorInput.trim();
+                if (val && !newProduct.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
+                  setNewProduct({ ...newProduct, flavors: [...newProduct.flavors, val] });
+                }
+                setNewFlavorInput("");
+              }}
+              style={styles.secondaryButton}
+            >
+              Add
+            </button>
+          </div>
+        </div>
+
         {/* Onset & Duration */}
         <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
           <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Onset & Duration</strong>
@@ -1413,6 +1503,7 @@ export default function MycoAdminPage() {
                             : "—"}
                       </div>
                       {(product.ingredients?.length ||
+                        product.flavors?.length ||
                         product.onsetMinutes ||
                         product.durationMinutes ||
                         product.brandMicroUnits ||
@@ -1422,6 +1513,14 @@ export default function MycoAdminPage() {
                           {product.ingredients?.map((ing) => (
                             <span key={ing} style={styles.readOnlyPill}>{ing}</span>
                           ))}
+                          {product.flavors?.length ? (
+                            <span style={{ display: "inline-flex", gap: "0.3rem", alignItems: "center" }}>
+                              <span style={{ color: "#7c3aed", fontWeight: 600, fontSize: "0.7rem" }}>FLAVORS:</span>
+                              {product.flavors.map((fl) => (
+                                <span key={fl} style={{ ...styles.readOnlyPill, background: "#fdf2f8", color: "#9d174d" }}>{fl}</span>
+                              ))}
+                            </span>
+                          ) : null}
                           {(product.onsetMinutes || product.durationMinutes) && (
                             <span>
                               {product.onsetMinutes ? `Onset: ${formatDuration(product.onsetMinutes)}` : ""}
@@ -1489,6 +1588,9 @@ export default function MycoAdminPage() {
                       <>
                         <button onClick={() => startEdit(product)} style={styles.secondaryButton}>
                           Edit
+                        </button>
+                        <button onClick={() => duplicateProduct(product.id)} style={styles.secondaryButton} title="Duplicate this product (e.g. for a different flavor recipe)">
+                          Duplicate
                         </button>
                         <button onClick={() => archiveProduct(product.id)} style={styles.secondaryButton}>
                           Archive
@@ -1711,6 +1813,68 @@ export default function MycoAdminPage() {
                               setEditDraft({ ...editDraft, ingredients: [...editDraft.ingredients, val] });
                             }
                             setEditIngredientInput("");
+                          }}
+                          style={styles.secondaryButton}
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Flavors (edit) */}
+                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem", marginTop: "0.5rem" }}>
+                      <strong style={{ fontSize: "0.8rem", color: "#374151" }}>Flavors (same recipe)</strong>
+                      <div style={{ ...styles.meta, marginTop: 2 }}>
+                        Same recipe, different flavors. For different recipes, use Duplicate.
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
+                        {editDraft.flavors.length === 0 && (
+                          <span style={styles.meta}>No flavors — single-flavor product</span>
+                        )}
+                        {editDraft.flavors.map((fl) => (
+                          <span key={fl} style={styles.ingredientPill}>
+                            {fl}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditDraft({
+                                  ...editDraft,
+                                  flavors: editDraft.flavors.filter((f) => f !== fl),
+                                })
+                              }
+                              style={styles.pillRemoveButton}
+                              aria-label={`Remove ${fl}`}
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center" }}>
+                        <input
+                          value={editFlavorInput}
+                          onChange={(e) => setEditFlavorInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              const val = editFlavorInput.trim();
+                              if (val && !editDraft.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
+                                setEditDraft({ ...editDraft, flavors: [...editDraft.flavors, val] });
+                              }
+                              setEditFlavorInput("");
+                            }
+                          }}
+                          placeholder="Add a flavor…"
+                          style={{ ...styles.input, maxWidth: "240px" }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const val = editFlavorInput.trim();
+                            if (val && !editDraft.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
+                              setEditDraft({ ...editDraft, flavors: [...editDraft.flavors, val] });
+                            }
+                            setEditFlavorInput("");
                           }}
                           style={styles.secondaryButton}
                         >

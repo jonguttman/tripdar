@@ -431,6 +431,7 @@ model StoreProductCatalog {
   unitsPerPack   Int? // # of units in the package
   totalDoseMg    Int? // computed total mg for the package
   ingredients    String[] // stacked ingredients/nootropics (Lion's Mane, Cordyceps, etc.)
+  flavors        String[] // flavor variants sharing this recipe (Mint, Raspberry, Original)
   onsetMinutes   Int? // time-to-effect in minutes
   durationMinutes Int? // experience duration in minutes
   brandMicroUnits Int? // brand-recommended units for a microdose
