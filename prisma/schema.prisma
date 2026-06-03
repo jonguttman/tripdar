@@ -449,6 +449,7 @@ model StoreProductCatalog {
   vibeProfile    ProductVibeProfile?
   strengthOffset ProductStrengthOffset?
   outcomeReports UserOutcomeReport[]
+  testerVotes    TesterVote[]
 
   @@index([partnerId, active])
   @@index([strainSlug])
@@ -463,6 +464,38 @@ model Brand {
   updatedAt DateTime @updatedAt
 
   products StoreProductCatalog[]
+}
+
+model TesterVote {
+  id              String   @id @default(cuid())
+  catalogItemId   String
+  voterName       String
+  voterEmail      String
+  voterPhone      String?
+  relationship    String?  // staff, regular, friend, other
+  // Effect sliders (0-100 each)
+  clarityCognition Int?
+  moodSocial       Int?
+  visualPattern    Int?
+  somatic          Int?
+  energyDirection  Int?
+  depthDirection   Int?
+  // Onset / duration buckets
+  onsetBucket    String?  // under_15, 15_30, 30_60, 60_plus
+  durationBucket String?  // under_2, 2_4, 4_6, 6_plus
+  // Dose taken
+  unitsTaken     Float?
+  // Free notes
+  notes          String?
+  // Metadata
+  ipHash         String?
+  userAgent      String?
+  createdAt      DateTime @default(now())
+
+  catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId, createdAt])
+  @@index([voterEmail])
 }
 
 model ProductPhoto {

@@ -143,6 +143,7 @@ export async function GET(request: NextRequest) {
           vibeProfile: true,
           photos: { orderBy: { sortOrder: "asc" } },
           brandRef: true,
+          _count: { select: { testerVotes: true } },
         },
         orderBy: [{ active: "desc" }, { updatedAt: "desc" }],
       }),

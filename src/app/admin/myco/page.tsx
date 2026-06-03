@@ -159,6 +159,7 @@ interface Product {
   brandMicroUnits: number | null;
   brandMiniUnits: number | null;
   brandMacroUnits: number | null;
+  _count?: { testerVotes: number };
 }
 
 interface PendingPhoto {
@@ -1444,7 +1445,42 @@ export default function MycoAdminPage() {
                       ) : null}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
+                    {!isArchived && (
+                      <button
+                        onClick={async () => {
+                          const url = `${window.location.origin}/t/${product.id}`;
+                          try {
+                            await navigator.clipboard.writeText(url);
+                            const shareText = `Try ${product.productName} and give me your feedback: ${url}`;
+                            // Try native share on mobile, fall back to clipboard-only
+                            if (navigator.share) {
+                              try { await navigator.share({ title: product.productName, text: shareText, url }); } catch {}
+                            }
+                            alert(`Tester link copied!\n\n${url}\n\nText or AirDrop it to anyone who's tried this product.`);
+                          } catch {
+                            prompt("Copy this tester link:", url);
+                          }
+                        }}
+                        style={{
+                          ...styles.secondaryButton,
+                          background: "linear-gradient(135deg, #7c3aed, #ec4899)",
+                          color: "white",
+                          border: "none",
+                          fontWeight: 600,
+                        }}
+                      >
+                        🔗 Get tester link
+                        {product._count && product._count.testerVotes > 0 && (
+                          <span style={{
+                            marginLeft: 6, background: "rgba(255,255,255,0.25)",
+                            padding: "1px 6px", borderRadius: 999, fontSize: "0.7rem",
+                          }}>
+                            {product._count.testerVotes} {product._count.testerVotes === 1 ? "vote" : "votes"}
+                          </span>
+                        )}
+                      </button>
+                    )}
                     {isArchived ? (
                       <button onClick={() => unarchiveProduct(product.id)} style={styles.secondaryButton}>
                         Unarchive
