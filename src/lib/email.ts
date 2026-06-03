@@ -3,6 +3,7 @@ import { Resend } from "resend";
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 const FROM_ADDRESS = "Tripdar <noreply@tripd.ar>";
+const REPLY_TO_ADDRESS = "scottyclaw@gmail.com";
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -10,16 +11,18 @@ export interface SendEmailOptions {
   html: string;
   text?: string;
   from?: string;
+  replyTo?: string;
 }
 
 export async function sendEmail(options: SendEmailOptions) {
-  const { to, subject, html, text, from = FROM_ADDRESS } = options;
+  const { to, subject, html, text, from = FROM_ADDRESS, replyTo = REPLY_TO_ADDRESS } = options;
 
   const { data, error } = await resend.emails.send({
     from,
     to: Array.isArray(to) ? to : [to],
     subject,
     html,
+    replyTo,
     ...(text ? { text } : {}),
   });
 
