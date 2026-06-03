@@ -1715,19 +1715,19 @@ export default function MycoAdminPage() {
                     </label>
                     <label style={styles.field}>
                       Dose per unit
-                      <div style={{ display: "flex", gap: "0.4rem" }}>
+                      <div style={styles.inlineRow}>
                         <input
                           type="number"
                           min="0"
                           step="any"
                           value={editDraft.productUnitMg}
                           onChange={(e) => setEditDraft({ ...editDraft, productUnitMg: e.target.value })}
-                          style={{ ...styles.input, flex: 1 }}
+                          style={{ ...styles.input, flex: 1, minWidth: 0 }}
                         />
                         <select
                           value={editDraft.productUnitInUnit}
                           onChange={(e) => setEditDraft({ ...editDraft, productUnitInUnit: e.target.value as DoseUnit })}
-                          style={{ ...styles.select, minWidth: "70px" }}
+                          style={styles.unitSelect}
                         >
                           <option value="mg">mg</option>
                           <option value="g">g</option>
