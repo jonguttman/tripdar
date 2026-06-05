@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.9.3] - 2026-06-03
+
+### Fixed
+- **Large photo uploads silently fail**: Vercel serverless has a 4.5MB request body limit. Phone photos (4-8MB) hit this limit and returned no visible error. Added client-side canvas resize — all photos are downscaled to max 1600px and re-encoded as JPEG at 85% quality before upload. Output is typically 200-600KB regardless of original size.
+
 ## [1.9.2] - 2026-06-03
 
 ### Fixed
