@@ -45,6 +45,8 @@ export async function POST(
         brandMicroUnits: source.brandMicroUnits,
         brandMiniUnits: source.brandMiniUnits,
         brandMacroUnits: source.brandMacroUnits,
+        brandDoseTiers: source.brandDoseTiers === null ? undefined : source.brandDoseTiers,
+        brandDoseInstructions: source.brandDoseInstructions,
         photoUrl: source.photoUrl,
         active: true,
         notes: source.notes,

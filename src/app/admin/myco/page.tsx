@@ -5,6 +5,20 @@ import { useEffect, useMemo, useState } from "react";
 
 type StrengthOffset = "standard" | "stronger" | "lighter";
 type ProductFilter = "all" | "active" | "inactive" | "archived";
+type BrandDoseCategory = "micro" | "mini" | "macro" | "custom";
+
+interface BrandDoseTierDraft {
+  id: string;
+  category: BrandDoseCategory;
+  label: string;
+  quantityText: string;
+  unit: string;
+}
+
+interface BrandDoseTier extends BrandDoseTierDraft {
+  quantityMin: number;
+  quantityMax: number | null;
+}
 
 interface EditDraft {
   productName: string;
@@ -21,9 +35,8 @@ interface EditDraft {
   flavors: string[];
   onsetMinutes: string;
   durationMinutes: string;
-  brandMicroUnits: string;
-  brandMiniUnits: string;
-  brandMacroUnits: string;
+  brandDoseTiers: BrandDoseTierDraft[];
+  brandDoseInstructions: string;
 }
 type SortKey = "productName" | "format" | "brand" | "active" | "updatedAt";
 type PhotoTag = "stock" | "package_front" | "package_back" | "lifestyle" | "other";
@@ -57,6 +70,12 @@ function formatDuration(minutes: number | null | undefined): string {
 const COMMON_INGREDIENTS = ["Lion's Mane", "Cordyceps", "Chaga", "Reishi", "L-Theanine", "Niacin"];
 
 const PHOTO_TAGS: PhotoTag[] = ["stock", "package_front", "package_back", "lifestyle", "other"];
+const BRAND_DOSE_CATEGORY_LABELS: Record<BrandDoseCategory, string> = {
+  micro: "Micro",
+  mini: "Mini",
+  macro: "Macro",
+  custom: "Custom",
+};
 
 const VIBE_DIMENSIONS: { key: VibeKey; label: string }[] = [
   { key: "clarity_cognition", label: "Mind: Scattered ↔ Focused" },
@@ -97,6 +116,84 @@ function readVibe(scores: unknown): VibeScores {
     if (typeof v === "number" && Number.isFinite(v)) base[key] = Math.max(-1, Math.min(1, v));
   }
   return base;
+}
+
+function unitForFormat(format: string): string {
+  if (format === "capsule") return "capsule";
+  if (format === "edible") return "gummy";
+  if (format === "tincture") return "dropper";
+  return "unit";
+}
+
+function makeBrandDoseTier(
+  category: BrandDoseCategory,
+  label: string,
+  unit: string,
+  quantityText = ""
+): BrandDoseTierDraft {
+  return {
+    id: `tier-${category}-${Math.random().toString(36).slice(2, 8)}`,
+    category,
+    label,
+    quantityText,
+    unit,
+  };
+}
+
+function defaultBrandDoseTiers(format: string): BrandDoseTierDraft[] {
+  const unit = unitForFormat(format);
+  return [
+    makeBrandDoseTier("micro", "Microdose", unit),
+    makeBrandDoseTier("mini", "Mini-dose", unit),
+    makeBrandDoseTier("macro", "Macro Dose", unit),
+  ];
+}
+
+function retargetDefaultTierUnits(
+  tiers: BrandDoseTierDraft[],
+  previousFormat: string,
+  nextFormat: string
+): BrandDoseTierDraft[] {
+  const previousUnit = unitForFormat(previousFormat);
+  const nextUnit = unitForFormat(nextFormat);
+  return tiers.map((tier) => ({
+    ...tier,
+    unit: !tier.unit || tier.unit === previousUnit ? nextUnit : tier.unit,
+  }));
+}
+
+function normalizeBrandDoseTiers(product: Product): BrandDoseTierDraft[] {
+  if (Array.isArray(product.brandDoseTiers) && product.brandDoseTiers.length > 0) {
+    return product.brandDoseTiers.map((tier, index) => ({
+      id: tier.id || `tier-${index + 1}`,
+      category: tier.category,
+      label: tier.label,
+      quantityText: tier.quantityText,
+      unit: tier.unit,
+    }));
+  }
+
+  const unit = unitForFormat(product.format);
+  return [
+    product.brandMicroUnits
+      ? makeBrandDoseTier("micro", "Microdose", unit, String(product.brandMicroUnits))
+      : null,
+    product.brandMiniUnits
+      ? makeBrandDoseTier("mini", "Mini-dose", unit, String(product.brandMiniUnits))
+      : null,
+    product.brandMacroUnits
+      ? makeBrandDoseTier("macro", "Macro Dose", unit, String(product.brandMacroUnits))
+      : null,
+  ].filter((tier): tier is BrandDoseTierDraft => Boolean(tier));
+}
+
+function activeBrandDoseTiers(tiers: BrandDoseTierDraft[]): BrandDoseTierDraft[] {
+  return tiers.filter((tier) => tier.label.trim() && tier.quantityText.trim());
+}
+
+function formatBrandDoseTier(tier: BrandDoseTier | BrandDoseTierDraft): string {
+  const unit = tier.unit.trim();
+  return `${tier.quantityText}${unit ? ` ${unit}` : ""} = ${tier.label}`;
 }
 
 interface Partner {
@@ -160,6 +257,8 @@ interface Product {
   brandMicroUnits: number | null;
   brandMiniUnits: number | null;
   brandMacroUnits: number | null;
+  brandDoseTiers: BrandDoseTier[] | null;
+  brandDoseInstructions: string | null;
   _count?: { testerVotes: number };
   flavors: string[];
 }
@@ -188,9 +287,8 @@ const emptyProduct = {
   flavors: [] as string[],
   onsetMinutes: "",
   durationMinutes: "",
-  brandMicroUnits: "",
-  brandMiniUnits: "",
-  brandMacroUnits: "",
+  brandDoseTiers: defaultBrandDoseTiers("capsule"),
+  brandDoseInstructions: "",
 };
 
 export default function MycoAdminPage() {
@@ -505,9 +603,8 @@ export default function MycoAdminPage() {
           flavors: newProduct.flavors,
           onsetMinutes: newProduct.onsetMinutes ? Number(newProduct.onsetMinutes) : null,
           durationMinutes: newProduct.durationMinutes ? Math.round(Number(newProduct.durationMinutes) * 60) : null,
-          brandMicroUnits: newProduct.brandMicroUnits ? Number(newProduct.brandMicroUnits) : null,
-          brandMiniUnits: newProduct.brandMiniUnits ? Number(newProduct.brandMiniUnits) : null,
-          brandMacroUnits: newProduct.brandMacroUnits ? Number(newProduct.brandMacroUnits) : null,
+          brandDoseTiers: activeBrandDoseTiers(newProduct.brandDoseTiers),
+          brandDoseInstructions: newProduct.brandDoseInstructions,
         }),
       });
       const data = await res.json();
@@ -562,7 +659,7 @@ export default function MycoAdminPage() {
           vibeOpen: false,
         },
       }));
-      setNewProduct(emptyProduct);
+      setNewProduct({ ...emptyProduct, brandDoseTiers: defaultBrandDoseTiers("capsule") });
       setPendingPhotos([]);
       setNewVibe(emptyVibe());
       setNewVibeOpen(false);
@@ -640,9 +737,8 @@ export default function MycoAdminPage() {
       flavors: product.flavors ?? [],
       onsetMinutes: product.onsetMinutes ? String(product.onsetMinutes) : "",
       durationMinutes: product.durationMinutes ? String(product.durationMinutes / 60) : "",
-      brandMicroUnits: product.brandMicroUnits ? String(product.brandMicroUnits) : "",
-      brandMiniUnits: product.brandMiniUnits ? String(product.brandMiniUnits) : "",
-      brandMacroUnits: product.brandMacroUnits ? String(product.brandMacroUnits) : "",
+      brandDoseTiers: normalizeBrandDoseTiers(product),
+      brandDoseInstructions: product.brandDoseInstructions ?? "",
     });
   }
 
@@ -676,9 +772,8 @@ export default function MycoAdminPage() {
         flavors: editDraft.flavors,
         onsetMinutes: editDraft.onsetMinutes ? Number(editDraft.onsetMinutes) : null,
         durationMinutes: editDraft.durationMinutes ? Math.round(Number(editDraft.durationMinutes) * 60) : null,
-        brandMicroUnits: editDraft.brandMicroUnits ? Number(editDraft.brandMicroUnits) : null,
-        brandMiniUnits: editDraft.brandMiniUnits ? Number(editDraft.brandMiniUnits) : null,
-        brandMacroUnits: editDraft.brandMacroUnits ? Number(editDraft.brandMacroUnits) : null,
+        brandDoseTiers: activeBrandDoseTiers(editDraft.brandDoseTiers),
+        brandDoseInstructions: editDraft.brandDoseInstructions,
       },
       "Product updated"
     );
@@ -984,7 +1079,18 @@ export default function MycoAdminPage() {
             Format
             <select
               value={newProduct.format}
-              onChange={(e) => setNewProduct({ ...newProduct, format: e.target.value })}
+              onChange={(e) => {
+                const format = e.target.value;
+                setNewProduct({
+                  ...newProduct,
+                  format,
+                  brandDoseTiers: retargetDefaultTierUnits(
+                    newProduct.brandDoseTiers,
+                    newProduct.format,
+                    format
+                  ),
+                });
+              }}
               style={styles.select}
             >
               <option value="capsule">Capsule</option>
@@ -1372,43 +1478,15 @@ export default function MycoAdminPage() {
             {newBrandTiersOpen ? "Hide" : "Show"} Brand Dose Tiers
           </button>
           {newBrandTiersOpen && (
-            <>
-              <p style={{ ...styles.meta, margin: "0.5rem 0" }}>
-                Use the brand&apos;s own packaging guidance. e.g. 1 cap microdose, 3 caps mini-dose, 5 caps macro.
-              </p>
-              <div style={styles.productGrid}>
-                <label style={styles.field}>
-                  Microdose units
-                  <input
-                    type="number"
-                    min="0"
-                    value={newProduct.brandMicroUnits}
-                    onChange={(e) => setNewProduct({ ...newProduct, brandMicroUnits: e.target.value })}
-                    style={styles.input}
-                  />
-                </label>
-                <label style={styles.field}>
-                  Mini-dose units
-                  <input
-                    type="number"
-                    min="0"
-                    value={newProduct.brandMiniUnits}
-                    onChange={(e) => setNewProduct({ ...newProduct, brandMiniUnits: e.target.value })}
-                    style={styles.input}
-                  />
-                </label>
-                <label style={styles.field}>
-                  Macro-dose units
-                  <input
-                    type="number"
-                    min="0"
-                    value={newProduct.brandMacroUnits}
-                    onChange={(e) => setNewProduct({ ...newProduct, brandMacroUnits: e.target.value })}
-                    style={styles.input}
-                  />
-                </label>
-              </div>
-            </>
+            <BrandDoseTierEditor
+              tiers={newProduct.brandDoseTiers}
+              instructions={newProduct.brandDoseInstructions}
+              defaultUnit={unitForFormat(newProduct.format)}
+              onChange={(brandDoseTiers) => setNewProduct({ ...newProduct, brandDoseTiers })}
+              onInstructionsChange={(brandDoseInstructions) =>
+                setNewProduct({ ...newProduct, brandDoseInstructions })
+              }
+            />
           )}
         </div>
 
@@ -1483,6 +1561,7 @@ export default function MycoAdminPage() {
               vibeOpen: false,
             };
             const brandName = product.brandRef?.name || product.brand || "No brand";
+            const productBrandDoseTiers = normalizeBrandDoseTiers(product);
             const computedTotal =
               product.productUnitMg && product.unitsPerPack
                 ? product.productUnitMg * product.unitsPerPack
@@ -1569,9 +1648,8 @@ export default function MycoAdminPage() {
                         product.flavors?.length ||
                         product.onsetMinutes ||
                         product.durationMinutes ||
-                        product.brandMicroUnits ||
-                        product.brandMiniUnits ||
-                        product.brandMacroUnits) ? (
+                        productBrandDoseTiers.length ||
+                        product.brandDoseInstructions) ? (
                         <div style={{ ...styles.meta, display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "center" }}>
                           {product.ingredients?.map((ing) => (
                             <span key={ing} style={styles.readOnlyPill}>{ing}</span>
@@ -1591,17 +1669,11 @@ export default function MycoAdminPage() {
                               {product.durationMinutes ? `Duration: ${formatDuration(product.durationMinutes)}` : ""}
                             </span>
                           )}
-                          {(product.brandMicroUnits || product.brandMiniUnits || product.brandMacroUnits) && (
-                            <span>
-                              Brand:{" "}
-                              {[
-                                product.brandMicroUnits ? `${product.brandMicroUnits} micro` : null,
-                                product.brandMiniUnits ? `${product.brandMiniUnits} mini` : null,
-                                product.brandMacroUnits ? `${product.brandMacroUnits} macro` : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" / ")}
-                            </span>
+                          {productBrandDoseTiers.length > 0 && (
+                            <span>Brand: {productBrandDoseTiers.map(formatBrandDoseTier).join(" / ")}</span>
+                          )}
+                          {product.brandDoseInstructions && (
+                            <span>Instructions: {product.brandDoseInstructions}</span>
                           )}
                         </div>
                       ) : null}
@@ -1690,7 +1762,18 @@ export default function MycoAdminPage() {
                       Format
                       <select
                         value={editDraft.format}
-                        onChange={(e) => setEditDraft({ ...editDraft, format: e.target.value })}
+                        onChange={(e) => {
+                          const format = e.target.value;
+                          setEditDraft({
+                            ...editDraft,
+                            format,
+                            brandDoseTiers: retargetDefaultTierUnits(
+                              editDraft.brandDoseTiers,
+                              editDraft.format,
+                              format
+                            ),
+                          });
+                        }}
                         style={styles.select}
                       >
                         <option value="capsule">Capsule</option>
@@ -1981,43 +2064,15 @@ export default function MycoAdminPage() {
                         {editBrandTiersOpen ? "Hide" : "Show"} Brand Dose Tiers
                       </button>
                       {editBrandTiersOpen && (
-                        <>
-                          <p style={{ ...styles.meta, margin: "0.5rem 0" }}>
-                            Use the brand&apos;s own packaging guidance. e.g. 1 cap microdose, 3 caps mini-dose, 5 caps macro.
-                          </p>
-                          <div style={styles.productGrid}>
-                            <label style={styles.field}>
-                              Microdose units
-                              <input
-                                type="number"
-                                min="0"
-                                value={editDraft.brandMicroUnits}
-                                onChange={(e) => setEditDraft({ ...editDraft, brandMicroUnits: e.target.value })}
-                                style={styles.input}
-                              />
-                            </label>
-                            <label style={styles.field}>
-                              Mini-dose units
-                              <input
-                                type="number"
-                                min="0"
-                                value={editDraft.brandMiniUnits}
-                                onChange={(e) => setEditDraft({ ...editDraft, brandMiniUnits: e.target.value })}
-                                style={styles.input}
-                              />
-                            </label>
-                            <label style={styles.field}>
-                              Macro-dose units
-                              <input
-                                type="number"
-                                min="0"
-                                value={editDraft.brandMacroUnits}
-                                onChange={(e) => setEditDraft({ ...editDraft, brandMacroUnits: e.target.value })}
-                                style={styles.input}
-                              />
-                            </label>
-                          </div>
-                        </>
+                        <BrandDoseTierEditor
+                          tiers={editDraft.brandDoseTiers}
+                          instructions={editDraft.brandDoseInstructions}
+                          defaultUnit={unitForFormat(editDraft.format)}
+                          onChange={(brandDoseTiers) => setEditDraft({ ...editDraft, brandDoseTiers })}
+                          onInstructionsChange={(brandDoseInstructions) =>
+                            setEditDraft({ ...editDraft, brandDoseInstructions })
+                          }
+                        />
                       )}
                     </div>
                     <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
@@ -2156,6 +2211,103 @@ function PhotoUploader({
         }}
         style={styles.fileInput}
       />
+    </div>
+  );
+}
+
+function BrandDoseTierEditor({
+  tiers,
+  instructions,
+  defaultUnit,
+  onChange,
+  onInstructionsChange,
+}: {
+  tiers: BrandDoseTierDraft[];
+  instructions: string;
+  defaultUnit: string;
+  onChange: (tiers: BrandDoseTierDraft[]) => void;
+  onInstructionsChange: (instructions: string) => void;
+}) {
+  function updateTier(id: string, patch: Partial<BrandDoseTierDraft>) {
+    onChange(tiers.map((tier) => (tier.id === id ? { ...tier, ...patch } : tier)));
+  }
+
+  function addTier() {
+    onChange([...tiers, makeBrandDoseTier("custom", "", defaultUnit)]);
+  }
+
+  function removeTier(id: string) {
+    onChange(tiers.filter((tier) => tier.id !== id));
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      <p style={{ ...styles.meta, margin: 0 }}>
+        Enter the brand&apos;s packaging guidance. Quantity accepts whole, half, quarter, and range values like 1/2, 0.5-1, or 1-3.
+      </p>
+      {tiers.map((tier) => (
+        <div key={tier.id} style={styles.doseTierRow}>
+          <label style={styles.field}>
+            Category
+            <select
+              value={tier.category}
+              onChange={(e) => updateTier(tier.id, { category: e.target.value as BrandDoseCategory })}
+              style={styles.select}
+            >
+              {Object.entries(BRAND_DOSE_CATEGORY_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label style={styles.field}>
+            Brand label
+            <input
+              value={tier.label}
+              onChange={(e) => updateTier(tier.id, { label: e.target.value })}
+              placeholder="Enlightening"
+              style={styles.input}
+            />
+          </label>
+          <label style={styles.field}>
+            Quantity or range
+            <input
+              value={tier.quantityText}
+              onChange={(e) => updateTier(tier.id, { quantityText: e.target.value })}
+              placeholder="1/2 or 1-3"
+              style={styles.input}
+            />
+          </label>
+          <label style={styles.field}>
+            Unit
+            <input
+              value={tier.unit}
+              onChange={(e) => updateTier(tier.id, { unit: e.target.value })}
+              placeholder={defaultUnit}
+              style={styles.input}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => removeTier(tier.id)}
+            style={{ ...styles.linkButton, alignSelf: "end", paddingBottom: "0.6rem" }}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={addTier} style={{ ...styles.secondaryButton, alignSelf: "flex-start" }}>
+        Add tier
+      </button>
+      <label style={styles.field}>
+        Additional Brand Dose Instructions
+        <textarea
+          value={instructions}
+          onChange={(e) => onInstructionsChange(e.target.value)}
+          rows={3}
+          placeholder="1 day on, 2 days off; take on a light stomach"
+          style={styles.textarea}
+        />
+      </label>
     </div>
   );
 }
@@ -2411,6 +2563,12 @@ const styles: Record<string, CSSProperties> = {
     gridTemplateColumns: "1fr 140px 40px",
     gap: "0.5rem",
     alignItems: "center",
+  },
+  doseTierRow: {
+    display: "grid",
+    gridTemplateColumns: "120px minmax(160px, 1fr) minmax(140px, 0.75fr) minmax(110px, 0.55fr) auto",
+    gap: "0.6rem",
+    alignItems: "end",
   },
   error: {
     padding: "0.75rem 1rem",

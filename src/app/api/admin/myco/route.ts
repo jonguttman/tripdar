@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import { Prisma } from "@prisma/client";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
@@ -13,6 +14,16 @@ const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
 
 type ProductFormat = (typeof VALID_FORMATS)[number];
 type StrengthOffset = (typeof VALID_OFFSETS)[number];
+type BrandDoseCategory = "micro" | "mini" | "macro" | "custom";
+type BrandDoseTier = {
+  id: string;
+  category: BrandDoseCategory;
+  label: string;
+  quantityText: string;
+  quantityMin: number;
+  quantityMax: number | null;
+  unit: string;
+};
 
 async function requireAuth() {
   const session = await getServerSession(authOptions);
@@ -57,6 +68,116 @@ function parsePositiveIntOrNull(value: unknown): number | null | undefined {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
   return Math.round(parsed);
+}
+
+function parseQuarterQuantity(value: string): number | null {
+  const trimmed = value.trim();
+  const fraction = trimmed.match(/^(\d+)\s*\/\s*([24])$/);
+  if (fraction) {
+    const numerator = Number(fraction[1]);
+    const denominator = Number(fraction[2]);
+    if (!Number.isFinite(numerator) || numerator <= 0) return null;
+    return numerator / denominator;
+  }
+
+  if (!/^\d+(?:\.\d+)?$/.test(trimmed)) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.abs(parsed * 4 - Math.round(parsed * 4)) < 0.00001 ? parsed : null;
+}
+
+function parseQuantitySide(value: string): { amount: number; unit?: string } | null {
+  const match = value.trim().match(/^(\d+(?:\.\d+)?|\d+\s*\/\s*[24])(?:\s+(.+))?$/);
+  if (!match) return null;
+  const amount = parseQuarterQuantity(match[1]);
+  if (amount === null) return null;
+  const unit = cleanText(match[2]);
+  return { amount, unit };
+}
+
+function parseBrandDoseQuantity(
+  quantityText: string,
+  unitText: string | undefined
+): { quantityMin: number; quantityMax: number | null; unit: string } | null {
+  const parts = quantityText
+    .trim()
+    .split(/\s+(?:to)\s+|\s*[-–—]\s*/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length < 1 || parts.length > 2) return null;
+
+  const low = parseQuantitySide(parts[0]);
+  const high = parts[1] ? parseQuantitySide(parts[1]) : null;
+  if (!low || (parts[1] && !high)) return null;
+  if (high && high.amount < low.amount) return null;
+
+  return {
+    quantityMin: low.amount,
+    quantityMax: high ? high.amount : null,
+    unit: cleanText(unitText) ?? high?.unit ?? low.unit ?? "",
+  };
+}
+
+function sanitizeBrandDoseTiers(value: unknown): BrandDoseTier[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item, index): BrandDoseTier | null => {
+      if (!item || typeof item !== "object") return null;
+      const input = item as Record<string, unknown>;
+      const label = cleanText(input.label);
+      const quantityText = cleanText(input.quantityText);
+      if (!label || !quantityText) return null;
+
+      const category =
+        input.category === "micro" ||
+        input.category === "mini" ||
+        input.category === "macro" ||
+        input.category === "custom"
+          ? input.category
+          : "custom";
+      const parsed = parseBrandDoseQuantity(quantityText, cleanText(input.unit));
+      if (!parsed) return null;
+
+      return {
+        id: cleanText(input.id) ?? `tier-${index + 1}`,
+        category,
+        label,
+        quantityText,
+        quantityMin: parsed.quantityMin,
+        quantityMax: parsed.quantityMax,
+        unit: parsed.unit,
+      };
+    })
+    .filter((tier): tier is BrandDoseTier => Boolean(tier))
+    .slice(0, 12);
+}
+
+function countSubmittedBrandDoseTiers(value: unknown): number {
+  if (!Array.isArray(value)) return 0;
+  return value.filter((item) => {
+    if (!item || typeof item !== "object") return false;
+    const input = item as Record<string, unknown>;
+    return Boolean(cleanText(input.label) || cleanText(input.quantityText) || cleanText(input.unit));
+  }).length;
+}
+
+function deriveLegacyBrandUnits(tiers: BrandDoseTier[]): {
+  brandMicroUnits: number | null;
+  brandMiniUnits: number | null;
+  brandMacroUnits: number | null;
+} {
+  const read = (category: BrandDoseCategory) => {
+    const tier = tiers.find((item) => item.category === category && item.quantityMax === null);
+    if (!tier || !Number.isInteger(tier.quantityMin)) return null;
+    return tier.quantityMin;
+  };
+
+  return {
+    brandMicroUnits: read("micro"),
+    brandMiniUnits: read("mini"),
+    brandMacroUnits: read("macro"),
+  };
 }
 
 async function resolvePartnerForUser(email: string, requestedPartnerId: string | null) {
@@ -237,6 +358,20 @@ export async function POST(request: NextRequest) {
     const brandMicroUnits = parsePositiveIntOrNull(body.brandMicroUnits);
     const brandMiniUnits = parsePositiveIntOrNull(body.brandMiniUnits);
     const brandMacroUnits = parsePositiveIntOrNull(body.brandMacroUnits);
+    const brandDoseTiers = sanitizeBrandDoseTiers(body.brandDoseTiers);
+    const legacyUnits = deriveLegacyBrandUnits(brandDoseTiers);
+    if (countSubmittedBrandDoseTiers(body.brandDoseTiers) > brandDoseTiers.length) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message:
+              "Brand dose tiers must use whole, half, quarter, or range quantities such as 1/2, 0.5, or 1-3.",
+          },
+        },
+        { status: 400 }
+      );
+    }
     const ingredients = Array.isArray(body.ingredients)
       ? body.ingredients
           .filter((i: unknown): i is string => typeof i === "string")
@@ -294,9 +429,11 @@ export async function POST(request: NextRequest) {
         flavors,
         onsetMinutes: onsetMinutes ?? null,
         durationMinutes: durationMinutes ?? null,
-        brandMicroUnits: brandMicroUnits ?? null,
-        brandMiniUnits: brandMiniUnits ?? null,
-        brandMacroUnits: brandMacroUnits ?? null,
+        brandMicroUnits: brandMicroUnits ?? legacyUnits.brandMicroUnits,
+        brandMiniUnits: brandMiniUnits ?? legacyUnits.brandMiniUnits,
+        brandMacroUnits: brandMacroUnits ?? legacyUnits.brandMacroUnits,
+        brandDoseTiers: brandDoseTiers.length > 0 ? brandDoseTiers : Prisma.JsonNull,
+        brandDoseInstructions: cleanText(body.brandDoseInstructions) ?? null,
         photoUrl: cleanText(body.photoUrl) ?? null,
         active: typeof body.active === "boolean" ? body.active : true,
         strengthOffset: {

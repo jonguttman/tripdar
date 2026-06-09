@@ -4,6 +4,60 @@ import TesterVoteForm from "./TesterVoteForm";
 
 export const dynamic = "force-dynamic";
 
+type BrandDoseTier = {
+  id?: string;
+  category?: string;
+  label: string;
+  quantityText: string;
+  quantityMin?: number;
+  quantityMax?: number | null;
+  unit: string;
+};
+
+function unitForFormat(format: string): string {
+  if (format === "capsule") return "capsule";
+  if (format === "edible") return "gummy";
+  if (format === "tincture") return "dropper";
+  return "unit";
+}
+
+function readBrandDoseTiers(product: {
+  brandDoseTiers: unknown;
+  brandMicroUnits: number | null;
+  brandMiniUnits: number | null;
+  brandMacroUnits: number | null;
+  format: string;
+}): BrandDoseTier[] {
+  if (Array.isArray(product.brandDoseTiers)) {
+    return product.brandDoseTiers.filter((tier): tier is BrandDoseTier => {
+      return Boolean(
+        tier &&
+          typeof tier === "object" &&
+          "label" in tier &&
+          "quantityText" in tier &&
+          "unit" in tier
+      );
+    });
+  }
+
+  const unit = unitForFormat(product.format);
+  return [
+    product.brandMicroUnits
+      ? { label: "Microdose", quantityText: String(product.brandMicroUnits), unit }
+      : null,
+    product.brandMiniUnits
+      ? { label: "Mini-dose", quantityText: String(product.brandMiniUnits), unit }
+      : null,
+    product.brandMacroUnits
+      ? { label: "Macro Dose", quantityText: String(product.brandMacroUnits), unit }
+      : null,
+  ].filter((tier): tier is BrandDoseTier => Boolean(tier));
+}
+
+function formatBrandDoseTier(tier: BrandDoseTier): string {
+  return `${tier.quantityText}${tier.unit ? ` ${tier.unit}` : ""} = ${tier.label}`;
+}
+
 export default async function TesterPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -20,6 +74,7 @@ export default async function TesterPage({ params }: { params: Promise<{ id: str
 
   const photoUrl = product.photos[0]?.url || product.photoUrl || null;
   const brandName = product.brandRef?.name || product.brand || null;
+  const brandDoseTiers = readBrandDoseTiers(product);
 
   return (
     <div style={{
@@ -74,6 +129,45 @@ export default async function TesterPage({ params }: { params: Promise<{ id: str
             </div>
           </div>
         </div>
+
+        {(brandDoseTiers.length > 0 || product.brandDoseInstructions) && (
+          <div style={{
+            background: "white",
+            borderRadius: 16,
+            padding: "1.25rem",
+            boxShadow: "0 4px 20px rgba(124,58,237,0.08)",
+            marginBottom: "1rem",
+          }}>
+            <h2 style={{ fontSize: "1rem", margin: "0 0 0.75rem 0" }}>Brand dose guidance</h2>
+            {brandDoseTiers.length > 0 && (
+              <div style={{ display: "grid", gap: "0.5rem" }}>
+                {brandDoseTiers.map((tier, index) => (
+                  <div
+                    key={tier.id || `${tier.label}-${index}`}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "0.75rem",
+                      fontSize: "0.85rem",
+                      paddingBottom: "0.5rem",
+                      borderBottom: index === brandDoseTiers.length - 1 ? "none" : "1px solid #f3e8ff",
+                    }}
+                  >
+                    <span style={{ fontWeight: 700 }}>{tier.label}</span>
+                    <span style={{ color: "#666", textAlign: "right" }}>
+                      {formatBrandDoseTier(tier).split(" = ")[0]}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {product.brandDoseInstructions && (
+              <p style={{ fontSize: "0.85rem", color: "#666", lineHeight: 1.5, margin: brandDoseTiers.length > 0 ? "0.85rem 0 0" : 0 }}>
+                {product.brandDoseInstructions}
+              </p>
+            )}
+          </div>
+        )}
 
         <div style={{ background: "white", borderRadius: 16, padding: "1.25rem", boxShadow: "0 4px 20px rgba(124,58,237,0.08)" }}>
           <h2 style={{ fontSize: "1.1rem", margin: "0 0 0.5rem 0" }}>How was your experience?</h2>

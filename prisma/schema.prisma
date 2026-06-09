@@ -437,6 +437,8 @@ model StoreProductCatalog {
   brandMicroUnits Int? // brand-recommended units for a microdose
   brandMiniUnits  Int? // brand-recommended units for a mini-dose
   brandMacroUnits Int? // brand-recommended units for a macro dose
+  brandDoseTiers Json? // structured brand-facing dose tiers with fractions/ranges
+  brandDoseInstructions String? // cadence, timing, food/stomach, and other brand guidance
   photoUrl       String? // legacy single photo (kept for back-compat)
   active         Boolean  @default(true)
   archivedAt     DateTime?
