@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
+import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
+import { computeReadiness } from "@/domain/myco/readiness";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -219,7 +221,7 @@ export async function PATCH(
 
     const existing = await prisma.storeProductCatalog.findUnique({
       where: { id },
-      select: { productUnitMg: true, unitsPerPack: true },
+      select: { productUnitMg: true, unitsPerPack: true, strengthOffset: true },
     });
 
     if (!existing) {
@@ -340,17 +342,31 @@ export async function PATCH(
       include: { strengthOffset: true, vibeProfile: true, photos: { orderBy: { sortOrder: "asc" } }, brandRef: true },
     });
 
-    if (offset) {
+    const strengthConfirmed =
+      typeof body.strengthConfirmed === "boolean" ? body.strengthConfirmed : undefined;
+    if (offset || strengthConfirmed !== undefined) {
+      const effectiveOffset = offset ?? existing.strengthOffset?.offset ?? "standard";
+      // Changing the offset value invalidates a previous confirmation unless
+      // this request explicitly confirms the new value.
+      const offsetChanged = Boolean(offset && offset !== existing.strengthOffset?.offset);
+      const confirmed =
+        strengthConfirmed ?? (offsetChanged ? false : existing.strengthOffset?.confirmed ?? false);
+      const confirmationFields = confirmed
+        ? { confirmed: true, confirmedAt: new Date(), confirmedBy: auth.user!.email! }
+        : { confirmed: false, confirmedAt: null, confirmedBy: null };
+
       await prisma.productStrengthOffset.upsert({
         where: { catalogItemId: id },
         update: {
-          offset,
-          rationale: offset === "standard" ? null : rationale,
+          offset: effectiveOffset,
+          rationale: effectiveOffset === "standard" ? null : rationale ?? existing.strengthOffset?.rationale,
+          ...confirmationFields,
         },
         create: {
           catalogItemId: id,
-          offset,
-          rationale: offset === "standard" ? null : rationale,
+          offset: effectiveOffset,
+          rationale: effectiveOffset === "standard" ? null : rationale ?? null,
+          ...confirmationFields,
         },
       });
     }
@@ -364,6 +380,34 @@ export async function PATCH(
       });
     }
 
+    // One-click adoption of the community-reported vibe profile. Computed
+    // server-side from ALL tester votes for this product.
+    if (body.acceptCommunityVibe === true) {
+      const votes = await prisma.testerVote.findMany({
+        where: { catalogItemId: id },
+        select: {
+          clarityCognition: true,
+          moodSocial: true,
+          visualPattern: true,
+          somatic: true,
+          energyDirection: true,
+          depthDirection: true,
+        },
+      });
+      const community = aggregateTesterVotes(votes);
+      if (!community.scores) {
+        return NextResponse.json(
+          { success: false, error: { message: "No tester feedback to accept yet" } },
+          { status: 400 }
+        );
+      }
+      await prisma.productVibeProfile.upsert({
+        where: { catalogItemId: id },
+        update: { scores: community.scores, source: "flywheel" },
+        create: { catalogItemId: id, scores: community.scores, source: "flywheel" },
+      });
+    }
+
     const updatedProduct = await prisma.storeProductCatalog.findUnique({
       where: { id: product.id },
       include: {
@@ -371,10 +415,61 @@ export async function PATCH(
         vibeProfile: true,
         photos: { orderBy: { sortOrder: "asc" } },
         brandRef: true,
+        _count: { select: { testerVotes: true } },
+        testerVotes: {
+          select: {
+            clarityCognition: true,
+            moodSocial: true,
+            visualPattern: true,
+            somatic: true,
+            energyDirection: true,
+            depthDirection: true,
+          },
+        },
       },
     });
 
-    return NextResponse.json({ success: true, data: { product: updatedProduct } });
+    if (!updatedProduct) {
+      return NextResponse.json(
+        { success: false, error: { message: "Product not found" } },
+        { status: 404 }
+      );
+    }
+
+    const { testerVotes, ...productData } = updatedProduct;
+    const readiness = computeReadiness({
+      format: productData.format,
+      brand: productData.brand,
+      brandId: productData.brandId,
+      productUnitMg: productData.productUnitMg,
+      unitsPerPack: productData.unitsPerPack,
+      totalDoseMg: productData.totalDoseMg,
+      onsetMinutes: productData.onsetMinutes,
+      durationMinutes: productData.durationMinutes,
+      brandMicroUnits: productData.brandMicroUnits,
+      brandMiniUnits: productData.brandMiniUnits,
+      brandMacroUnits: productData.brandMacroUnits,
+      brandDoseTiers: productData.brandDoseTiers,
+      photoUrl: productData.photoUrl,
+      photoCount: productData.photos.length,
+      vibeScores: productData.vibeProfile?.scores ?? null,
+      strengthOffset: productData.strengthOffset
+        ? { offset: productData.strengthOffset.offset, confirmed: productData.strengthOffset.confirmed }
+        : null,
+    });
+    const community = aggregateTesterVotes(testerVotes);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        product: {
+          ...productData,
+          readiness,
+          community,
+          confidence: computeConfidence(community.voteCount, community.spread),
+        },
+      },
+    });
   } catch (error) {
     console.error("Error updating Myco product:", error);
     return NextResponse.json(

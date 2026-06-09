@@ -8,6 +8,8 @@ import { Prisma } from "@prisma/client";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
+import { computeReadiness } from "@/domain/myco/readiness";
+import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -283,14 +285,63 @@ export async function GET(request: NextRequest) {
           photos: { orderBy: { sortOrder: "asc" } },
           brandRef: true,
           _count: { select: { testerVotes: true } },
+          // Full vote set per product — community aggregation must never run
+          // on a subset (see BUG_LOG pagination lesson).
+          testerVotes: {
+            select: {
+              clarityCognition: true,
+              moodSocial: true,
+              visualPattern: true,
+              somatic: true,
+              energyDirection: true,
+              depthDirection: true,
+            },
+          },
         },
         orderBy: [{ active: "desc" }, { updatedAt: "desc" }],
       }),
     ]);
 
+    const productsWithReadiness = products.map(({ testerVotes, ...product }) => {
+      const readiness = computeReadiness({
+        format: product.format,
+        brand: product.brand,
+        brandId: product.brandId,
+        productUnitMg: product.productUnitMg,
+        unitsPerPack: product.unitsPerPack,
+        totalDoseMg: product.totalDoseMg,
+        onsetMinutes: product.onsetMinutes,
+        durationMinutes: product.durationMinutes,
+        brandMicroUnits: product.brandMicroUnits,
+        brandMiniUnits: product.brandMiniUnits,
+        brandMacroUnits: product.brandMacroUnits,
+        brandDoseTiers: product.brandDoseTiers,
+        photoUrl: product.photoUrl,
+        photoCount: product.photos.length,
+        vibeScores: product.vibeProfile?.scores ?? null,
+        strengthOffset: product.strengthOffset
+          ? { offset: product.strengthOffset.offset, confirmed: product.strengthOffset.confirmed }
+          : null,
+      });
+      const community = aggregateTesterVotes(testerVotes);
+      return {
+        ...product,
+        readiness,
+        community,
+        confidence: computeConfidence(community.voteCount, community.spread),
+      };
+    });
+
+    const activeProducts = productsWithReadiness.filter((p) => p.active && !p.archivedAt);
+    const summary = {
+      activeCount: activeProducts.length,
+      readyCount: activeProducts.filter((p) => p.readiness.ready).length,
+      needsAttentionCount: activeProducts.filter((p) => !p.readiness.ready).length,
+    };
+
     return NextResponse.json({
       success: true,
-      data: { partners, partner, products, brands, userRole },
+      data: { partners, partner, products: productsWithReadiness, brands, userRole, summary },
     });
   } catch (error) {
     console.error("Error loading Myco admin data:", error);
