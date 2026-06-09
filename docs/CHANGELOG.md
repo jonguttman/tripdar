@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.10.0] - 2026-06-09
+
+### Added
+- **Product readiness model**: `computeReadiness()` (`src/domain/myco/readiness.ts`) defines "recommendation-ready" — photo, brand, mg/unit, units/pack, onset, duration, vibe profile, brand dose guidance, and a *confirmed* strength offset. The same check powers the admin completeness view and hard-gates the customer-facing engine (`src/domain/myco/candidates.ts`), so archived/inactive/incomplete products can never be recommended.
+- **Admin catalog completeness view** (`/admin/myco`): per-product ✅ Ready / ⚠️ N missing chips with "Still needed: …" detail, Needs attention / Ready filters, a "X of Y active products recommendation-ready" summary (computed over the full catalog, not a page), and dose-math warnings (`units × mg/unit ≠ total`, outlier per-unit doses).
+- **Strength offset confirmation**: offsets now require explicit admin confirmation (`confirmed`/`confirmedAt`/`confirmedBy` on `ProductStrengthOffset`); changing the offset value invalidates a prior confirmation.
+- **Product-first recommendation engine** (`src/domain/myco/scoring.ts`): scores catalog products directly via 6-axis cosine similarity against user intent, with format-preference boost and a **strain-specific match highlight** when the product's strain also fits the intent.
+- **Deterministic dose curve** (`src/domain/myco/dose.ts`): depth (gentle/noticeable/deep) picks the rung on the brand's own micro/mini/macro dose ladder, experience level caps it (new explorers never start above mini), strength offset shifts guidance with the spec's visible disclaimer. Always a range; fully unit-tested (25 domain tests).
+- **Public Myco customer flow** at `/m/[partnerSlug]` (no login): age gate (21+, placeholder copy pending legal review), guided intake (up to 3 intents → experience → depth → format), product cards with photo, key vibes, dose guidance, onset/duration, and a "why this matched" reflection. Kiosk mode (`?kiosk=1`) re-gates age per customer with a 2-minute idle reset. "Everyone is different. Start low and go slow." + not-medical-advice on every screen.
+- **Reflections**: LLM-generated "why this matched" copy (Anthropic API, `MYCO_REFLECTION_MODEL` env override) with a deterministic fallback — the flow never blocks on the API.
+- **Post-results email capture**: `MycoProfileSignup` model + `/api/myco/signup`. Deliberately *not* a NextAuth account — admin auth is whitelist-gated and grants `partner_admin` by default, so customer accounts need their own role model (post-demo).
+- **Community vibe profiles + confidence**: tester votes aggregate into a per-axis community profile (`src/domain/myco/community.ts`) shown beside the admin sliders (👥 values, divergence highlighted), with one-click "Accept community profile" (`source: "flywheel"`). Admin-only confidence badges (No reports / Low / Building / Solid) from report volume + agreement.
+- **New models**: `MycoRecommendationResult` (product-first results, strain-keyed `RecommendationResult` untouched for the WP engine), `MycoProfileSignup`. Migration `20260609180000_myco_product_first`.
+
+### Changed
+- `/api/admin/myco` GET and `[id]` PATCH responses now include per-product `readiness`, `community`, and `confidence`.
+- Canonical 6-axis vibe definitions extracted to `src/domain/myco/vibes.ts` (shared by admin UI, engine, and aggregation).
+
 ## [1.9.4] - 2026-06-09
 
 ### Fixed
