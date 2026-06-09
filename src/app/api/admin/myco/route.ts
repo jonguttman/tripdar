@@ -180,15 +180,24 @@ function deriveLegacyBrandUnits(tiers: BrandDoseTier[]): {
   };
 }
 
-async function resolvePartnerForUser(email: string, requestedPartnerId: string | null) {
-  if (requestedPartnerId) {
-    return prisma.partner.findUnique({ where: { id: requestedPartnerId } });
-  }
-
+async function resolvePartnerForUser(
+  email: string,
+  userRole: Awaited<ReturnType<typeof getUserRole>>,
+  requestedPartnerId: string | null
+) {
   const user = await prisma.user.findUnique({ where: { email } });
 
-  if (user?.partnerId) {
-    return prisma.partner.findUnique({ where: { id: user.partnerId } });
+  // Partner admins are pinned to their assigned partner. Do not let a stale or forged
+  // partnerId query param select a missing/different partner and strand the UI on the
+  // "create an active partner" empty state.
+  if (userRole === "partner_admin" && user?.partnerId) {
+    const assignedPartner = await prisma.partner.findUnique({ where: { id: user.partnerId } });
+    if (assignedPartner) return assignedPartner;
+  }
+
+  if (userRole === "super_admin" && requestedPartnerId) {
+    const requestedPartner = await prisma.partner.findUnique({ where: { id: requestedPartnerId } });
+    if (requestedPartner) return requestedPartner;
   }
 
   const defaultPartner = await prisma.partner.findFirst({
@@ -196,7 +205,7 @@ async function resolvePartnerForUser(email: string, requestedPartnerId: string |
     orderBy: { createdAt: "asc" },
   });
 
-  if (defaultPartner && user) {
+  if (defaultPartner && user && !user.partnerId) {
     await prisma.user.update({
       where: { id: user.id },
       data: { partnerId: defaultPartner.id },
@@ -204,6 +213,15 @@ async function resolvePartnerForUser(email: string, requestedPartnerId: string |
   }
 
   return defaultPartner;
+}
+
+async function partnerIdForMutation(email: string, requestedPartnerId: string) {
+  const role = await getUserRole(email);
+  if (role === "super_admin") return requestedPartnerId;
+
+  const user = await prisma.user.findUnique({ where: { email }, select: { partnerId: true } });
+  if (!user?.partnerId) return undefined;
+  return user.partnerId === requestedPartnerId ? requestedPartnerId : undefined;
 }
 
 export async function GET(request: NextRequest) {
@@ -214,7 +232,7 @@ export async function GET(request: NextRequest) {
     const email = auth.user!.email!;
     const userRole = await getUserRole(email);
     const partnerId = request.nextUrl.searchParams.get("partnerId");
-    const selectedPartner = await resolvePartnerForUser(email, partnerId);
+    const selectedPartner = await resolvePartnerForUser(email, userRole, partnerId);
     const [partners, brands] = await Promise.all([
       prisma.partner.findMany({
         orderBy: { name: "asc" },
@@ -344,7 +362,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const partnerId = cleanText(body.partnerId);
+    let partnerId = cleanText(body.partnerId);
     const productName = cleanText(body.productName);
     const format = parseFormat(body.format);
     const productUnitMg = parsePositiveInt(body.productUnitMg);
@@ -396,6 +414,14 @@ export async function POST(request: NextRequest) {
           },
         },
         { status: 400 }
+      );
+    }
+
+    partnerId = await partnerIdForMutation(auth.user!.email!, partnerId);
+    if (!partnerId) {
+      return NextResponse.json(
+        { success: false, error: { message: "You do not have access to this partner" } },
+        { status: 403 }
       );
     }
 

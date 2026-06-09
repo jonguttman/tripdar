@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.9.4] - 2026-06-09
+
+### Fixed
+- **Myco partner admin empty state after stale partner selection**: Partner admins are now always resolved to their assigned partner on `/api/admin/myco`, ignoring stale/forged `partnerId` query params that could incorrectly return `partner: null` and show "Create an active partner before configuring Myco products." Product creation now also verifies partner admins can only create products for their assigned partner.
+
 ## [1.9.3] - 2026-06-03
 
 ### Fixed

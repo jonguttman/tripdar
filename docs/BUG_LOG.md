@@ -4,6 +4,36 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-06-09-001: Myco partner admin sees "Create an active partner" despite assigned partner
+
+**Symptoms:**
+- Audrey could log in to `/admin/myco`, but the UI showed "Create an active partner before configuring Myco products."
+- Production data still had an active `Partner` for The Mushroom Top and Audrey's `User.partnerId` still pointed at it.
+- This blocked product entry even though the partner setup itself was intact.
+
+**Root Cause:**
+The Myco GET route trusted any `partnerId` query param before checking the logged-in user's assigned partner. If a partner admin arrived with a stale/bad `partnerId` value, `resolvePartnerForUser()` returned `null` instead of falling back to the user's `partnerId`, which made the frontend render the no-partner empty state. This was also a partner-isolation hole: a partner admin could request another partner's id.
+
+**Fix:**
+- Changed `resolvePartnerForUser()` so partner admins are pinned to their assigned `User.partnerId` first.
+- Super admins can still select a requested partner by query param.
+- Bad requested partner ids now fall back to the active default instead of stranding the UI.
+- Product creation now verifies partner admins can only create under their assigned partner.
+
+**Files Modified:**
+- `src/app/api/admin/myco/route.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Never let partner-scoped request params override the authenticated user's ownership scope for partner_admin users.
+- For partner admin routes, auth/role check comes first, ownership resolution second, user-supplied ids last and only for super_admin selection.
+
+**Lesson Learned:**
+An empty-state message can be an authorization-resolution bug, not missing data. Verify the DB first, then check whether request parameters can bypass the user's assigned ownership scope.
+
+---
+
 ## BUG-2026-06-03-001: Myco photo upload returns HTTP 500 (Next.js 16 async params)
 
 **Symptoms:**
