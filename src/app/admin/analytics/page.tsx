@@ -193,28 +193,45 @@ export default function AnalyticsDashboardPage() {
               <h2 className="mb-4 text-base font-semibold text-bark-700">
                 Views Trend
               </h2>
-              <div className="flex h-[150px] items-end gap-px overflow-hidden pt-4 sm:gap-1">
-                {trendData.map((point, i) => (
-                  <div
-                    key={i}
-                    className="flex h-full min-w-0 flex-1 flex-col items-center"
-                  >
-                    <div
-                      className="mt-auto min-h-[2px] w-full rounded-t"
-                      style={{
-                        height: `${(point.views / maxViews) * 100}%`,
-                        background:
-                          "linear-gradient(180deg, #44602f 0%, #9db786 100%)",
-                      }}
-                    />
-                    <div className="mt-2 w-full truncate text-center text-[10px] text-bark-400">
+              <div className="h-[180px] overflow-hidden">
+                <svg
+                  viewBox={`0 0 ${trendData.length * 12} 120`}
+                  preserveAspectRatio="none"
+                  className="h-[150px] w-full overflow-visible"
+                  role="img"
+                  aria-label="Views trend bar chart"
+                >
+                  <defs>
+                    <linearGradient id="viewsTrendBar" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#44602f" />
+                      <stop offset="100%" stopColor="#9db786" />
+                    </linearGradient>
+                  </defs>
+                  {trendData.map((point, i) => {
+                    const barHeight = Math.max(2, (point.views / maxViews) * 100);
+                    return (
+                      <rect
+                        key={point.date}
+                        x={i * 12 + 2}
+                        y={110 - barHeight}
+                        width={8}
+                        height={barHeight}
+                        rx={2}
+                        fill="url(#viewsTrendBar)"
+                      />
+                    );
+                  })}
+                </svg>
+                <div className="flex gap-px sm:gap-1">
+                  {trendData.map((point) => (
+                    <div key={point.date} className="min-w-0 flex-1 truncate text-center text-[10px] text-bark-400">
                       {new Date(point.date).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
                       })}
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </Card>
           )}

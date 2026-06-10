@@ -298,7 +298,7 @@ export default function AdminLayout({
           {userBlock(true)}
           <button
             onClick={() => signOut()}
-            className="flex min-h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-bark-700 text-xs font-medium text-bark-300 transition-colors hover:bg-bark-800 hover:text-bone-100"
+            className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-bark-700 text-xs font-medium text-bark-300 transition-colors hover:bg-bark-800 hover:text-bone-100"
           >
             <Icon name="logout" size={14} />
             Sign out

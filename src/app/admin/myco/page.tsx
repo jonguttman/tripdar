@@ -1351,7 +1351,7 @@ export default function MycoAdminPage() {
                 if (f) addPendingPhoto(f);
                 e.target.value = "";
               }}
-              className="min-w-0 text-sm text-bark-600 file:mr-3 file:min-h-9 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone-200 file:px-3 file:text-sm file:font-medium file:text-bark-700"
+              className="min-w-0 text-sm text-bark-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone-200 file:px-3 file:text-sm file:font-medium file:text-bark-700"
             />
             <span className="text-xs text-moss-700 sm:ml-auto">Photos save when you click Create. If anything fails, you&apos;ll see an error.</span>
           </div>
@@ -2264,7 +2264,7 @@ export default function MycoAdminPage() {
                               "Strength offset confirmed"
                             )
                           }
-                          className="inline-flex min-h-9 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-bone-50 px-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50"
+                          className="inline-flex min-h-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-bone-50 px-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50"
                         >
                           Confirm offset
                         </button>
@@ -2376,7 +2376,7 @@ export default function MycoAdminPage() {
                                   );
                                 }
                               }}
-                              className="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-lg border border-moss-300 bg-bone-50 px-3 text-sm font-medium text-moss-700 transition-colors hover:bg-moss-50"
+                              className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-moss-300 bg-bone-50 px-3 text-sm font-medium text-moss-700 transition-colors hover:bg-moss-50"
                             >
                               👥 Accept community profile (n={product.community.voteCount})
                             </button>
@@ -2425,7 +2425,7 @@ function PhotoUploader({
           if (f) await onUpload(productId, f, tag);
           e.target.value = "";
         }}
-        className="min-w-0 text-sm text-bark-600 file:mr-3 file:min-h-9 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone-200 file:px-3 file:text-sm file:font-medium file:text-bark-700"
+        className="min-w-0 text-sm text-bark-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone-200 file:px-3 file:text-sm file:font-medium file:text-bark-700"
       />
     </div>
   );

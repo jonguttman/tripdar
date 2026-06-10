@@ -18,7 +18,8 @@ const variantClasses: Record<Variant, string> = {
 };
 
 const sizeClasses: Record<Size, string> = {
-  sm: "min-h-9 px-3 text-sm gap-1.5",
+  // Keep even compact admin actions at the mobile-friendly 44px target.
+  sm: "min-h-11 px-3 text-sm gap-1.5",
   md: "min-h-11 px-4 text-sm gap-2",
 };
 

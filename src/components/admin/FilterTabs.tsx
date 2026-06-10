@@ -41,7 +41,7 @@ export function FilterTabs<T extends string>({
             aria-selected={active}
             onClick={() => onChange(tab.value)}
             className={cn(
-              "flex min-h-10 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors",
+              "flex min-h-11 shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors",
               active
                 ? "border-moss-600 bg-moss-600 text-bone-50"
                 : "border-bone-300 bg-bone-50 text-bark-600 hover:border-moss-300"

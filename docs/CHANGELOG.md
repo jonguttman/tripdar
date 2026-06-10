@@ -12,6 +12,9 @@
 - **Modals are bottom sheets on mobile** (shared `Modal`), with sticky full-width action footers; large edit forms (Strains, Myco product) use the wide variant.
 - Admin sign-in screens restyled (password, magic link, GitHub) with proper `autocomplete`/`inputMode` attributes.
 
+### Fixed
+- Removed the last remaining admin inline style object by rendering the Analytics views trend as SVG bars, and tightened shared/admin-specific controls so compact buttons, filter pills, file buttons, and sign-out actions still meet the 44px mobile touch target.
+
 ## [1.10.0] - 2026-06-09
 
 ### Added
