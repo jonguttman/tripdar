@@ -13,6 +13,21 @@ import {
   COME_UP_OPTIONS,
   PEAK_CHARACTER_OPTIONS,
 } from "@/domain/strain/types";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Input,
+  LoadingState,
+  Modal,
+  PageHeader,
+  Select,
+  Textarea,
+  cn,
+} from "@/components/admin";
 
 interface Strain {
   id: string;
@@ -333,247 +348,245 @@ export default function StrainsAdminPage() {
     if (!isCreating && !editingStrain) return null;
 
     return (
-      <div style={styles.modalOverlay} onClick={closeModal}>
-        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-          <h2 style={styles.modalTitle}>
-            {isCreating ? "Create Strain" : `Edit: ${editingStrain?.name}`}
-          </h2>
-
-          <div style={styles.formGrid}>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Name *</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                style={styles.input}
-                placeholder="Golden Teacher"
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Potency</label>
-              <select
-                value={formData.potency}
-                onChange={(e) => setFormData({ ...formData, potency: e.target.value })}
-                style={styles.select}
-              >
-                {POTENCY_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Trip Consistency</label>
-              <select
-                value={formData.stability}
-                onChange={(e) => setFormData({ ...formData, stability: e.target.value })}
-                style={styles.select}
-              >
-                {STABILITY_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Beginner Friendly</label>
-              <select
-                value={formData.beginner}
-                onChange={(e) => setFormData({ ...formData, beginner: e.target.value })}
-                style={styles.select}
-              >
-                {BEGINNER_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Visual Intensity</label>
-              <select
-                value={formData.visual}
-                onChange={(e) => setFormData({ ...formData, visual: e.target.value })}
-                style={styles.select}
-              >
-                {VISUAL_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Confidence ({formData.confidence}%)</label>
-              <input
-                type="range"
-                min="0"
-                max="100"
-                value={formData.confidence}
-                onChange={(e) => setFormData({ ...formData, confidence: parseInt(e.target.value) })}
-                style={styles.range}
-              />
-            </div>
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Vibes (comma-separated)</label>
-            <input
+      <Modal
+        open
+        onClose={closeModal}
+        wide
+        title={isCreating ? "Create Strain" : `Edit: ${editingStrain?.name}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={loading || !formData.name || !formData.description}
+            >
+              {loading ? "Saving..." : isCreating ? "Create" : "Save Changes"}
+            </Button>
+          </>
+        }
+      >
+        <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Name" required>
+            <Input
               type="text"
-              value={vibeInput}
-              onChange={(e) => setVibeInput(e.target.value)}
-              style={styles.input}
-              placeholder="calm, introspective, teacher-like"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Golden Teacher"
             />
-          </div>
+          </Field>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Description *</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              style={styles.textarea}
-              rows={4}
-              placeholder="A brief description of the strain's characteristics and experience..."
+          <Field label="Potency">
+            <Select
+              value={formData.potency}
+              onChange={(e) => setFormData({ ...formData, potency: e.target.value })}
+            >
+              {POTENCY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Trip Consistency">
+            <Select
+              value={formData.stability}
+              onChange={(e) => setFormData({ ...formData, stability: e.target.value })}
+            >
+              {STABILITY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Beginner Friendly">
+            <Select
+              value={formData.beginner}
+              onChange={(e) => setFormData({ ...formData, beginner: e.target.value })}
+            >
+              {BEGINNER_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label="Visual Intensity">
+            <Select
+              value={formData.visual}
+              onChange={(e) => setFormData({ ...formData, visual: e.target.value })}
+            >
+              {VISUAL_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field label={`Confidence (${formData.confidence}%)`}>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={formData.confidence}
+              onChange={(e) => setFormData({ ...formData, confidence: parseInt(e.target.value) })}
+              className="h-11 w-full cursor-pointer accent-moss-600"
             />
-          </div>
+          </Field>
+        </div>
 
-          {/* Lineage Section */}
-          <div style={styles.lineageSection}>
-            <h4 style={styles.lineageTitle}>Lineage</h4>
+        <Field label="Vibes (comma-separated)" className="mb-4">
+          <Input
+            type="text"
+            value={vibeInput}
+            onChange={(e) => setVibeInput(e.target.value)}
+            placeholder="calm, introspective, teacher-like"
+          />
+        </Field>
 
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Parent Strains</label>
-              <select
-                multiple
-                value={formData.parentStrains || []}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-                  setFormData({ ...formData, parentStrains: selected });
-                }}
-                style={{ ...styles.select, height: "120px" }}
+        <Field label="Description" required className="mb-4">
+          <Textarea
+            value={formData.description}
+            onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+            rows={4}
+            placeholder="A brief description of the strain's characteristics and experience..."
+          />
+        </Field>
+
+        {/* Lineage Section */}
+        <div className="mt-6 border-t border-bone-300 pt-5">
+          <h4 className="mb-4 text-sm font-semibold uppercase tracking-wide text-bark-500">
+            Lineage
+          </h4>
+
+          <Field
+            label="Parent Strains"
+            hint="Hold Ctrl/Cmd to select multiple"
+            className="mb-4"
+          >
+            <Select
+              multiple
+              value={formData.parentStrains || []}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, opt => opt.value);
+                setFormData({ ...formData, parentStrains: selected });
+              }}
+              className="h-[120px] py-2"
+            >
+              {strains
+                .filter(s => s.id !== editingStrain?.id)
+                .map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))
+              }
+            </Select>
+          </Field>
+
+          <Field label="Lineage Notes" className="mb-4">
+            <Input
+              type="text"
+              value={formData.lineageNotes || ""}
+              onChange={(e) => setFormData({ ...formData, lineageNotes: e.target.value })}
+              placeholder="e.g., Cross of PE × B+"
+            />
+          </Field>
+        </div>
+
+        {/* Experiential Attributes Section */}
+        <div className="mt-6 border-t border-bone-300 pt-5">
+          <h4 className="mb-4 text-sm font-semibold uppercase tracking-wide text-bark-500">
+            Experience Profile
+          </h4>
+
+          <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Onset Time">
+              <Select
+                value={formData.onsetTime || ""}
+                onChange={(e) => setFormData({ ...formData, onsetTime: e.target.value })}
               >
-                {strains
-                  .filter(s => s.id !== editingStrain?.id)
-                  .map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))
-                }
-              </select>
-              <small style={styles.helpText}>Hold Ctrl/Cmd to select multiple</small>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Lineage Notes</label>
-              <input
-                type="text"
-                value={formData.lineageNotes || ""}
-                onChange={(e) => setFormData({ ...formData, lineageNotes: e.target.value })}
-                style={styles.input}
-                placeholder="e.g., Cross of PE × B+"
-              />
-            </div>
-          </div>
-
-          {/* Experiential Attributes Section */}
-          <div style={styles.lineageSection}>
-            <h4 style={styles.lineageTitle}>Experience Profile</h4>
-
-            <div style={styles.formGrid}>
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Onset Time</label>
-                <select
-                  value={formData.onsetTime || ""}
-                  onChange={(e) => setFormData({ ...formData, onsetTime: e.target.value })}
-                  style={styles.select}
-                >
-                  <option value="">Not specified</option>
-                  {ONSET_TIME_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Typical Duration</label>
-                <select
-                  value={formData.typicalDuration || ""}
-                  onChange={(e) => setFormData({ ...formData, typicalDuration: e.target.value })}
-                  style={styles.select}
-                >
-                  <option value="">Not specified</option>
-                  {DURATION_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Body/Head Balance</label>
-                <select
-                  value={formData.bodyHeadBalance || ""}
-                  onChange={(e) => setFormData({ ...formData, bodyHeadBalance: e.target.value })}
-                  style={styles.select}
-                >
-                  <option value="">Not specified</option>
-                  {BODY_HEAD_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Come-Up Intensity</label>
-                <select
-                  value={formData.comeUpIntensity || ""}
-                  onChange={(e) => setFormData({ ...formData, comeUpIntensity: e.target.value })}
-                  style={styles.select}
-                >
-                  <option value="">Not specified</option>
-                  {COME_UP_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div style={styles.formGroup}>
-                <label style={styles.label}>Peak Character</label>
-                <select
-                  value={formData.peakCharacter || ""}
-                  onChange={(e) => setFormData({ ...formData, peakCharacter: e.target.value })}
-                  style={styles.select}
-                >
-                  <option value="">Not specified</option>
-                  {PEAK_CHARACTER_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Emotional Character</label>
-              <select
-                multiple
-                value={formData.emotionalCharacter || []}
-                onChange={(e) => {
-                  const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-                  setFormData({ ...formData, emotionalCharacter: selected });
-                }}
-                style={{ ...styles.select, height: "120px" }}
-              >
-                {EMOTIONAL_CHARACTER_OPTIONS.map((opt) => (
+                <option value="">Not specified</option>
+                {ONSET_TIME_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>{opt}</option>
                 ))}
-              </select>
-              <small style={styles.helpText}>Hold Ctrl/Cmd to select multiple</small>
-            </div>
+              </Select>
+            </Field>
+
+            <Field label="Typical Duration">
+              <Select
+                value={formData.typicalDuration || ""}
+                onChange={(e) => setFormData({ ...formData, typicalDuration: e.target.value })}
+              >
+                <option value="">Not specified</option>
+                {DURATION_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="Body/Head Balance">
+              <Select
+                value={formData.bodyHeadBalance || ""}
+                onChange={(e) => setFormData({ ...formData, bodyHeadBalance: e.target.value })}
+              >
+                <option value="">Not specified</option>
+                {BODY_HEAD_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="Come-Up Intensity">
+              <Select
+                value={formData.comeUpIntensity || ""}
+                onChange={(e) => setFormData({ ...formData, comeUpIntensity: e.target.value })}
+              >
+                <option value="">Not specified</option>
+                {COME_UP_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="Peak Character">
+              <Select
+                value={formData.peakCharacter || ""}
+                onChange={(e) => setFormData({ ...formData, peakCharacter: e.target.value })}
+              >
+                <option value="">Not specified</option>
+                {PEAK_CHARACTER_OPTIONS.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </Select>
+            </Field>
           </div>
 
-          {/* Dose Experience Descriptions */}
-          <div style={styles.lineageSection}>
-            <h4 style={styles.lineageTitle}>Dose Experience Descriptions</h4>
-            <small style={styles.helpText}>Short poetic descriptions (~35-45 chars) for each dose level on the dose card</small>
+          <Field
+            label="Emotional Character"
+            hint="Hold Ctrl/Cmd to select multiple"
+          >
+            <Select
+              multiple
+              value={formData.emotionalCharacter || []}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, opt => opt.value);
+                setFormData({ ...formData, emotionalCharacter: selected });
+              }}
+              className="h-[120px] py-2"
+            >
+              {EMOTIONAL_CHARACTER_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+
+        {/* Dose Experience Descriptions */}
+        <div className="mt-6 border-t border-bone-300 pt-5">
+          <h4 className="mb-1 text-sm font-semibold uppercase tracking-wide text-bark-500">
+            Dose Experience Descriptions
+          </h4>
+          <p className="mb-4 text-xs text-bark-400">
+            Short poetic descriptions (~35-45 chars) for each dose level on the dose card
+          </p>
+          <div className="space-y-3">
             {[
               "I. Microdose",
               "II. Mini-dose",
@@ -582,9 +595,8 @@ export default function StrainsAdminPage() {
               "V. Megadose",
               "VI. Heroic Dose",
             ].map((label, i) => (
-              <div key={label} style={{ ...styles.formGroup, marginBottom: "10px" }}>
-                <label style={styles.label}>{label}</label>
-                <input
+              <Field key={label} label={label}>
+                <Input
                   type="text"
                   value={(formData.doseExperiences || [])[i] || ""}
                   onChange={(e) => {
@@ -592,511 +604,175 @@ export default function StrainsAdminPage() {
                     updated[i] = e.target.value;
                     setFormData({ ...formData, doseExperiences: updated });
                   }}
-                  style={styles.input}
                   placeholder="e.g., Gentle clarity, quiet warmth"
                   maxLength={60}
                 />
-              </div>
+              </Field>
             ))}
           </div>
-
-          {/* Image upload for editing */}
-          {editingStrain && (
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Visualization Image (optional)</label>
-              <div
-                style={{
-                  ...styles.dropZone,
-                  borderColor: dragOver ? "#8b5cf6" : "#ddd",
-                  backgroundColor: dragOver ? "#f5f3ff" : "#fafafa",
-                }}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-                onDragLeave={() => setDragOver(false)}
-                onDrop={(e) => handleDrop(e, editingStrain.name, editingStrain.id)}
-              >
-                {uploadingImage ? (
-                  <p style={styles.dropText}>Uploading...</p>
-                ) : visualizationUrls[editingStrain.id] ? (
-                  <div style={{ position: "relative" }}>
-                    <img
-                      src={visualizationUrls[editingStrain.id]}
-                      alt={editingStrain.name}
-                      style={styles.previewImage}
-                    />
-                    <p style={{ margin: "8px 0 0", fontSize: "12px", color: "#666" }}>
-                      Drag a new image here to replace, or{" "}
-                      <span
-                        style={{ color: "#8b5cf6", cursor: "pointer", textDecoration: "underline" }}
-                        onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
-                      >
-                        browse files
-                      </span>
-                    </p>
-                  </div>
-                ) : (
-                  <p
-                    style={{ ...styles.dropText, cursor: "pointer" }}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    Drag &amp; drop image or click to select
-                  </p>
-                )}
-              </div>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleFileSelect(e, editingStrain.name, editingStrain.id)}
-                style={{ display: "none" }}
-              />
-            </div>
-          )}
-
-          <div style={styles.modalActions}>
-            <button onClick={closeModal} style={styles.cancelButton}>
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !formData.name || !formData.description}
-              style={styles.button}
-            >
-              {loading ? "Saving..." : isCreating ? "Create" : "Save Changes"}
-            </button>
-          </div>
         </div>
-      </div>
+
+        {/* Image upload for editing */}
+        {editingStrain && (
+          <div className="mt-6">
+            <span className="mb-1.5 block text-sm font-medium text-bark-700">
+              Visualization Image (optional)
+            </span>
+            <div
+              className={cn(
+                "rounded-lg border-2 border-dashed p-5 text-center transition-colors",
+                dragOver
+                  ? "border-moss-500 bg-moss-50"
+                  : "border-bone-300 bg-bone-100"
+              )}
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => handleDrop(e, editingStrain.name, editingStrain.id)}
+            >
+              {uploadingImage ? (
+                <p className="text-sm text-bark-500">Uploading...</p>
+              ) : visualizationUrls[editingStrain.id] ? (
+                <div className="relative">
+                  <img
+                    src={visualizationUrls[editingStrain.id]}
+                    alt={editingStrain.name}
+                    className="block max-h-48 max-w-full rounded"
+                  />
+                  <p className="mt-2 text-xs text-bark-500">
+                    Drag a new image here to replace, or{" "}
+                    <span
+                      className="cursor-pointer text-moss-600 underline"
+                      onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
+                    >
+                      browse files
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                <p
+                  className="cursor-pointer text-sm text-bark-500"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Drag &amp; drop image or click to select
+                </p>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => handleFileSelect(e, editingStrain.name, editingStrain.id)}
+              className="hidden"
+            />
+          </div>
+        )}
+      </Modal>
     );
   };
 
   return (
-    <div style={styles.container}>
+    <div className="mx-auto max-w-6xl p-4 sm:p-8">
       {/* Header */}
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Strains</h1>
-        </div>
-        <div style={styles.headerActions}>
-          <button onClick={openCreate} style={styles.button}>
-            + Add Strain
-          </button>
-          <button onClick={initializeStorage} style={styles.secondaryButton}>
-            Initialize Storage
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Strains"
+        actions={
+          <>
+            <Button onClick={openCreate}>+ Add Strain</Button>
+            <Button variant="secondary" onClick={initializeStorage}>
+              Initialize Storage
+            </Button>
+          </>
+        }
+      />
 
       {/* Messages */}
-      {error && <div style={styles.errorBox}>{error}</div>}
-      {success && <div style={styles.successBox}>{success}</div>}
+      {error && (
+        <Alert tone="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert tone="success" className="mb-4">
+          {success}
+        </Alert>
+      )}
 
       {/* Strain List */}
-      <div style={styles.strainGrid}>
-        {loading && strains.length === 0 ? (
-          <p style={styles.loading}>Loading strains...</p>
-        ) : strains.length === 0 ? (
-          <p style={styles.empty}>No strains yet. Click "Add Strain" to create one.</p>
-        ) : (
-          strains.map((strain) => (
-            <div key={strain.id} style={styles.strainCard}>
+      {loading && strains.length === 0 ? (
+        <LoadingState label="Loading strains..." />
+      ) : strains.length === 0 ? (
+        <EmptyState
+          title="No strains yet."
+          description={'Click "Add Strain" to create one.'}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
+          {strains.map((strain) => (
+            <Card key={strain.id} padded={false} className="overflow-hidden">
               {/* Image */}
-              <div style={styles.strainImage}>
+              <div className="relative flex h-40 items-center justify-center bg-bone-200">
                 {visualizationUrls[strain.id] ? (
                   <img
                     src={visualizationUrls[strain.id]}
                     alt={strain.name}
-                    style={styles.cardImage}
+                    className="size-full object-cover"
                   />
                 ) : (
-                  <div style={styles.noImage}>No Image</div>
+                  <div className="text-sm text-bark-400">No Image</div>
                 )}
                 {/* Strain name overlay */}
-                <div style={styles.strainNameOverlay}>
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-bark-900/80 via-bark-900/60 to-transparent px-4 py-3 text-base font-semibold text-bone-50">
                   {strain.name}
                 </div>
               </div>
 
               {/* Info */}
-              <div style={styles.strainInfo}>
-                <div style={styles.strainMeta}>
-                  <span style={styles.badge}>{strain.potency}</span>
-                  <span style={styles.badge}>{strain.beginner === "Yes" ? "Beginner OK" : strain.beginner === "No" ? "Experienced" : "Maybe"}</span>
+              <div className="p-4">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <Badge tone="neutral">{strain.potency}</Badge>
+                  <Badge tone="neutral">{strain.beginner === "Yes" ? "Beginner OK" : strain.beginner === "No" ? "Experienced" : "Maybe"}</Badge>
                 </div>
-                <p style={styles.strainDesc}>
+                <p className="mb-3 text-sm leading-relaxed text-bark-600">
                   {strain.description.length > 120
                     ? strain.description.substring(0, 120) + "..."
                     : strain.description}
                 </p>
-                <div style={styles.vibes}>
+                <div className="flex flex-wrap gap-1.5">
                   {strain.vibe.slice(0, 3).map((v) => (
-                    <span key={v} style={styles.vibe}>{v}</span>
+                    <span
+                      key={v}
+                      className="rounded-full bg-moss-100 px-2 py-0.5 text-[11px] text-moss-700"
+                    >
+                      {v}
+                    </span>
                   ))}
                 </div>
               </div>
 
               {/* Actions */}
-              <div style={styles.strainActions}>
-                <button onClick={() => openEdit(strain)} style={styles.editButton}>
+              <div className="flex gap-2 border-t border-bone-200 p-3">
+                <Button
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => openEdit(strain)}
+                >
                   Edit
-                </button>
-                <button onClick={() => handleDelete(strain)} style={styles.deleteButton}>
+                </Button>
+                <Button
+                  variant="danger-ghost"
+                  className="flex-1"
+                  onClick={() => handleDelete(strain)}
+                >
                   Delete
-                </button>
+                </Button>
               </div>
-            </div>
-          ))
-        )}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Modal */}
       {renderModal()}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    minHeight: "100vh",
-    backgroundColor: "#f5f5f5",
-    padding: "20px",
-    fontFamily: "system-ui, sans-serif",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    maxWidth: "1200px",
-    margin: "0 auto 24px",
-    padding: "20px 24px",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-  },
-  headerActions: {
-    display: "flex",
-    gap: "12px",
-  },
-  card: {
-    maxWidth: "400px",
-    margin: "100px auto",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    padding: "32px",
-    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-    textAlign: "center" as const,
-  },
-  title: {
-    margin: "0 0 4px",
-    fontSize: "24px",
-    fontWeight: "600",
-  },
-  subtitle: {
-    margin: 0,
-    color: "#666",
-    fontSize: "14px",
-  },
-  button: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "600",
-    backgroundColor: "#8b5cf6",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  secondaryButton: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "500",
-    backgroundColor: "white",
-    color: "#666",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  logoutButton: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "500",
-    backgroundColor: "transparent",
-    color: "#666",
-    border: "none",
-    cursor: "pointer",
-  },
-  loading: {
-    textAlign: "center" as const,
-    color: "#666",
-    padding: "40px",
-  },
-  errorBox: {
-    maxWidth: "1200px",
-    margin: "0 auto 16px",
-    padding: "12px 20px",
-    backgroundColor: "#fef2f2",
-    border: "1px solid #fecaca",
-    borderRadius: "8px",
-    color: "#dc2626",
-  },
-  successBox: {
-    maxWidth: "1200px",
-    margin: "0 auto 16px",
-    padding: "12px 20px",
-    backgroundColor: "#f0fdf4",
-    border: "1px solid #bbf7d0",
-    borderRadius: "8px",
-    color: "#16a34a",
-  },
-  strainGrid: {
-    maxWidth: "1200px",
-    margin: "0 auto",
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
-    gap: "20px",
-  },
-  strainCard: {
-    backgroundColor: "white",
-    borderRadius: "12px",
-    overflow: "hidden",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-  },
-  strainImage: {
-    position: "relative" as const,
-    height: "160px",
-    backgroundColor: "#f0f0f0",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  strainNameOverlay: {
-    position: "absolute" as const,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: "12px 16px",
-    background: "linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.6) 60%, transparent 100%)",
-    color: "white",
-    fontSize: "16px",
-    fontWeight: "600",
-    textShadow: "0 1px 2px rgba(0,0,0,0.3)",
-  },
-  cardImage: {
-    width: "100%",
-    height: "100%",
-    objectFit: "cover" as const,
-  },
-  noImage: {
-    color: "#999",
-    fontSize: "14px",
-  },
-  strainInfo: {
-    padding: "16px",
-  },
-  strainName: {
-    margin: "0 0 8px",
-    fontSize: "18px",
-    fontWeight: "600",
-  },
-  strainMeta: {
-    display: "flex",
-    gap: "8px",
-    marginBottom: "12px",
-  },
-  badge: {
-    padding: "4px 8px",
-    backgroundColor: "#f3f4f6",
-    borderRadius: "4px",
-    fontSize: "12px",
-    color: "#666",
-  },
-  strainDesc: {
-    margin: "0 0 12px",
-    fontSize: "13px",
-    color: "#666",
-    lineHeight: "1.5",
-  },
-  vibes: {
-    display: "flex",
-    gap: "6px",
-    flexWrap: "wrap" as const,
-  },
-  vibe: {
-    padding: "2px 8px",
-    backgroundColor: "#ede9fe",
-    borderRadius: "12px",
-    fontSize: "11px",
-    color: "#7c3aed",
-  },
-  strainActions: {
-    display: "flex",
-    borderTop: "1px solid #eee",
-  },
-  editButton: {
-    flex: 1,
-    padding: "12px",
-    backgroundColor: "transparent",
-    border: "none",
-    color: "#8b5cf6",
-    fontWeight: "500",
-    cursor: "pointer",
-  },
-  deleteButton: {
-    flex: 1,
-    padding: "12px",
-    backgroundColor: "transparent",
-    border: "none",
-    borderLeft: "1px solid #eee",
-    color: "#ef4444",
-    fontWeight: "500",
-    cursor: "pointer",
-  },
-  empty: {
-    textAlign: "center" as const,
-    color: "#999",
-    padding: "60px 20px",
-    gridColumn: "1 / -1",
-  },
-  // Modal styles
-  modalOverlay: {
-    position: "fixed" as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-    zIndex: 1000,
-  },
-  modal: {
-    backgroundColor: "white",
-    borderRadius: "16px",
-    padding: "24px",
-    maxWidth: "600px",
-    width: "100%",
-    maxHeight: "90vh",
-    overflowY: "auto" as const,
-  },
-  modalTitle: {
-    margin: "0 0 20px",
-    fontSize: "20px",
-    fontWeight: "600",
-  },
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, 1fr)",
-    gap: "16px",
-    marginBottom: "16px",
-  },
-  formGroup: {
-    marginBottom: "16px",
-  },
-  label: {
-    display: "block",
-    marginBottom: "6px",
-    fontSize: "13px",
-    fontWeight: "500",
-    color: "#333",
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    fontSize: "14px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    boxSizing: "border-box" as const,
-  },
-  select: {
-    width: "100%",
-    padding: "10px 12px",
-    fontSize: "14px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    backgroundColor: "white",
-    boxSizing: "border-box" as const,
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    fontSize: "14px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    resize: "vertical" as const,
-    boxSizing: "border-box" as const,
-    fontFamily: "inherit",
-  },
-  range: {
-    width: "100%",
-  },
-  dropZone: {
-    position: "relative" as const,
-    padding: "20px",
-    border: "2px dashed #ddd",
-    borderRadius: "8px",
-    textAlign: "center" as const,
-    cursor: "pointer",
-    transition: "all 0.2s",
-  },
-  dropText: {
-    margin: 0,
-    color: "#666",
-    fontSize: "14px",
-  },
-  previewImage: {
-    maxWidth: "100%",
-    maxHeight: "200px",
-    borderRadius: "4px",
-    display: "block",
-  },
-  imageOverlay: {
-    position: "absolute" as const,
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: "8px",
-    background: "rgba(0,0,0,0.5)",
-    color: "white",
-    fontSize: "12px",
-    textAlign: "center" as const,
-    borderRadius: "0 0 4px 4px",
-  },
-  modalActions: {
-    display: "flex",
-    gap: "12px",
-    justifyContent: "flex-end",
-    marginTop: "24px",
-    paddingTop: "16px",
-    borderTop: "1px solid #eee",
-  },
-  cancelButton: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "500",
-    backgroundColor: "transparent",
-    color: "#666",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  lineageSection: {
-    marginTop: "24px",
-    paddingTop: "20px",
-    borderTop: "1px solid #eee",
-  },
-  lineageTitle: {
-    margin: "0 0 16px",
-    fontSize: "14px",
-    fontWeight: "600",
-    color: "#666",
-    textTransform: "uppercase" as const,
-    letterSpacing: "0.5px",
-  },
-  helpText: {
-    display: "block",
-    marginTop: "4px",
-    fontSize: "12px",
-    color: "#999",
-  },
-};
