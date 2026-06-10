@@ -18,6 +18,7 @@ import { scoreProducts } from "@/domain/myco/scoring";
 import { generateReflections } from "@/domain/myco/reflection";
 import type { VibeScores } from "@/domain/myco/vibes";
 import type { DoseIntensity } from "@/domain/myco/dose";
+import { checkRateLimit, clientIp } from "@/domain/myco/rate-limit";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -43,6 +44,15 @@ function hashIp(ip: string): string {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+
+    const ip = clientIp(req);
+    const limit = checkRateLimit(`recommend:${ip}`, 12, 10 * 60 * 1000);
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Too many recommendation requests. Please wait and try again." },
+        { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } }
+      );
+    }
 
     const partnerSlug = typeof body.partnerSlug === "string" ? body.partnerSlug.trim() : "";
     const intents = (Array.isArray(body.intents) ? body.intents : []).filter(isMycoIntent) as MycoIntent[];
@@ -116,10 +126,6 @@ export async function POST(req: NextRequest) {
 
     const reflections = await generateReflections(top, { intents, experienceLevel, intensity });
 
-    const ip =
-      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-      req.headers.get("x-real-ip") ||
-      "unknown";
     const sessionToken = generateSessionToken();
 
     const session = await prisma.recommendationSession.create({

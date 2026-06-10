@@ -297,6 +297,7 @@ model MycoProfileSignup {
 
   @@index([partnerId, createdAt])
   @@index([email])
+  @@unique([partnerId, email, sessionToken])
 }
 
 model RecommendationResult {

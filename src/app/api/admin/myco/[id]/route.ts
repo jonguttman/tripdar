@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
+import { getUserRole } from "@/domain/auth/role";
 import { prisma } from "@/lib/prisma";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 import { computeReadiness } from "@/domain/myco/readiness";
@@ -196,6 +197,17 @@ function sanitizeVibeScores(value: unknown): Record<string, number> | undefined 
   return out;
 }
 
+async function canAccessProduct(email: string, partnerId: string): Promise<boolean> {
+  const role = await getUserRole(email);
+  if (role === "super_admin") return true;
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { partnerId: true },
+  });
+  return user?.partnerId === partnerId;
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -221,13 +233,20 @@ export async function PATCH(
 
     const existing = await prisma.storeProductCatalog.findUnique({
       where: { id },
-      select: { productUnitMg: true, unitsPerPack: true, strengthOffset: true },
+      select: { partnerId: true, productUnitMg: true, unitsPerPack: true, strengthOffset: true },
     });
 
     if (!existing) {
       return NextResponse.json(
         { success: false, error: { message: "Product not found" } },
         { status: 404 }
+      );
+    }
+
+    if (!(await canAccessProduct(auth.user!.email!, existing.partnerId))) {
+      return NextResponse.json(
+        { success: false, error: { message: "You do not have access to this product" } },
+        { status: 403 }
       );
     }
 

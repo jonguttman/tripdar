@@ -256,9 +256,11 @@ export async function GET(request: NextRequest) {
     if (!selectedPartner) {
       return NextResponse.json({
         success: true,
-        data: { partners, partner: null, products: [], brands, userRole },
+        data: { partners: [], partner: null, products: [], brands, userRole },
       });
     }
+
+    const visiblePartners = userRole === "super_admin" ? partners : partners.filter((p) => p.id === selectedPartner.id);
 
     const includeArchived = request.nextUrl.searchParams.get("includeArchived") === "1";
 
@@ -341,7 +343,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: { partners, partner, products: productsWithReadiness, brands, userRole, summary },
+      data: { partners: visiblePartners, partner, products: productsWithReadiness, brands, userRole, summary },
     });
   } catch (error) {
     console.error("Error loading Myco admin data:", error);
