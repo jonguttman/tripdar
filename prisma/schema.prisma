@@ -255,9 +255,49 @@ model RecommendationSession {
   results         RecommendationResult[]
   dosingGuides    DosingGuideToken[]
   mycoChatSession MycoChatSession?
+  mycoResults     MycoRecommendationResult[]
 
   @@index([partnerId, createdAt])
   @@index([sessionToken])
+}
+
+// Product-first recommendation results (Myco customer flow). Strain-keyed
+// RecommendationResult stays as-is for the WordPress strain engine.
+model MycoRecommendationResult {
+  id            String   @id @default(cuid())
+  sessionId     String
+  catalogItemId String
+  rank          Int
+  matchScore    Float
+  baseScore     Float
+  strainMatch   Boolean  @default(false) // strain-specific product highlighted for this intent
+  doseTierLabel String?
+  doseUnitsText String?
+  doseMgLow     Int?
+  doseMgHigh    Int?
+  reflection    String? // "why this matched" copy shown to the customer
+  createdAt     DateTime @default(now())
+
+  session     RecommendationSession @relation(fields: [sessionId], references: [id])
+  catalogItem StoreProductCatalog   @relation(fields: [catalogItemId], references: [id])
+
+  @@index([sessionId])
+  @@index([catalogItemId, createdAt])
+}
+
+// Post-results email capture from the customer flow. Not an auth account —
+// customer accounts require role-model work (admin auth grants partner_admin
+// by default) and are deliberately deferred.
+model MycoProfileSignup {
+  id           String   @id @default(cuid())
+  email        String
+  sessionToken String?
+  partnerId    String
+  createdAt    DateTime @default(now())
+
+  @@index([partnerId, createdAt])
+  @@index([email])
+  @@unique([partnerId, email, sessionToken])
 }
 
 model RecommendationResult {
@@ -453,6 +493,7 @@ model StoreProductCatalog {
   strengthOffset ProductStrengthOffset?
   outcomeReports UserOutcomeReport[]
   testerVotes    TesterVote[]
+  mycoResults    MycoRecommendationResult[]
 
   @@index([partnerId, active])
   @@index([strainSlug])
@@ -530,6 +571,9 @@ model ProductStrengthOffset {
   catalogItemId String   @unique
   offset        String   @default("standard") // standard, stronger, lighter
   rationale     String?
+  confirmed     Boolean  @default(false) // Audrey/admin has reviewed and confirmed this offset
+  confirmedAt   DateTime?
+  confirmedBy   String? // email of the admin who confirmed
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

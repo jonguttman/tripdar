@@ -4,7 +4,16 @@ import type { ChangeEvent, CSSProperties } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 type StrengthOffset = "standard" | "stronger" | "lighter";
-type ProductFilter = "all" | "active" | "inactive" | "archived";
+type ProductFilter = "all" | "needs_attention" | "ready" | "active" | "inactive" | "archived";
+
+type ConfidenceLevel = "none" | "low" | "building" | "solid";
+
+const CONFIDENCE_BADGES: Record<ConfidenceLevel, { label: string; bg: string; color: string }> = {
+  none: { label: "No reports", bg: "#f3f4f6", color: "#6b7280" },
+  low: { label: "Low confidence", bg: "#fef3c7", color: "#92400e" },
+  building: { label: "Building confidence", bg: "#dbeafe", color: "#1d4ed8" },
+  solid: { label: "Solid confidence", bg: "#dcfce7", color: "#166534" },
+};
 type BrandDoseCategory = "micro" | "mini" | "macro" | "custom";
 
 interface BrandDoseTierDraft {
@@ -247,10 +256,25 @@ interface Product {
   strengthOffset: {
     offset: StrengthOffset;
     rationale: string | null;
+    confirmed: boolean;
+    confirmedBy: string | null;
   } | null;
   vibeProfile: {
     scores: Record<string, number>;
+    source: string;
   } | null;
+  // Present on GET/PATCH responses; absent right after create/duplicate
+  readiness?: {
+    ready: boolean;
+    missing: string[];
+    warnings: string[];
+  };
+  community?: {
+    voteCount: number;
+    scores: Record<string, number> | null;
+    spread: number | null;
+  };
+  confidence?: ConfidenceLevel;
   ingredients: string[];
   onsetMinutes: number | null;
   durationMinutes: number | null;
@@ -429,6 +453,8 @@ export default function MycoAdminPage() {
       if (product.archivedAt != null) return false;
       if (filter === "active") return product.active;
       if (filter === "inactive") return !product.active;
+      if (filter === "needs_attention") return product.active && product.readiness?.ready === false;
+      if (filter === "ready") return product.active && product.readiness?.ready === true;
       return true;
     });
 
@@ -646,7 +672,7 @@ export default function MycoAdminPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ vibeScores: newVibe }),
         });
-        product.vibeProfile = { scores: { ...newVibe } };
+        product.vibeProfile = { scores: { ...newVibe }, source: "admin" };
       }
 
       setProducts((current) => [product, ...current]);
@@ -1527,7 +1553,21 @@ export default function MycoAdminPage() {
 
       <section style={styles.panel}>
         <div style={styles.panelHeader}>
-          <h2 style={styles.sectionTitle}>Product Catalog</h2>
+          <div>
+            <h2 style={styles.sectionTitle}>Product Catalog</h2>
+            {(() => {
+              // Full in-memory catalog, never a paginated subset (BUG_LOG lesson)
+              const activeOnes = products.filter((p) => p.active && !p.archivedAt);
+              const readyCount = activeOnes.filter((p) => p.readiness?.ready).length;
+              const needsWork = activeOnes.length - readyCount;
+              return (
+                <div style={{ fontSize: "0.8rem", color: needsWork > 0 ? "#92400e" : "#166534", marginTop: 2 }}>
+                  {readyCount} of {activeOnes.length} active products recommendation-ready
+                  {needsWork > 0 ? ` — ${needsWork} need${needsWork === 1 ? "s" : ""} attention` : " ✓"}
+                </div>
+              );
+            })()}
+          </div>
           <div style={styles.toolbar}>
             <select
               value={filter}
@@ -1539,6 +1579,8 @@ export default function MycoAdminPage() {
               style={styles.select}
             >
               <option value="all">All</option>
+              <option value="needs_attention">Needs attention</option>
+              <option value="ready">Ready</option>
               <option value="active">On</option>
               <option value="inactive">Off</option>
               <option value="archived">Archived</option>
@@ -1629,7 +1671,57 @@ export default function MycoAdminPage() {
                             Archived
                           </span>
                         )}
+                        {!isArchived && product.readiness && (
+                          <span
+                            title={
+                              product.readiness.ready
+                                ? "All set — this product can be recommended to customers"
+                                : `Missing: ${product.readiness.missing.join(", ")}`
+                            }
+                            style={{
+                              marginLeft: "0.5rem",
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                              padding: "0.1rem 0.45rem",
+                              borderRadius: 999,
+                              background: product.readiness.ready ? "#dcfce7" : "#fef3c7",
+                              color: product.readiness.ready ? "#166534" : "#92400e",
+                            }}
+                          >
+                            {product.readiness.ready
+                              ? "✅ Ready"
+                              : `⚠️ ${product.readiness.missing.length} missing`}
+                          </span>
+                        )}
+                        {!isArchived && product.confidence && (
+                          <span
+                            title="How well-understood this product is, from tester reports (admin-only)"
+                            style={{
+                              marginLeft: "0.4rem",
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                              padding: "0.1rem 0.45rem",
+                              borderRadius: 999,
+                              background: CONFIDENCE_BADGES[product.confidence].bg,
+                              color: CONFIDENCE_BADGES[product.confidence].color,
+                            }}
+                          >
+                            {CONFIDENCE_BADGES[product.confidence].label}
+                          </span>
+                        )}
                       </div>
+                      {!isArchived && product.readiness && !product.readiness.ready && (
+                        <div style={{ fontSize: "0.75rem", color: "#92400e", marginTop: 2 }}>
+                          Still needed: {product.readiness.missing.join(", ")}
+                        </div>
+                      )}
+                      {!isArchived && product.readiness && product.readiness.warnings.length > 0 && (
+                        <div style={{ fontSize: "0.75rem", color: "#b45309", marginTop: 2 }}>
+                          {product.readiness.warnings.map((w) => (
+                            <div key={w}>⚠ {w}</div>
+                          ))}
+                        </div>
+                      )}
                       <div style={styles.meta}>
                         {brandName} • {product.format}
                         {product.strainSlug ? ` • ${product.strainSlug}` : ""}
@@ -2107,13 +2199,39 @@ export default function MycoAdminPage() {
                           strengthOffset: draft.strengthOffset,
                           strengthRationale: draft.strengthRationale,
                         },
-                        "Strength offset saved"
+                        "Strength offset saved — remember to confirm it"
                       )
                     }
                     style={styles.secondaryButton}
                   >
                     Save
                   </button>
+                  {product.strengthOffset?.confirmed ? (
+                    <span
+                      title={product.strengthOffset.confirmedBy ? `Confirmed by ${product.strengthOffset.confirmedBy}` : "Confirmed"}
+                      style={{ fontSize: "0.75rem", color: "#166534", background: "#dcfce7", padding: "0.25rem 0.5rem", borderRadius: 999, fontWeight: 600, whiteSpace: "nowrap" }}
+                    >
+                      ✓ Confirmed
+                    </span>
+                  ) : (
+                    <button
+                      title="Confirm you've reviewed this strength offset — required for the product to be recommendation-ready"
+                      onClick={() =>
+                        patchProduct(
+                          product.id,
+                          {
+                            strengthOffset: draft.strengthOffset,
+                            strengthRationale: draft.strengthRationale,
+                            strengthConfirmed: true,
+                          },
+                          "Strength offset confirmed"
+                        )
+                      }
+                      style={{ ...styles.secondaryButton, borderColor: "#f59e0b", color: "#92400e", whiteSpace: "nowrap" }}
+                    >
+                      Confirm offset
+                    </button>
+                  )}
                 </div>
 
                 <div style={{ marginTop: "0.75rem" }}>
@@ -2151,29 +2269,78 @@ export default function MycoAdminPage() {
                   {draft.vibeOpen && (
                     <>
                       <div style={styles.vibeGrid}>
-                        {VIBE_DIMENSIONS.map(({ key, label }) => (
-                          <label key={key} style={styles.vibeRow}>
-                            <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{label}</span>
-                            <input
-                              type="range"
-                              min={-1}
-                              max={1}
-                              step={0.05}
-                              value={draft.vibe[key]}
-                              onChange={(e) => updateDraftVibe(product.id, key, Number(e.target.value))}
-                            />
-                            <span style={styles.meta}>{draft.vibe[key].toFixed(2)}</span>
-                          </label>
-                        ))}
+                        {VIBE_DIMENSIONS.map(({ key, label }) => {
+                          const communityValue = product.community?.scores?.[key];
+                          const delta =
+                            typeof communityValue === "number"
+                              ? communityValue - draft.vibe[key]
+                              : null;
+                          return (
+                            <label key={key} style={styles.vibeRow}>
+                              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{label}</span>
+                              <input
+                                type="range"
+                                min={-1}
+                                max={1}
+                                step={0.05}
+                                value={draft.vibe[key]}
+                                onChange={(e) => updateDraftVibe(product.id, key, Number(e.target.value))}
+                              />
+                              <span style={styles.meta}>
+                                {draft.vibe[key].toFixed(2)}
+                                {typeof communityValue === "number" && (
+                                  <span
+                                    title={`Community average from ${product.community?.voteCount ?? 0} tester reports`}
+                                    style={{
+                                      marginLeft: 6,
+                                      color: delta !== null && Math.abs(delta) >= 0.3 ? "#b45309" : "#6b7280",
+                                      fontWeight: delta !== null && Math.abs(delta) >= 0.3 ? 700 : 400,
+                                    }}
+                                  >
+                                    👥 {communityValue.toFixed(2)}
+                                  </span>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })}
                       </div>
-                      <button
-                        onClick={() =>
-                          patchProduct(product.id, { vibeScores: draft.vibe }, "Effects saved")
-                        }
-                        style={styles.secondaryButton}
-                      >
-                        Save Effects
-                      </button>
+                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
+                        <button
+                          onClick={() =>
+                            patchProduct(product.id, { vibeScores: draft.vibe }, "Effects saved")
+                          }
+                          style={styles.secondaryButton}
+                        >
+                          Save Effects
+                        </button>
+                        {product.community?.scores && (
+                          <button
+                            title="Replace the admin profile with the community average from tester reports"
+                            onClick={() => {
+                              if (
+                                confirm(
+                                  `Replace this product's effect profile with the community average from ${product.community?.voteCount} tester report${product.community?.voteCount === 1 ? "" : "s"}?`
+                                )
+                              ) {
+                                patchProduct(
+                                  product.id,
+                                  { acceptCommunityVibe: true },
+                                  "Community profile adopted"
+                                );
+                              }
+                            }}
+                            style={{ ...styles.secondaryButton, borderColor: "#7c3aed", color: "#6d28d9" }}
+                          >
+                            👥 Accept community profile (n={product.community.voteCount})
+                          </button>
+                        )}
+                        {product.vibeProfile?.source === "flywheel" && (
+                          <span style={{ fontSize: "0.75rem", color: "#6d28d9" }}>
+                            Current profile sourced from community feedback
+                          </span>
+                        )}
+                      </div>
                     </>
                   )}
                 </div>
