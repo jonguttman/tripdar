@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0] - 2026-06-10
+
+### Added
+- **Admin design system — "Mushroom & forest floor"**: Tailwind CSS v4 with a custom earthy theme (`src/app/admin/admin.css`: bone/bark/moss/amber/clay/lichen palettes, serif display font), scoped to `/admin` only — the public site is unaffected. New shared component library in `src/components/admin/` (Button, Card, Badge + `statusTone`, Alert, Modal, Field/Input/Select/Textarea, PageHeader, StatCard, EmptyState, Spinner/LoadingState, FilterTabs, Icon) with conventions documented in `src/components/admin/CONVENTIONS.md`.
+- **Mobile navigation**: bottom tab bar (Dashboard, Myco, Reviews, Reports, More) + slide-out drawer + sticky top bar on small screens, replacing the fixed 260px sidebar that made admin pages unusable on phones. Desktop keeps a restyled sidebar.
+
+### Changed
+- **All 9 admin pages migrated off inline `CSSProperties` styles** to Tailwind + shared components, mobile-first (usable at 375px with no horizontal scroll, 44px touch targets, 16px inputs to prevent iOS zoom): Dashboard, Myco Store, Strains, Collections, Reviews, Ratings, Trip Reports, Analytics, Partners. Presentation-only — all state, handlers, and API calls unchanged.
+- **Moderation on the go**: Reviews/Ratings/Reports use scrollable status filter pills and single-column card lists with thumb-sized side-by-side Approve/Reject buttons.
+- **Modals are bottom sheets on mobile** (shared `Modal`), with sticky full-width action footers; large edit forms (Strains, Myco product) use the wide variant.
+- Admin sign-in screens restyled (password, magic link, GitHub) with proper `autocomplete`/`inputMode` attributes.
+
 ## [1.10.0] - 2026-06-09
 
 ### Added
