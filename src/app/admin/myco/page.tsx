@@ -269,6 +269,7 @@ interface ProductPhoto {
   id: string;
   url: string;
   tag: PhotoTag;
+  flavor: string | null;
   sortOrder: number;
 }
 
@@ -819,6 +820,28 @@ export default function MycoAdminPage() {
     const totalDoseMg = editDraft.totalDoseOverride && editDraft.totalDoseMg
       ? toMg(editDraft.totalDoseMg, editDraft.totalDoseInUnit)
       : null;
+
+    // Recipe-defining changes invalidate tester feedback and confirmed offsets.
+    // Same recipe + flavors should stay one product; different recipe should be duplicated.
+    const product = products.find((p) => p.id === productId);
+    const feedbackCount = product?._count?.testerVotes ?? 0;
+    if (product && feedbackCount > 0) {
+      const recipeChanged =
+        productUnitMg !== product.productUnitMg ||
+        editDraft.format !== product.format ||
+        (editDraft.strainSlug || null) !== product.strainSlug ||
+        JSON.stringify(editDraft.ingredients) !== JSON.stringify(product.ingredients ?? []);
+      if (recipeChanged) {
+        const proceed = confirm(
+          `This product has ${feedbackCount} tester report${feedbackCount === 1 ? "" : "s"} describing its current recipe.\n\n` +
+            `Changing dose, format, strain, or ingredients means those reports no longer describe this product, ` +
+            `and the strength offset will need re-confirmation.\n\n` +
+            `If this is really a DIFFERENT recipe, cancel and use Duplicate instead. Apply the change anyway?`
+        );
+        if (!proceed) return;
+      }
+    }
+
     await patchProduct(
       productId,
       {
@@ -951,6 +974,35 @@ export default function MycoAdminPage() {
         current.map((p) =>
           p.id === productId
             ? { ...p, photos: p.photos.map((ph) => (ph.id === photoId ? { ...ph, tag } : ph)) }
+            : p
+        )
+      );
+    } catch {
+      setError("Network error updating photo");
+    }
+  }
+
+  async function updatePhotoFlavor(productId: string, photoId: string, flavor: string) {
+    try {
+      const res = await fetch(`/api/admin/myco/${productId}/photos/${photoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ flavor: flavor || null }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.error?.message || "Failed to update photo");
+        return;
+      }
+      setProducts((current) =>
+        current.map((p) =>
+          p.id === productId
+            ? {
+                ...p,
+                photos: p.photos.map((ph) =>
+                  ph.id === photoId ? { ...ph, flavor: flavor || null } : ph
+                ),
+              }
             : p
         )
       );
@@ -2290,6 +2342,17 @@ export default function MycoAdminPage() {
                               <option key={t} value={t}>{t}</option>
                             ))}
                           </Select>
+                          {product.flavors?.length > 0 && (
+                            <Select
+                              value={photo.flavor ?? ""}
+                              onChange={(e) => updatePhotoFlavor(product.id, photo.id, e.target.value)}
+                            >
+                              <option value="">All flavors</option>
+                              {product.flavors.map((f) => (
+                                <option key={f} value={f}>{f}</option>
+                              ))}
+                            </Select>
+                          )}
                           <Button
                             variant="danger-ghost"
                             size="sm"

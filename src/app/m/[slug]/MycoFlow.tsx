@@ -420,6 +420,12 @@ export default function MycoFlow({
                     </div>
                   </div>
 
+                  {r.flavors.length > 0 && (
+                    <div style={{ fontSize: "0.78rem", color: "#666", marginTop: "0.6rem" }}>
+                      Comes in: {r.flavors.join(" · ")}
+                    </div>
+                  )}
+
                   <p style={{ fontSize: "0.88rem", lineHeight: 1.6, color: "#444", margin: "0.85rem 0 0" }}>{r.reflection}</p>
 
                   {r.doseGuidance && (

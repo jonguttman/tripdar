@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
-import { getUserRole } from "@/domain/auth/role";
 import { prisma } from "@/lib/prisma";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 import { computeReadiness } from "@/domain/myco/readiness";
+import { normalizeFlavors } from "@/domain/myco/flavors";
+import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -197,17 +198,6 @@ function sanitizeVibeScores(value: unknown): Record<string, number> | undefined 
   return out;
 }
 
-async function canAccessProduct(email: string, partnerId: string): Promise<boolean> {
-  const role = await getUserRole(email);
-  if (role === "super_admin") return true;
-
-  const user = await prisma.user.findUnique({
-    where: { email },
-    select: { partnerId: true },
-  });
-  return user?.partnerId === partnerId;
-}
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -217,6 +207,15 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+
+    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { success: false, error: { message: access.message } },
+        { status: access.status }
+      );
+    }
+
     const body = await request.json();
     const offset = parseOffset(body.strengthOffset);
     const rationale = cleanText(body.strengthRationale);
@@ -233,20 +232,21 @@ export async function PATCH(
 
     const existing = await prisma.storeProductCatalog.findUnique({
       where: { id },
-      select: { partnerId: true, productUnitMg: true, unitsPerPack: true, strengthOffset: true },
+      select: {
+        productUnitMg: true,
+        unitsPerPack: true,
+        strengthOffset: true,
+        format: true,
+        strainSlug: true,
+        ingredients: true,
+        brandDoseTiers: true,
+      },
     });
 
     if (!existing) {
       return NextResponse.json(
         { success: false, error: { message: "Product not found" } },
         { status: 404 }
-      );
-    }
-
-    if (!(await canAccessProduct(auth.user!.email!, existing.partnerId))) {
-      return NextResponse.json(
-        { success: false, error: { message: "You do not have access to this product" } },
-        { status: 403 }
       );
     }
 
@@ -328,13 +328,7 @@ export async function PATCH(
         : [];
     }
     if ("flavors" in body) {
-      data.flavors = Array.isArray(body.flavors)
-        ? body.flavors
-            .filter((i: unknown): i is string => typeof i === "string")
-            .map((i: string) => i.trim())
-            .filter((i: string) => i.length > 0)
-            .slice(0, 25)
-        : [];
+      data.flavors = normalizeFlavors(body.flavors);
     }
 
     // Auto-recompute totalDoseMg when not explicitly provided but both
@@ -361,15 +355,28 @@ export async function PATCH(
       include: { strengthOffset: true, vibeProfile: true, photos: { orderBy: { sortOrder: "asc" } }, brandRef: true },
     });
 
+    // Recipe-defining fields: when one actually changes, prior tester feedback
+    // and a confirmed strength offset describe a product that no longer exists.
+    const recipeChanged =
+      (data.productUnitMg !== undefined && data.productUnitMg !== existing.productUnitMg) ||
+      (data.format !== undefined && data.format !== existing.format) ||
+      ("strainSlug" in body && (data.strainSlug ?? null) !== existing.strainSlug) ||
+      ("ingredients" in body &&
+        JSON.stringify(data.ingredients) !== JSON.stringify(existing.ingredients)) ||
+      ("brandDoseTiers" in body &&
+        JSON.stringify(data.brandDoseTiers ?? null) !== JSON.stringify(existing.brandDoseTiers ?? null));
+
     const strengthConfirmed =
       typeof body.strengthConfirmed === "boolean" ? body.strengthConfirmed : undefined;
-    if (offset || strengthConfirmed !== undefined) {
+    if (offset || strengthConfirmed !== undefined || (recipeChanged && existing.strengthOffset?.confirmed)) {
       const effectiveOffset = offset ?? existing.strengthOffset?.offset ?? "standard";
-      // Changing the offset value invalidates a previous confirmation unless
-      // this request explicitly confirms the new value.
+      // Changing the offset value — or the recipe it was confirmed against —
+      // invalidates a previous confirmation unless this request explicitly
+      // confirms the new value.
       const offsetChanged = Boolean(offset && offset !== existing.strengthOffset?.offset);
       const confirmed =
-        strengthConfirmed ?? (offsetChanged ? false : existing.strengthOffset?.confirmed ?? false);
+        strengthConfirmed ??
+        (offsetChanged || recipeChanged ? false : existing.strengthOffset?.confirmed ?? false);
       const confirmationFields = confirmed
         ? { confirmed: true, confirmedAt: new Date(), confirmedBy: auth.user!.email! }
         : { confirmed: false, confirmedAt: null, confirmedBy: null };

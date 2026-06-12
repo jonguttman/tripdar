@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
 import { computeReadiness } from "@/domain/myco/readiness";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
+import { normalizeFlavors } from "@/domain/myco/flavors";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -450,13 +451,7 @@ export async function POST(request: NextRequest) {
           .filter((i: string) => i.length > 0)
           .slice(0, 25)
       : [];
-    const flavors = Array.isArray(body.flavors)
-      ? body.flavors
-          .filter((i: unknown): i is string => typeof i === "string")
-          .map((i: string) => i.trim())
-          .filter((i: string) => i.length > 0)
-          .slice(0, 25)
-      : [];
+    const flavors = normalizeFlavors(body.flavors);
 
     if (!partnerId || !productName || !format || !productUnitMg) {
       return NextResponse.json(

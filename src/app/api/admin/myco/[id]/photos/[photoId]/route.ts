@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
+import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
+import { matchFlavor } from "@/domain/myco/flavors";
 
 const VALID_TAGS = ["stock", "package_front", "package_back", "lifestyle", "other"] as const;
 type PhotoTag = (typeof VALID_TAGS)[number];
@@ -31,11 +33,19 @@ export async function PATCH(
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { photoId } = await params;
+    const { id, photoId } = await params;
     if (!photoId) {
       return NextResponse.json(
         { success: false, error: { message: "photoId is required" } },
         { status: 400 }
+      );
+    }
+
+    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { success: false, error: { message: access.message } },
+        { status: access.status }
       );
     }
 
@@ -47,11 +57,38 @@ export async function PATCH(
       data.sortOrder = Math.round(body.sortOrder);
     }
 
-    const photo = await prisma.productPhoto.update({
-      where: { id: photoId },
+    if ("flavor" in body) {
+      if (body.flavor === null || body.flavor === "") {
+        data.flavor = null;
+      } else {
+        const product = await prisma.storeProductCatalog.findUnique({
+          where: { id },
+          select: { flavors: true },
+        });
+        const flavor = matchFlavor(body.flavor, product?.flavors ?? []);
+        if (!flavor) {
+          return NextResponse.json(
+            { success: false, error: { message: "Unknown flavor — add it to the product's flavor list first" } },
+            { status: 400 }
+          );
+        }
+        data.flavor = flavor;
+      }
+    }
+
+    // Scope by both ids so a photo from another product can't be modified
+    const updated = await prisma.productPhoto.updateMany({
+      where: { id: photoId, catalogItemId: id },
       data,
     });
+    if (updated.count === 0) {
+      return NextResponse.json(
+        { success: false, error: { message: "Photo not found" } },
+        { status: 404 }
+      );
+    }
 
+    const photo = await prisma.productPhoto.findUnique({ where: { id: photoId } });
     return NextResponse.json({ success: true, data: { photo } });
   } catch (error) {
     console.error("Error updating product photo:", error);
@@ -70,7 +107,7 @@ export async function DELETE(
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const { photoId } = await params;
+    const { id, photoId } = await params;
     if (!photoId) {
       return NextResponse.json(
         { success: false, error: { message: "photoId is required" } },
@@ -78,7 +115,24 @@ export async function DELETE(
       );
     }
 
-    await prisma.productPhoto.delete({ where: { id: photoId } });
+    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { success: false, error: { message: access.message } },
+        { status: access.status }
+      );
+    }
+
+    const deleted = await prisma.productPhoto.deleteMany({
+      where: { id: photoId, catalogItemId: id },
+    });
+    if (deleted.count === 0) {
+      return NextResponse.json(
+        { success: false, error: { message: "Photo not found" } },
+        { status: 404 }
+      );
+    }
+
     return NextResponse.json({ success: true, data: { deleted: true } });
   } catch (error) {
     console.error("Error deleting product photo:", error);

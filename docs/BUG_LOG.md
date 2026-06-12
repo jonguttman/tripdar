@@ -4,6 +4,38 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-06-12-001: Product-scoped Myco admin routes missing partner ownership checks
+
+**Symptoms:**
+- No user-visible symptom — found during the flavor/recipe design review.
+- `/api/admin/myco/[id]` (PATCH), `[id]/duplicate`, `[id]/photos` (POST), and `[id]/photos/[photoId]` (PATCH/DELETE) only checked that *a* session existed, then operated on any product ID.
+- A partner admin with another partner's product ID could read its full data (via duplicate — the copy landed under their view), modify it, or delete its photos.
+- The photo PATCH/DELETE additionally never verified the photo belonged to the product in the URL.
+
+**Root Cause:**
+The main `/api/admin/myco` route gained ownership resolution when BUG-2026-06-09-001 was fixed, but the product-scoped sub-routes were written with only `requireAuth()` (session presence) and were never retrofitted. Authorization lived in one route instead of a shared helper, so every new sub-route silently shipped without it.
+
+**Fix:**
+- Added `resolveProductForAdmin(email, productId)` (`src/domain/myco/adminAccess.ts`): role check first, then partner-ownership comparison; super admins pass, partner admins must own the product's partner. Returns 404 (not 403) for foreign products so existence isn't leaked.
+- Applied to all five product-scoped handlers.
+- Photo PATCH/DELETE now scope by `{ id: photoId, catalogItemId: id }` so a photo from another product 404s.
+
+**Files Modified:**
+- `src/domain/myco/adminAccess.ts` (new)
+- `src/app/api/admin/myco/[id]/route.ts`
+- `src/app/api/admin/myco/[id]/duplicate/route.ts`
+- `src/app/api/admin/myco/[id]/photos/route.ts`
+- `src/app/api/admin/myco/[id]/photos/[photoId]/route.ts`
+
+**Prevention:**
+- Ownership verification belongs in a shared domain helper, not inline in one route — sub-routes inherit it by calling the helper, not by remembering to copy the pattern.
+- When adding any `[id]`-scoped admin route, the checklist is: auth → `resolveProductForAdmin` → operation scoped by both ids.
+
+**Lesson Learned:**
+Fixing an authorization bug in one route (BUG-2026-06-09-001) does not fix the class of bug. Audit sibling routes for the same gap while the failure mode is fresh — this one sat unnoticed in four handlers.
+
+---
+
 ## BUG-2026-06-09-001: Myco partner admin sees "Create an active partner" despite assigned partner
 
 **Symptoms:**
