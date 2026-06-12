@@ -1,11 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import "./admin.css";
+
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { signIn, signOut, useSession } from "next-auth/react";
+import {
+  Alert,
+  Button,
+  Icon,
+  Input,
+  Spinner,
+  cn,
+  type IconName,
+} from "@/components/admin";
 
-const navItems = [
+const navItems: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin", label: "Dashboard", icon: "grid" },
   { href: "/admin/myco", label: "Myco Store", icon: "spark" },
   { href: "/admin/strains", label: "Strains", icon: "leaf" },
@@ -17,68 +28,19 @@ const navItems = [
   { href: "/admin/partners", label: "Partners", icon: "users" },
 ];
 
-const icons: Record<string, JSX.Element> = {
-  grid: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="3" width="7" height="7" rx="1" />
-      <rect x="14" y="3" width="7" height="7" rx="1" />
-      <rect x="3" y="14" width="7" height="7" rx="1" />
-      <rect x="14" y="14" width="7" height="7" rx="1" />
-    </svg>
-  ),
-  leaf: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c1.5 0 3-.3 4.3-.9" />
-      <path d="M12 2c3 3 5 7.5 5 12 0 1.5-.3 3-.9 4.3" />
-      <path d="M12 2v20" />
-    </svg>
-  ),
-  folder: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-    </svg>
-  ),
-  star: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-    </svg>
-  ),
-  award: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="8" r="7" />
-      <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88" />
-    </svg>
-  ),
-  file: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-      <polyline points="14 2 14 8 20 8" />
-      <line x1="16" y1="13" x2="8" y2="13" />
-      <line x1="16" y1="17" x2="8" y2="17" />
-    </svg>
-  ),
-  chart: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <line x1="18" y1="20" x2="18" y2="10" />
-      <line x1="12" y1="20" x2="12" y2="4" />
-      <line x1="6" y1="20" x2="6" y2="14" />
-    </svg>
-  ),
-  users: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  ),
-  spark: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3z" />
-      <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
-    </svg>
-  ),
-};
+/* High-traffic sections pinned to the mobile bottom tab bar. */
+const tabBarItems = [
+  navItems[0], // Dashboard
+  navItems[1], // Myco Store
+  navItems[4], // Reviews
+  navItems[6], // Trip Reports
+];
+
+function isActiveRoute(pathname: string, href: string): boolean {
+  return (
+    pathname === href || (href !== "/admin" && pathname.startsWith(href))
+  );
+}
 
 export default function AdminLayout({
   children,
@@ -87,6 +49,7 @@ export default function AdminLayout({
 }) {
   const { data: session, status } = useSession();
   const pathname = usePathname();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [emailLoading, setEmailLoading] = useState(false);
@@ -95,6 +58,11 @@ export default function AdminLayout({
   const [pwPassword, setPwPassword] = useState("");
   const [pwLoading, setPwLoading] = useState(false);
   const [pwError, setPwError] = useState("");
+
+  // Close the drawer whenever navigation happens.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
 
   async function handlePasswordSignIn(e: React.FormEvent) {
     e.preventDefault();
@@ -141,8 +109,8 @@ export default function AdminLayout({
   // Loading state
   if (status === "loading") {
     return (
-      <div style={styles.loadingContainer}>
-        <div style={styles.spinner} />
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-bone-100 font-sans text-bark-400">
+        <Spinner />
         <p>Loading...</p>
       </div>
     );
@@ -151,72 +119,92 @@ export default function AdminLayout({
   // Not authenticated
   if (!session) {
     return (
-      <div style={styles.authContainer}>
-        <div style={styles.authCard}>
-          <div style={styles.logo}>Tripdar</div>
-          <h1 style={styles.authTitle}>Admin Dashboard</h1>
+      <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-bark-900 via-bark-800 to-moss-900 px-4 py-8 font-sans">
+        <div className="w-full max-w-md rounded-2xl bg-bone-50 p-6 shadow-2xl sm:p-10">
+          <div className="text-center">
+            <div className="font-display text-3xl text-moss-700">Tripdar</div>
+            <h1 className="mt-2 mb-6 text-lg font-semibold text-bark-800">
+              Admin Dashboard
+            </h1>
+          </div>
 
           {emailSent ? (
-            <div style={styles.emailSentBox}>
-              <p style={styles.emailSentText}>
-                Check your inbox — a sign-in link has been sent to <strong>{email}</strong>.
-              </p>
-            </div>
+            <Alert tone="success">
+              Check your inbox — a sign-in link has been sent to{" "}
+              <strong>{email}</strong>.
+            </Alert>
           ) : (
             <>
-              <form onSubmit={handlePasswordSignIn} style={styles.emailForm}>
-                <p style={styles.authSubtitle}>Sign in with email and password.</p>
-                <input
+              <form onSubmit={handlePasswordSignIn} className="flex flex-col gap-3">
+                <p className="text-sm text-bark-400">
+                  Sign in with email and password.
+                </p>
+                <Input
                   type="email"
                   value={pwEmail}
                   onChange={(e) => setPwEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="email"
+                  inputMode="email"
                   required
-                  style={styles.emailInput}
                 />
-                <input
+                <Input
                   type="password"
                   value={pwPassword}
                   onChange={(e) => setPwPassword(e.target.value)}
                   placeholder="Password"
+                  autoComplete="current-password"
                   required
-                  style={styles.emailInput}
                 />
-                {pwError && <p style={styles.emailError}>{pwError}</p>}
-                <button type="submit" disabled={pwLoading} style={styles.emailButton}>
+                {pwError && <p className="text-sm text-clay-600">{pwError}</p>}
+                <Button type="submit" loading={pwLoading} full>
                   {pwLoading ? "Signing in..." : "Sign in"}
-                </button>
+                </Button>
               </form>
 
-              <div style={styles.divider}>
-                <span style={styles.dividerText}>or</span>
+              <div className="my-5 flex items-center gap-3 text-sm text-bark-300">
+                <span className="h-px flex-1 bg-bone-300" />
+                or
+                <span className="h-px flex-1 bg-bone-300" />
               </div>
 
-              <form onSubmit={handleEmailSignIn} style={styles.emailForm}>
-                <p style={styles.authSubtitle}>Enter your email to receive a sign-in link.</p>
-                <input
+              <form onSubmit={handleEmailSignIn} className="flex flex-col gap-3">
+                <p className="text-sm text-bark-400">
+                  Enter your email to receive a sign-in link.
+                </p>
+                <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
+                  autoComplete="email"
+                  inputMode="email"
                   required
-                  style={styles.emailInput}
                 />
-                {emailError && <p style={styles.emailError}>{emailError}</p>}
-                <button type="submit" disabled={emailLoading} style={styles.emailButton}>
+                {emailError && (
+                  <p className="text-sm text-clay-600">{emailError}</p>
+                )}
+                <Button
+                  type="submit"
+                  variant="secondary"
+                  loading={emailLoading}
+                  full
+                >
                   {emailLoading ? "Sending..." : "Send sign-in link"}
-                </button>
+                </Button>
               </form>
 
-              <div style={styles.divider}>
-                <span style={styles.dividerText}>or</span>
+              <div className="my-5 flex items-center gap-3 text-sm text-bark-300">
+                <span className="h-px flex-1 bg-bone-300" />
+                or
+                <span className="h-px flex-1 bg-bone-300" />
               </div>
 
-              <p style={styles.authSubtitle}>Sign in with your GitHub account.</p>
-              <button onClick={() => signIn("github")} style={styles.authButton}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: "8px" }}>
-                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-                </svg>
+              <button
+                onClick={() => signIn("github")}
+                className="flex min-h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-lg bg-bark-900 text-sm font-medium text-bone-50 transition-colors hover:bg-bark-800"
+              >
+                <Icon name="github" size={20} />
                 Sign in with GitHub
               </button>
             </>
@@ -226,297 +214,195 @@ export default function AdminLayout({
     );
   }
 
-  return (
-    <div style={styles.container}>
-      {/* Sidebar */}
-      <aside style={styles.sidebar}>
-        <div style={styles.sidebarHeader}>
-          <Link href="/admin" style={styles.logoLink}>
-            <span style={styles.logo}>Tripdar</span>
-          </Link>
-          <span style={styles.adminBadge}>Admin</span>
+  const navLinks = (variant: "sidebar" | "drawer") =>
+    navItems.map((item) => {
+      const active = isActiveRoute(pathname, item.href);
+      return (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={cn(
+            "flex min-h-11 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors",
+            variant === "sidebar"
+              ? active
+                ? "bg-moss-800/60 text-moss-100"
+                : "text-bark-300 hover:bg-bark-800 hover:text-bone-100"
+              : active
+                ? "bg-moss-100 text-moss-800"
+                : "text-bark-600 hover:bg-bone-200/60"
+          )}
+        >
+          <Icon name={item.icon} size={20} className="shrink-0" />
+          {item.label}
+        </Link>
+      );
+    });
+
+  const userBlock = (dark: boolean) => (
+    <div className="flex items-center gap-3">
+      {session.user?.image ? (
+        <img
+          src={session.user.image}
+          alt=""
+          className="size-9 shrink-0 rounded-full bg-bark-700"
+        />
+      ) : (
+        <div
+          className={cn(
+            "flex size-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+            dark ? "bg-moss-800 text-moss-200" : "bg-moss-100 text-moss-700"
+          )}
+        >
+          {(session.user?.name || session.user?.email || "?")
+            .charAt(0)
+            .toUpperCase()}
         </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <div
+          className={cn(
+            "truncate text-sm font-medium",
+            dark ? "text-bone-100" : "text-bark-800"
+          )}
+        >
+          {session.user?.name}
+        </div>
+        <div
+          className={cn(
+            "truncate text-xs",
+            dark ? "text-bark-300" : "text-bark-400"
+          )}
+        >
+          {session.user?.email}
+        </div>
+      </div>
+    </div>
+  );
 
-        <nav style={styles.nav}>
-          {navItems.map((item) => {
-            const isActive = pathname === item.href ||
-              (item.href !== "/admin" && pathname.startsWith(item.href));
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                style={{
-                  ...styles.navItem,
-                  ...(isActive ? styles.navItemActive : {}),
-                }}
-              >
-                <span style={styles.navIcon}>{icons[item.icon]}</span>
-                {item.label}
-              </Link>
-            );
-          })}
+  return (
+    <div className="min-h-dvh bg-bone-100 font-sans text-bark-800">
+      {/* Desktop sidebar */}
+      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col bg-bark-900 md:flex">
+        <div className="flex items-center gap-3 border-b border-bark-700/60 px-5 py-5">
+          <Link href="/admin" className="font-display text-2xl text-moss-300">
+            Tripdar
+          </Link>
+          <span className="rounded bg-bark-800 px-2 py-1 text-[0.625rem] font-semibold uppercase tracking-wider text-bark-300">
+            Admin
+          </span>
+        </div>
+        <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+          {navLinks("sidebar")}
         </nav>
-
-        <div style={styles.sidebarFooter}>
-          <div style={styles.userInfo}>
-            {session.user?.image && (
-              <img
-                src={session.user.image}
-                alt=""
-                style={styles.userAvatar}
-              />
-            )}
-            <div style={styles.userDetails}>
-              <div style={styles.userName}>{session.user?.name}</div>
-              <div style={styles.userEmail}>{session.user?.email}</div>
-            </div>
-          </div>
-          <button onClick={() => signOut()} style={styles.signOutButton}>
+        <div className="space-y-3 border-t border-bark-700/60 p-4">
+          {userBlock(true)}
+          <button
+            onClick={() => signOut()}
+            className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-bark-700 text-xs font-medium text-bark-300 transition-colors hover:bg-bark-800 hover:text-bone-100"
+          >
+            <Icon name="logout" size={14} />
             Sign out
           </button>
         </div>
       </aside>
 
+      {/* Mobile top bar */}
+      <header className="sticky top-0 z-40 flex min-h-14 items-center justify-between gap-3 border-b border-bone-300 bg-bone-100/90 px-4 backdrop-blur md:hidden">
+        <Link href="/admin" className="flex items-center gap-2">
+          <span className="font-display text-xl text-moss-700">Tripdar</span>
+          <span className="rounded bg-bone-200 px-1.5 py-0.5 text-[0.625rem] font-semibold uppercase tracking-wider text-bark-500">
+            Admin
+          </span>
+        </Link>
+        <button
+          onClick={() => setDrawerOpen(true)}
+          aria-label="Open menu"
+          className="-mr-2 flex size-11 cursor-pointer items-center justify-center rounded-lg text-bark-600 hover:bg-bone-200/60"
+        >
+          <Icon name="menu" size={22} />
+        </button>
+      </header>
+
+      {/* Mobile drawer */}
+      {drawerOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-bark-900/50 backdrop-blur-[2px] animate-fade-in md:hidden"
+          onClick={() => setDrawerOpen(false)}
+        >
+          <div
+            className="absolute inset-y-0 right-0 flex w-[85vw] max-w-xs flex-col bg-bone-50 shadow-2xl animate-drawer-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-bone-300 px-4 py-3">
+              <span className="font-display text-xl text-moss-700">Tripdar</span>
+              <button
+                onClick={() => setDrawerOpen(false)}
+                aria-label="Close menu"
+                className="-mr-2 flex size-11 cursor-pointer items-center justify-center rounded-lg text-bark-500 hover:bg-bone-200/60"
+              >
+                <Icon name="x" size={22} />
+              </button>
+            </div>
+            <nav className="flex-1 space-y-0.5 overflow-y-auto p-3">
+              {navLinks("drawer")}
+            </nav>
+            <div className="space-y-3 border-t border-bone-300 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              {userBlock(false)}
+              <button
+                onClick={() => signOut()}
+                className="flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-lg border border-bone-300 text-sm font-medium text-bark-600 transition-colors hover:bg-bone-200/60"
+              >
+                <Icon name="logout" size={16} />
+                Sign out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
-      <main style={styles.main}>{children}</main>
+      <main className="min-h-dvh pb-[calc(4.5rem+env(safe-area-inset-bottom))] md:pb-0 md:pl-64">
+        {children}
+      </main>
+
+      {/* Mobile bottom tab bar */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex border-t border-bone-300 bg-bone-50/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+        {tabBarItems.map((item) => {
+          const active = isActiveRoute(pathname, item.href);
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex min-h-16 flex-1 flex-col items-center justify-center gap-1 text-[0.625rem] font-medium",
+                active ? "text-moss-700" : "text-bark-400"
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-7 w-12 items-center justify-center rounded-full transition-colors",
+                  active && "bg-moss-100"
+                )}
+              >
+                <Icon name={item.icon} size={20} />
+              </span>
+              {item.label === "Trip Reports" ? "Reports" : item.label === "Myco Store" ? "Myco" : item.label}
+            </Link>
+          );
+        })}
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className={cn(
+            "flex min-h-16 flex-1 cursor-pointer flex-col items-center justify-center gap-1 text-[0.625rem] font-medium",
+            drawerOpen ? "text-moss-700" : "text-bark-400"
+          )}
+        >
+          <span className="flex h-7 w-12 items-center justify-center rounded-full">
+            <Icon name="dots" size={20} />
+          </span>
+          More
+        </button>
+      </nav>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    display: "flex",
-    minHeight: "100vh",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-  },
-  sidebar: {
-    width: "260px",
-    background: "#1f2937",
-    color: "white",
-    display: "flex",
-    flexDirection: "column",
-    position: "fixed",
-    top: 0,
-    left: 0,
-    bottom: 0,
-    zIndex: 100,
-  },
-  sidebarHeader: {
-    padding: "1.5rem",
-    borderBottom: "1px solid #374151",
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-  },
-  logoLink: {
-    textDecoration: "none",
-  },
-  logo: {
-    fontSize: "1.5rem",
-    fontWeight: 700,
-    color: "#a78bfa",
-  },
-  adminBadge: {
-    fontSize: "0.625rem",
-    fontWeight: 600,
-    padding: "0.25rem 0.5rem",
-    background: "#374151",
-    borderRadius: "4px",
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
-    color: "#9ca3af",
-  },
-  nav: {
-    flex: 1,
-    padding: "1rem 0",
-    overflowY: "auto",
-  },
-  navItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    padding: "0.75rem 1.5rem",
-    color: "#9ca3af",
-    textDecoration: "none",
-    fontSize: "0.875rem",
-    fontWeight: 500,
-    transition: "all 0.15s ease",
-  },
-  navItemActive: {
-    color: "white",
-    background: "#374151",
-    borderRight: "3px solid #a78bfa",
-  },
-  navIcon: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    width: "20px",
-    height: "20px",
-  },
-  sidebarFooter: {
-    padding: "1rem 1.5rem",
-    borderTop: "1px solid #374151",
-  },
-  userInfo: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    marginBottom: "0.75rem",
-  },
-  userAvatar: {
-    width: "36px",
-    height: "36px",
-    borderRadius: "50%",
-    background: "#374151",
-  },
-  userDetails: {
-    flex: 1,
-    minWidth: 0,
-  },
-  userName: {
-    fontSize: "0.875rem",
-    fontWeight: 500,
-    color: "white",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  userEmail: {
-    fontSize: "0.75rem",
-    color: "#9ca3af",
-    whiteSpace: "nowrap",
-    overflow: "hidden",
-    textOverflow: "ellipsis",
-  },
-  signOutButton: {
-    width: "100%",
-    padding: "0.5rem",
-    background: "transparent",
-    border: "1px solid #4b5563",
-    borderRadius: "6px",
-    color: "#9ca3af",
-    fontSize: "0.75rem",
-    cursor: "pointer",
-  },
-  main: {
-    flex: 1,
-    marginLeft: "260px",
-    background: "#f9fafb",
-    minHeight: "100vh",
-  },
-  loadingContainer: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: "100vh",
-    color: "#6b7280",
-    gap: "1rem",
-  },
-  spinner: {
-    width: "40px",
-    height: "40px",
-    border: "3px solid #e5e7eb",
-    borderTopColor: "#6d28d9",
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-  },
-  authContainer: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #1f2937 0%, #111827 100%)",
-  },
-  authCard: {
-    background: "white",
-    borderRadius: "16px",
-    padding: "3rem",
-    textAlign: "center",
-    maxWidth: "400px",
-    width: "90%",
-    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
-  },
-  authTitle: {
-    fontSize: "1.5rem",
-    fontWeight: 600,
-    margin: "1rem 0 0.5rem",
-    color: "#111827",
-  },
-  authSubtitle: {
-    fontSize: "0.875rem",
-    color: "#6b7280",
-    margin: "0 0 1.5rem",
-  },
-  authButton: {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "0.75rem 1.5rem",
-    background: "#24292f",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    fontWeight: 500,
-    cursor: "pointer",
-  },
-  emailForm: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "0.75rem",
-    marginBottom: "1rem",
-  },
-  emailInput: {
-    padding: "0.75rem 1rem",
-    border: "1px solid #d1d5db",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    color: "#111827",
-    width: "100%",
-  },
-  emailButton: {
-    padding: "0.75rem 1.5rem",
-    background: "#2563eb",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    fontSize: "1rem",
-    fontWeight: 500,
-    cursor: "pointer",
-    width: "100%",
-  },
-  emailError: {
-    color: "#dc2626",
-    fontSize: "0.85rem",
-    margin: 0,
-  },
-  emailSentBox: {
-    background: "#ecfdf5",
-    border: "1px solid #a7f3d0",
-    borderRadius: "8px",
-    padding: "1.25rem",
-  },
-  emailSentText: {
-    color: "#065f46",
-    margin: 0,
-    lineHeight: 1.5,
-  },
-  divider: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.75rem",
-    margin: "1rem 0",
-  },
-  dividerText: {
-    color: "#9ca3af",
-    fontSize: "0.85rem",
-    padding: "0 0.25rem",
-    background: "white",
-    position: "relative" as const,
-    zIndex: 1,
-    margin: "0 auto",
-  },
-};

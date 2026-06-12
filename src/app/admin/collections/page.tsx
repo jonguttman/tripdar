@@ -1,6 +1,21 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  Icon,
+  Input,
+  LoadingState,
+  Modal,
+  PageHeader,
+  Select,
+  Textarea,
+} from "@/components/admin";
 
 interface Collection {
   id: string;
@@ -184,376 +199,181 @@ export default function CollectionsAdminPage() {
     }
   };
 
-  const renderModal = () => {
-    if (!isCreating && !editingCollection) return null;
-
-    return (
-      <div style={styles.modalOverlay} onClick={closeModal}>
-        <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-          <h2 style={styles.modalTitle}>
-            {isCreating ? "Create Collection" : `Edit: ${editingCollection?.name}`}
-          </h2>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Name *</label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              style={styles.input}
-              placeholder="Best for Beginners"
-            />
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Description *</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              style={styles.textarea}
-              rows={3}
-              placeholder="A curated list of beginner-friendly strains..."
-            />
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Strains</label>
-            <select
-              multiple
-              value={formData.strains}
-              onChange={(e) => {
-                const selected = Array.from(e.target.selectedOptions, opt => opt.value);
-                setFormData({ ...formData, strains: selected });
-              }}
-              style={{ ...styles.select, height: "200px" }}
-            >
-              {strains.map((s) => (
-                <option key={s.id} value={s.id}>{s.name}</option>
-              ))}
-            </select>
-            <small style={styles.helpText}>Hold Ctrl/Cmd to select multiple. Selected: {formData.strains.length}</small>
-          </div>
-
-          <div style={styles.formGrid}>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Sort Order</label>
-              <input
-                type="number"
-                value={formData.sortOrder}
-                onChange={(e) => setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })}
-                style={styles.input}
-              />
-            </div>
-
-            <div style={styles.formGroup}>
-              <label style={styles.checkboxLabel}>
-                <input
-                  type="checkbox"
-                  checked={formData.featured}
-                  onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
-                />
-                Featured Collection
-              </label>
-            </div>
-          </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>Tags (comma-separated)</label>
-            <input
-              type="text"
-              value={tagsInput}
-              onChange={(e) => setTagsInput(e.target.value)}
-              style={styles.input}
-              placeholder="beginner, gentle, recommended"
-            />
-          </div>
-
-          <div style={styles.modalActions}>
-            <button onClick={closeModal} style={styles.cancelButton}>Cancel</button>
-            <button
-              onClick={handleSubmit}
-              disabled={loading || !formData.name || !formData.description}
-              style={styles.button}
-            >
-              {loading ? "Saving..." : isCreating ? "Create" : "Save Changes"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Collections</h1>
-        <button onClick={openCreate} style={styles.button}>+ Add Collection</button>
-      </div>
+    <div className="mx-auto max-w-6xl p-4 sm:p-8">
+      <PageHeader
+        title="Collections"
+        actions={
+          <Button onClick={openCreate}>
+            <Icon name="plus" size={16} />
+            Add Collection
+          </Button>
+        }
+      />
 
-      {error && <div style={styles.errorBox}>{error}</div>}
-      {success && <div style={styles.successBox}>{success}</div>}
+      {error && (
+        <Alert tone="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
+      {success && (
+        <Alert tone="success" className="mb-4">
+          {success}
+        </Alert>
+      )}
 
-      <div style={styles.collectionList}>
+      <div className="flex flex-col gap-3 sm:gap-4">
         {loading && collections.length === 0 ? (
-          <p style={styles.loading}>Loading collections...</p>
+          <LoadingState label="Loading collections..." />
         ) : collections.length === 0 ? (
-          <p style={styles.empty}>No collections yet. Click "Add Collection" to create one.</p>
+          <EmptyState
+            icon="folder"
+            title="No collections yet."
+            description={'Click "Add Collection" to create one.'}
+          />
         ) : (
           collections.map((collection) => (
-            <div key={collection.id} style={styles.collectionCard}>
-              <div style={styles.collectionInfo}>
-                <div style={styles.collectionHeader}>
-                  <h3 style={styles.collectionName}>{collection.name}</h3>
-                  {collection.featured && <span style={styles.featuredBadge}>Featured</span>}
+            <Card
+              key={collection.id}
+              className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <h3 className="text-base font-semibold text-bark-800">
+                    {collection.name}
+                  </h3>
+                  {collection.featured && <Badge tone="warning">Featured</Badge>}
                 </div>
-                <p style={styles.collectionDesc}>{collection.description}</p>
-                <div style={styles.collectionMeta}>
+                <p className="mb-2 text-sm leading-relaxed text-bark-600">
+                  {collection.description}
+                </p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-bark-400">
                   <span>{collection.strains.length} strains</span>
                   <span>Order: {collection.sortOrder}</span>
                   {collection.tags && collection.tags.length > 0 && (
-                    <span>Tags: {collection.tags.join(", ")}</span>
+                    <span className="break-all">
+                      Tags: {collection.tags.join(", ")}
+                    </span>
                   )}
                 </div>
               </div>
-              <div style={styles.collectionActions}>
-                <button onClick={() => openEdit(collection)} style={styles.editButton}>Edit</button>
-                <button onClick={() => handleDelete(collection)} style={styles.deleteButton}>Delete</button>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => openEdit(collection)}
+                >
+                  <Icon name="edit" size={16} />
+                  Edit
+                </Button>
+                <Button
+                  variant="danger-ghost"
+                  size="sm"
+                  onClick={() => handleDelete(collection)}
+                >
+                  <Icon name="trash" size={16} />
+                  Delete
+                </Button>
               </div>
-            </div>
+            </Card>
           ))
         )}
       </div>
 
-      {renderModal()}
+      <Modal
+        open={isCreating || !!editingCollection}
+        onClose={closeModal}
+        title={isCreating ? "Create Collection" : `Edit: ${editingCollection?.name}`}
+        footer={
+          <>
+            <Button variant="secondary" onClick={closeModal}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={loading || !formData.name || !formData.description}
+            >
+              {loading ? "Saving..." : isCreating ? "Create" : "Save Changes"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label="Name" required>
+            <Input
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Best for Beginners"
+            />
+          </Field>
+
+          <Field label="Description" required>
+            <Textarea
+              value={formData.description}
+              onChange={(e) =>
+                setFormData({ ...formData, description: e.target.value })
+              }
+              rows={3}
+              placeholder="A curated list of beginner-friendly strains..."
+            />
+          </Field>
+
+          <Field
+            label="Strains"
+            hint={`Hold Ctrl/Cmd to select multiple. Selected: ${formData.strains.length}`}
+          >
+            <Select
+              multiple
+              value={formData.strains}
+              onChange={(e) => {
+                const selected = Array.from(e.target.selectedOptions, (opt) => opt.value);
+                setFormData({ ...formData, strains: selected });
+              }}
+              className="h-[200px] py-2"
+            >
+              {strains.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Sort Order">
+              <Input
+                type="number"
+                value={formData.sortOrder}
+                onChange={(e) =>
+                  setFormData({ ...formData, sortOrder: parseInt(e.target.value) || 0 })
+                }
+              />
+            </Field>
+
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm text-bark-700 sm:self-end">
+              <input
+                type="checkbox"
+                checked={formData.featured}
+                onChange={(e) =>
+                  setFormData({ ...formData, featured: e.target.checked })
+                }
+                className="size-4 accent-moss-600"
+              />
+              Featured Collection
+            </label>
+          </div>
+
+          <Field label="Tags (comma-separated)">
+            <Input
+              type="text"
+              value={tagsInput}
+              onChange={(e) => setTagsInput(e.target.value)}
+              placeholder="beginner, gentle, recommended"
+            />
+          </Field>
+        </div>
+      </Modal>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    padding: "2rem",
-  },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "1.5rem",
-  },
-  title: {
-    fontSize: "1.5rem",
-    fontWeight: 600,
-    margin: 0,
-    color: "#111827",
-  },
-  button: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "600",
-    backgroundColor: "#8b5cf6",
-    color: "white",
-    border: "none",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-  loading: {
-    textAlign: "center" as const,
-    color: "#666",
-    padding: "40px",
-  },
-  errorBox: {
-    padding: "12px 20px",
-    backgroundColor: "#fef2f2",
-    border: "1px solid #fecaca",
-    borderRadius: "8px",
-    color: "#dc2626",
-    marginBottom: "1rem",
-  },
-  successBox: {
-    padding: "12px 20px",
-    backgroundColor: "#f0fdf4",
-    border: "1px solid #bbf7d0",
-    borderRadius: "8px",
-    color: "#16a34a",
-    marginBottom: "1rem",
-  },
-  collectionList: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "16px",
-  },
-  collectionCard: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "white",
-    borderRadius: "12px",
-    padding: "20px",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-    border: "1px solid #e5e7eb",
-  },
-  collectionInfo: {
-    flex: 1,
-  },
-  collectionHeader: {
-    display: "flex",
-    alignItems: "center",
-    gap: "12px",
-    marginBottom: "8px",
-  },
-  collectionName: {
-    margin: 0,
-    fontSize: "18px",
-    fontWeight: "600",
-  },
-  featuredBadge: {
-    padding: "2px 8px",
-    backgroundColor: "#fef3c7",
-    color: "#d97706",
-    borderRadius: "4px",
-    fontSize: "12px",
-    fontWeight: "500",
-  },
-  collectionDesc: {
-    margin: "0 0 12px",
-    fontSize: "14px",
-    color: "#666",
-    lineHeight: "1.4",
-  },
-  collectionMeta: {
-    display: "flex",
-    gap: "16px",
-    fontSize: "13px",
-    color: "#999",
-  },
-  collectionActions: {
-    display: "flex",
-    gap: "8px",
-  },
-  editButton: {
-    padding: "8px 16px",
-    backgroundColor: "transparent",
-    border: "1px solid #ddd",
-    borderRadius: "6px",
-    color: "#666",
-    cursor: "pointer",
-  },
-  deleteButton: {
-    padding: "8px 16px",
-    backgroundColor: "transparent",
-    border: "1px solid #fecaca",
-    borderRadius: "6px",
-    color: "#ef4444",
-    cursor: "pointer",
-  },
-  empty: {
-    textAlign: "center" as const,
-    color: "#999",
-    padding: "60px 20px",
-    background: "white",
-    borderRadius: "12px",
-    border: "2px dashed #e5e7eb",
-  },
-  modalOverlay: {
-    position: "fixed" as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "20px",
-    zIndex: 1000,
-  },
-  modal: {
-    backgroundColor: "white",
-    borderRadius: "16px",
-    padding: "24px",
-    maxWidth: "600px",
-    width: "100%",
-    maxHeight: "90vh",
-    overflowY: "auto" as const,
-  },
-  modalTitle: {
-    margin: "0 0 20px",
-    fontSize: "20px",
-    fontWeight: "600",
-  },
-  formGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, 1fr)",
-    gap: "16px",
-    marginBottom: "16px",
-  },
-  formGroup: {
-    marginBottom: "16px",
-  },
-  label: {
-    display: "block",
-    marginBottom: "6px",
-    fontSize: "13px",
-    fontWeight: "500",
-    color: "#333",
-  },
-  checkboxLabel: {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    fontSize: "14px",
-    color: "#333",
-    cursor: "pointer",
-    marginTop: "24px",
-  },
-  input: {
-    width: "100%",
-    padding: "10px 12px",
-    fontSize: "14px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    boxSizing: "border-box" as const,
-  },
-  select: {
-    width: "100%",
-    padding: "10px 12px",
-    fontSize: "14px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    backgroundColor: "white",
-    boxSizing: "border-box" as const,
-  },
-  textarea: {
-    width: "100%",
-    padding: "10px 12px",
-    fontSize: "14px",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    resize: "vertical" as const,
-    boxSizing: "border-box" as const,
-    fontFamily: "inherit",
-  },
-  helpText: {
-    display: "block",
-    marginTop: "4px",
-    fontSize: "12px",
-    color: "#999",
-  },
-  modalActions: {
-    display: "flex",
-    gap: "12px",
-    justifyContent: "flex-end",
-    marginTop: "24px",
-    paddingTop: "16px",
-    borderTop: "1px solid #eee",
-  },
-  cancelButton: {
-    padding: "10px 20px",
-    fontSize: "14px",
-    fontWeight: "500",
-    backgroundColor: "transparent",
-    color: "#666",
-    border: "1px solid #ddd",
-    borderRadius: "8px",
-    cursor: "pointer",
-  },
-};

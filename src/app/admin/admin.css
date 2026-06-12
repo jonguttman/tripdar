@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/*
+ * Tripdar Admin — "Mushroom & forest floor" theme.
+ * Warm cream surfaces, deep moss green primary, amber + clay accents.
+ * This stylesheet is imported only by the /admin layout so the public
+ * site keeps its own styling untouched.
+ */
+@theme {
+  --font-sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", serif;
+
+  /* Bone — warm cream surfaces and borders */
+  --color-bone-50: #fdfbf6;
+  --color-bone-100: #f6f1e7;
+  --color-bone-200: #ede4d3;
+  --color-bone-300: #e0d3bc;
+  --color-bone-400: #c9b896;
+
+  /* Bark — warm brown neutrals (text, dark surfaces) */
+  --color-bark-100: #e9e2d4;
+  --color-bark-200: #cfc5b1;
+  --color-bark-300: #b3a78f;
+  --color-bark-400: #978a70;
+  --color-bark-500: #7a6e57;
+  --color-bark-600: #5d5345;
+  --color-bark-700: #463e33;
+  --color-bark-800: #322c24;
+  --color-bark-900: #211c16;
+
+  /* Moss — primary forest green */
+  --color-moss-50: #f0f4ec;
+  --color-moss-100: #dde8d3;
+  --color-moss-200: #c2d4b0;
+  --color-moss-300: #9db786;
+  --color-moss-400: #76985e;
+  --color-moss-500: #587a43;
+  --color-moss-600: #44602f;
+  --color-moss-700: #374f27;
+  --color-moss-800: #2c4020;
+  --color-moss-900: #22311a;
+
+  /* Amber — warm honey/ochre (pending, warnings) */
+  --color-amber-50: #fbf5e6;
+  --color-amber-100: #f5e7c4;
+  --color-amber-200: #ecd497;
+  --color-amber-300: #ddb95f;
+  --color-amber-400: #cb9e36;
+  --color-amber-500: #b3851f;
+  --color-amber-600: #92691a;
+  --color-amber-700: #745217;
+  --color-amber-800: #5c4115;
+
+  /* Clay — burnt terracotta (errors, destructive) */
+  --color-clay-50: #faf0ec;
+  --color-clay-100: #f3dcd2;
+  --color-clay-200: #e6bca9;
+  --color-clay-300: #d6977c;
+  --color-clay-400: #c47557;
+  --color-clay-500: #ad5a3d;
+  --color-clay-600: #8f4630;
+  --color-clay-700: #733828;
+  --color-clay-800: #5a2d21;
+
+  /* Lichen — muted blue-green (info) */
+  --color-lichen-100: #dcebe4;
+  --color-lichen-200: #b9d6c9;
+  --color-lichen-500: #4f7d6b;
+  --color-lichen-600: #3e6555;
+  --color-lichen-700: #335245;
+
+  --animate-drawer-in: drawer-in 0.2s ease-out;
+  --animate-sheet-up: sheet-up 0.25s ease-out;
+  --animate-fade-in: fade-in 0.15s ease-out;
+
+  @keyframes drawer-in {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+  @keyframes sheet-up {
+    from {
+      transform: translateY(2rem);
+      opacity: 0.6;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

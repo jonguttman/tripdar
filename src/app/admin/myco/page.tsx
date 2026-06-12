@@ -1,18 +1,35 @@
 "use client";
 
-import type { ChangeEvent, CSSProperties } from "react";
+import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Field,
+  FilterTabs,
+  Input,
+  LoadingState,
+  Modal,
+  PageHeader,
+  Select,
+  Textarea,
+  type BadgeTone,
+  type FilterTab,
+} from "@/components/admin";
 
 type StrengthOffset = "standard" | "stronger" | "lighter";
 type ProductFilter = "all" | "needs_attention" | "ready" | "active" | "inactive" | "archived";
 
 type ConfidenceLevel = "none" | "low" | "building" | "solid";
 
-const CONFIDENCE_BADGES: Record<ConfidenceLevel, { label: string; bg: string; color: string }> = {
-  none: { label: "No reports", bg: "#f3f4f6", color: "#6b7280" },
-  low: { label: "Low confidence", bg: "#fef3c7", color: "#92400e" },
-  building: { label: "Building confidence", bg: "#dbeafe", color: "#1d4ed8" },
-  solid: { label: "Solid confidence", bg: "#dcfce7", color: "#166534" },
+const CONFIDENCE_BADGES: Record<ConfidenceLevel, { label: string; tone: BadgeTone }> = {
+  none: { label: "No reports", tone: "neutral" },
+  low: { label: "Low confidence", tone: "warning" },
+  building: { label: "Building confidence", tone: "info" },
+  solid: { label: "Solid confidence", tone: "success" },
 };
 type BrandDoseCategory = "micro" | "mini" | "macro" | "custom";
 
@@ -85,6 +102,24 @@ const BRAND_DOSE_CATEGORY_LABELS: Record<BrandDoseCategory, string> = {
   macro: "Macro",
   custom: "Custom",
 };
+
+const PRODUCT_FILTER_TABS: FilterTab<ProductFilter>[] = [
+  { value: "all", label: "All" },
+  { value: "needs_attention", label: "Needs attention" },
+  { value: "ready", label: "Ready" },
+  { value: "active", label: "On" },
+  { value: "inactive", label: "Off" },
+  { value: "archived", label: "Archived" },
+];
+
+const INGREDIENT_PILL_CLASSES =
+  "inline-flex items-center gap-1.5 rounded-full bg-moss-100 px-2.5 py-1 text-xs font-semibold text-moss-700";
+const PILL_REMOVE_CLASSES =
+  "cursor-pointer p-0 text-base font-bold leading-none text-moss-700 hover:text-moss-800";
+const READONLY_PILL_CLASSES =
+  "inline-flex items-center rounded-full bg-moss-100 px-2 py-0.5 text-[0.72rem] font-semibold text-moss-700";
+const PHOTO_GRID_CLASSES =
+  "mt-2 grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2";
 
 const VIBE_DIMENSIONS: { key: VibeKey; label: string }[] = [
   { key: "clarity_cognition", label: "Mind: Scattered ↔ Focused" },
@@ -786,9 +821,8 @@ export default function MycoAdminPage() {
       ? toMg(editDraft.totalDoseMg, editDraft.totalDoseInUnit)
       : null;
 
-    // Recipe-defining change on a product with feedback: the existing tester
-    // reports describe the OLD recipe. Same recipe + flavors = edit this
-    // product; different recipe = Duplicate.
+    // Recipe-defining changes invalidate tester feedback and confirmed offsets.
+    // Same recipe + flavors should stay one product; different recipe should be duplicated.
     const product = products.find((p) => p.id === productId);
     const feedbackCount = product?._count?.testerVotes ?? 0;
     if (product && feedbackCount > 0) {
@@ -999,14 +1033,21 @@ export default function MycoAdminPage() {
   }
 
   if (loading) {
-    return <div style={styles.container}>Loading Myco admin...</div>;
+    return (
+      <div className="mx-auto max-w-6xl p-4 sm:p-8">
+        <LoadingState label="Loading Myco admin..." />
+      </div>
+    );
   }
 
   if (!partner) {
     return (
-      <div style={styles.container}>
-        <h1 style={styles.title}>Myco Store Admin</h1>
-        <div style={styles.panel}>Create an active partner before configuring Myco products.</div>
+      <div className="mx-auto max-w-6xl p-4 sm:p-8">
+        <PageHeader title="Myco Store Admin" />
+        <EmptyState
+          icon="folder"
+          title="Create an active partner before configuring Myco products."
+        />
       </div>
     );
   }
@@ -1018,122 +1059,115 @@ export default function MycoAdminPage() {
       : null;
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Myco Store Admin</h1>
-          <p style={styles.subtitle}>Manage store settings, product availability, and dose guidance.</p>
-        </div>
-        <select
-          value={partner.id}
-          onChange={(event) => loadData(event.target.value)}
-          style={styles.select}
-        >
-          {partners.map((item) => (
-            <option key={item.id} value={item.id}>{item.name}</option>
-          ))}
-        </select>
-      </div>
+    <div className="mx-auto max-w-6xl p-4 sm:p-8">
+      <PageHeader
+        title="Myco Store Admin"
+        subtitle="Manage store settings, product availability, and dose guidance."
+        actions={
+          <Select
+            value={partner.id}
+            onChange={(event) => loadData(event.target.value)}
+            className="sm:w-56"
+          >
+            {partners.map((item) => (
+              <option key={item.id} value={item.id}>{item.name}</option>
+            ))}
+          </Select>
+        }
+      />
 
-      {error && <div style={styles.error}>{error}</div>}
-      {message && <div style={styles.message}>{message}</div>}
+      {error && (
+        <Alert tone="error" className="mb-4 whitespace-pre-line">
+          {error}
+        </Alert>
+      )}
+      {message && (
+        <Alert tone="success" className="mb-4">
+          {message}
+        </Alert>
+      )}
 
-      <section style={styles.panel}>
-        <div style={styles.panelHeader}>
-          <h2 style={styles.sectionTitle}>Store Settings</h2>
+      <Card className="mb-6">
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-lg font-semibold text-bark-800">Store Settings</h2>
           {!isReadOnlySettings && (
-            <button onClick={saveSettings} disabled={saving} style={styles.primaryButton}>
+            <Button onClick={saveSettings} disabled={saving} className="w-full sm:w-auto">
               {saving ? "Saving..." : "Save Settings"}
-            </button>
+            </Button>
           )}
         </div>
         {isReadOnlySettings && (
-          <div style={styles.notice}>
+          <Alert tone="warning" className="mb-4">
             Store settings are managed by Tripdar — contact us to update.
-          </div>
+          </Alert>
         )}
-        <div style={styles.settingsGrid}>
-          <label style={styles.field}>
-            Store name
-            <input
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Store name">
+            <Input
               value={settings.name}
               onChange={(e) => setSettings({ ...settings, name: e.target.value })}
               readOnly={isReadOnlySettings}
               disabled={isReadOnlySettings}
-              style={styles.input}
             />
-          </label>
-          <label style={styles.field}>
-            Subdomain
-            <input
+          </Field>
+          <Field label="Subdomain">
+            <Input
               value={settings.subdomain}
               onChange={(e) => setSettings({ ...settings, subdomain: e.target.value })}
               readOnly={isReadOnlySettings}
               disabled={isReadOnlySettings}
               placeholder="top"
-              style={styles.input}
             />
-          </label>
-          <label style={styles.field}>
-            Contact email
-            <input
+          </Field>
+          <Field label="Contact email">
+            <Input
               value={settings.contactEmail}
               onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
               readOnly={isReadOnlySettings}
               disabled={isReadOnlySettings}
-              style={styles.input}
             />
-          </label>
-          <label style={styles.field}>
-            Contact phone
-            <input
+          </Field>
+          <Field label="Contact phone">
+            <Input
               value={settings.contactPhone}
               onChange={(e) => setSettings({ ...settings, contactPhone: e.target.value })}
               readOnly={isReadOnlySettings}
               disabled={isReadOnlySettings}
-              style={styles.input}
             />
-          </label>
-          <label style={styles.field}>
-            Contact website
-            <input
+          </Field>
+          <Field label="Contact website">
+            <Input
               value={settings.contactWebsite}
               onChange={(e) => setSettings({ ...settings, contactWebsite: e.target.value })}
               readOnly={isReadOnlySettings}
               disabled={isReadOnlySettings}
-              style={styles.input}
             />
-          </label>
-          <label style={{ ...styles.field, gridColumn: "1 / -1" }}>
-            Myco welcome message
-            <textarea
+          </Field>
+          <Field label="Myco welcome message" className="sm:col-span-2">
+            <Textarea
               value={settings.mycoWelcomeMessage}
               onChange={(e) => setSettings({ ...settings, mycoWelcomeMessage: e.target.value })}
               readOnly={isReadOnlySettings}
               disabled={isReadOnlySettings}
               rows={3}
-              style={styles.textarea}
             />
-          </label>
+          </Field>
         </div>
-      </section>
+      </Card>
 
-      <section style={styles.panel}>
-        <h2 style={styles.sectionTitle}>Add Product</h2>
+      <Card className="mb-6">
+        <h2 className="mb-4 text-lg font-semibold text-bark-800">Add Product</h2>
 
         {/* Row 1: Identity */}
-        <div style={styles.productGrid}>
-          <label style={styles.field}>
-            Product name
-            <input
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Product name">
+            <Input
               value={newProduct.productName}
               onChange={(e) => setNewProduct({ ...newProduct, productName: e.target.value })}
-              style={styles.input}
             />
-          </label>
-          <label style={styles.field}>
-            Brand
-            <select
+          </Field>
+          <Field label="Brand">
+            <Select
               value={showNewBrand ? "__new__" : newProduct.brandId}
               onChange={(e) => {
                 const val = e.target.value;
@@ -1145,18 +1179,16 @@ export default function MycoAdminPage() {
                   setNewProduct({ ...newProduct, brandId: val });
                 }
               }}
-              style={styles.select}
             >
               <option value="">— Unspecified —</option>
               {brands.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
               <option value="__new__">+ New brand…</option>
-            </select>
-          </label>
-          <label style={styles.field}>
-            Format
-            <select
+            </Select>
+          </Field>
+          <Field label="Format">
+            <Select
               value={newProduct.format}
               onChange={(e) => {
                 const format = e.target.value;
@@ -1170,83 +1202,89 @@ export default function MycoAdminPage() {
                   ),
                 });
               }}
-              style={styles.select}
             >
               <option value="capsule">Capsule</option>
               <option value="edible">Edible</option>
               <option value="dried">Dried</option>
               <option value="tincture">Tincture</option>
               <option value="other">Other</option>
-            </select>
-          </label>
-          <label style={styles.field}>
-            Strain
-            <select
+            </Select>
+          </Field>
+          <Field label="Strain">
+            <Select
               value={newProduct.strainSlug}
               onChange={(e) => setNewProduct({ ...newProduct, strainSlug: e.target.value })}
-              style={styles.select}
             >
               <option value="">Unspecified</option>
               {strains.map((s) => (
                 <option key={s.id} value={s.slug}>{s.name}</option>
               ))}
-            </select>
-          </label>
+            </Select>
+          </Field>
         </div>
 
         {/* Inline "new brand" creator (full-width, below row 1) */}
         {showNewBrand && (
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.75rem", alignItems: "center" }}>
-            <input
-              value={newBrandName}
-              onChange={(e) => setNewBrandName(e.target.value)}
-              placeholder="New brand name"
-              style={{ ...styles.input, maxWidth: "280px" }}
-            />
-            <button onClick={createBrand} style={styles.secondaryButton}>Create brand</button>
-            <button onClick={() => { setShowNewBrand(false); setNewBrandName(""); }} style={styles.linkButton}>Cancel</button>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="min-w-0 flex-1 sm:max-w-72">
+              <Input
+                value={newBrandName}
+                onChange={(e) => setNewBrandName(e.target.value)}
+                placeholder="New brand name"
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" onClick={createBrand}>Create brand</Button>
+              <Button
+                variant="ghost"
+                onClick={() => { setShowNewBrand(false); setNewBrandName(""); }}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         )}
 
         {/* Row 2: Dose */}
-        <div style={{ ...styles.productGrid, marginTop: "1rem" }}>
-          <label style={styles.field}>
-            Dose per unit
-            <div style={styles.inlineRow}>
-              <input
-                type="number"
-                min="0"
-                step="any"
-                value={newProduct.productUnitMg}
-                onChange={(e) => setNewProduct({ ...newProduct, productUnitMg: e.target.value })}
-                style={{ ...styles.input, flex: 1, minWidth: 0 }}
-              />
-              <select
-                value={newProduct.productUnitInUnit}
-                onChange={(e) => setNewProduct({ ...newProduct, productUnitInUnit: e.target.value as DoseUnit })}
-                style={styles.unitSelect}
-              >
-                <option value="mg">mg</option>
-                <option value="g">g</option>
-              </select>
+        <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Field label="Dose per unit">
+            <div className="flex w-full items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <Input
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={newProduct.productUnitMg}
+                  onChange={(e) => setNewProduct({ ...newProduct, productUnitMg: e.target.value })}
+                />
+              </div>
+              <div className="w-20 shrink-0">
+                <Select
+                  value={newProduct.productUnitInUnit}
+                  onChange={(e) => setNewProduct({ ...newProduct, productUnitInUnit: e.target.value as DoseUnit })}
+                >
+                  <option value="mg">mg</option>
+                  <option value="g">g</option>
+                </Select>
+              </div>
             </div>
-          </label>
-          <label style={styles.field}>
-            Units per package
-            <input
+          </Field>
+          <Field label="Units per package">
+            <Input
               type="number"
               min="1"
               value={newProduct.unitsPerPack}
               onChange={(e) => setNewProduct({ ...newProduct, unitsPerPack: e.target.value })}
-              style={styles.input}
             />
-          </label>
-          <div style={styles.field}>
-            <span>Total dose</span>
+          </Field>
+          <div>
+            <span className="mb-1.5 block text-sm font-medium text-bark-700">Total dose</span>
             {!newProduct.totalDoseOverride ? (
-              <div style={styles.totalBox}>
-                <span style={styles.totalValue}>{formatDose(computedNewTotal)}</span>
-                <button
+              <div className="flex min-h-11 items-center gap-3 rounded-lg border border-dashed border-bone-300 bg-bone-100 px-3.5">
+                <span className="flex-1 text-sm font-bold text-bark-800">{formatDose(computedNewTotal)}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() =>
                     setNewProduct({
                       ...newProduct,
@@ -1255,106 +1293,108 @@ export default function MycoAdminPage() {
                       totalDoseInUnit: computedNewTotal && computedNewTotal >= 1000 ? "g" : "mg",
                     })
                   }
-                  style={styles.linkButton}
                 >
                   Edit
-                </button>
+                </Button>
               </div>
             ) : (
-              <div style={styles.inlineRow}>
-                <input
-                  type="number"
-                  min="0"
-                  step="any"
-                  value={
-                    newProduct.totalDoseInUnit === "g" && newProduct.totalDoseMg
-                      ? String(Number(newProduct.totalDoseMg) / 1000)
-                      : newProduct.totalDoseMg
-                  }
-                  onChange={(e) =>
-                    setNewProduct({
-                      ...newProduct,
-                      totalDoseMg:
-                        newProduct.totalDoseInUnit === "g"
-                          ? String(Number(e.target.value) * 1000)
-                          : e.target.value,
-                    })
-                  }
-                  style={{ ...styles.input, flex: 1, minWidth: 0 }}
-                />
-                <select
-                  value={newProduct.totalDoseInUnit}
-                  onChange={(e) => setNewProduct({ ...newProduct, totalDoseInUnit: e.target.value as DoseUnit })}
-                  style={styles.unitSelect}
-                >
-                  <option value="mg">mg</option>
-                  <option value="g">g</option>
-                </select>
-                <button
+              <div className="flex w-full items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <Input
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={
+                      newProduct.totalDoseInUnit === "g" && newProduct.totalDoseMg
+                        ? String(Number(newProduct.totalDoseMg) / 1000)
+                        : newProduct.totalDoseMg
+                    }
+                    onChange={(e) =>
+                      setNewProduct({
+                        ...newProduct,
+                        totalDoseMg:
+                          newProduct.totalDoseInUnit === "g"
+                            ? String(Number(e.target.value) * 1000)
+                            : e.target.value,
+                      })
+                    }
+                  />
+                </div>
+                <div className="w-20 shrink-0">
+                  <Select
+                    value={newProduct.totalDoseInUnit}
+                    onChange={(e) => setNewProduct({ ...newProduct, totalDoseInUnit: e.target.value as DoseUnit })}
+                  >
+                    <option value="mg">mg</option>
+                    <option value="g">g</option>
+                  </Select>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={() =>
                     setNewProduct({ ...newProduct, totalDoseOverride: false, totalDoseMg: "" })
                   }
-                  style={styles.linkButton}
                 >
                   Auto
-                </button>
+                </Button>
               </div>
             )}
           </div>
-          <label style={styles.field}>
-            Strength offset
-            <select
+          <Field label="Strength offset">
+            <Select
               value={newProduct.strengthOffset}
               onChange={(e) =>
                 setNewProduct({ ...newProduct, strengthOffset: e.target.value as StrengthOffset })
               }
-              style={styles.select}
             >
               <option value="standard">Standard</option>
               <option value="stronger">Hits Stronger</option>
               <option value="lighter">Hits Lighter</option>
-            </select>
-          </label>
+            </Select>
+          </Field>
         </div>
 
         {newProduct.strengthOffset !== "standard" && (
-          <div style={{ marginTop: "0.75rem" }}>
-            <label style={{ ...styles.field, maxWidth: "560px" }}>
-              Rationale
-              <input
+          <div className="mt-3">
+            <Field label="Rationale" className="max-w-xl">
+              <Input
                 value={newProduct.strengthRationale}
                 onChange={(e) => setNewProduct({ ...newProduct, strengthRationale: e.target.value })}
                 placeholder="e.g. dense caps, hits harder than the printed dose"
-                style={styles.input}
               />
-            </label>
+            </Field>
           </div>
         )}
 
-        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
-          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Photos</strong>
-          <div style={{ ...styles.photoGrid, marginTop: "0.5rem" }}>
+        <div className="mt-5 border-t border-bone-200 pt-4">
+          <strong className="text-sm font-semibold text-bark-700">Photos</strong>
+          <div className={PHOTO_GRID_CLASSES}>
             {pendingPhotos.map((pp) => (
-              <div key={pp.id} style={styles.photoCard}>
+              <div
+                key={pp.id}
+                className="flex flex-col items-stretch gap-1.5 rounded-lg border border-bone-300 bg-bone-50 p-1.5"
+              >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pp.previewUrl} alt="" style={styles.photoImg} />
-                <div style={styles.meta}>{pp.tag}</div>
-                <button onClick={() => removePendingPhoto(pp.id)} style={styles.linkButton}>
+                <img src={pp.previewUrl} alt="" className="h-20 w-full rounded-md bg-bone-200 object-cover" />
+                <div className="text-xs text-bark-400">{pp.tag}</div>
+                <Button variant="ghost" size="sm" onClick={() => removePendingPhoto(pp.id)}>
                   Remove
-                </button>
+                </Button>
               </div>
             ))}
           </div>
-          <div style={styles.uploadRow}>
-            <select
-              value={pendingPhotoTag}
-              onChange={(e) => setPendingPhotoTag(e.target.value as PhotoTag)}
-              style={{ ...styles.select, width: "auto", minWidth: "140px" }}
-            >
-              {PHOTO_TAGS.map((t) => (
-                <option key={t} value={t}>{t.replace("_", " ")}</option>
-              ))}
-            </select>
+          <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-bone-300 bg-bone-100 px-3 py-2.5">
+            <div className="w-36 shrink-0">
+              <Select
+                value={pendingPhotoTag}
+                onChange={(e) => setPendingPhotoTag(e.target.value as PhotoTag)}
+              >
+                {PHOTO_TAGS.map((t) => (
+                  <option key={t} value={t}>{t.replace("_", " ")}</option>
+                ))}
+              </Select>
+            </div>
             <input
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif"
@@ -1363,21 +1403,21 @@ export default function MycoAdminPage() {
                 if (f) addPendingPhoto(f);
                 e.target.value = "";
               }}
-              style={styles.fileInput}
+              className="min-w-0 text-sm text-bark-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone-200 file:px-3 file:text-sm file:font-medium file:text-bark-700"
             />
-            <span style={{ ...styles.meta, marginLeft: "auto", color: "#7c3aed" }}>Photos save when you click Create. If anything fails, you&apos;ll see an error.</span>
+            <span className="text-xs text-moss-700 sm:ml-auto">Photos save when you click Create. If anything fails, you&apos;ll see an error.</span>
           </div>
         </div>
 
         {/* Ingredients & Stacks */}
-        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
-          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Ingredients & Stacks</strong>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
+        <div className="mt-5 border-t border-bone-200 pt-4">
+          <strong className="text-sm font-semibold text-bark-700">Ingredients & Stacks</strong>
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {newProduct.ingredients.length === 0 && (
-              <span style={styles.meta}>No ingredients added yet</span>
+              <span className="text-xs text-bark-400">No ingredients added yet</span>
             )}
             {newProduct.ingredients.map((ing) => (
-              <span key={ing} style={styles.ingredientPill}>
+              <span key={ing} className={INGREDIENT_PILL_CLASSES}>
                 {ing}
                 <button
                   type="button"
@@ -1387,7 +1427,7 @@ export default function MycoAdminPage() {
                       ingredients: newProduct.ingredients.filter((i) => i !== ing),
                     })
                   }
-                  style={styles.pillRemoveButton}
+                  className={PILL_REMOVE_CLASSES}
                   aria-label={`Remove ${ing}`}
                 >
                   ×
@@ -1395,15 +1435,16 @@ export default function MycoAdminPage() {
               </span>
             ))}
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.6rem" }}>
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             {COMMON_INGREDIENTS.map((quick) => {
               const alreadyAdded = newProduct.ingredients.some(
                 (i) => i.toLowerCase() === quick.toLowerCase()
               );
               return (
-                <button
+                <Button
                   key={quick}
-                  type="button"
+                  variant="secondary"
+                  size="sm"
                   disabled={alreadyAdded}
                   onClick={() =>
                     setNewProduct({
@@ -1411,36 +1452,33 @@ export default function MycoAdminPage() {
                       ingredients: [...newProduct.ingredients, quick],
                     })
                   }
-                  style={{
-                    ...styles.quickPickButton,
-                    opacity: alreadyAdded ? 0.4 : 1,
-                    cursor: alreadyAdded ? "default" : "pointer",
-                  }}
+                  className="rounded-full"
                 >
                   + {quick}
-                </button>
+                </Button>
               );
             })}
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", alignItems: "center" }}>
-            <input
-              value={newIngredientInput}
-              onChange={(e) => setNewIngredientInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  const val = newIngredientInput.trim();
-                  if (val && !newProduct.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
-                    setNewProduct({ ...newProduct, ingredients: [...newProduct.ingredients, val] });
+          <div className="mt-2.5 flex items-center gap-2">
+            <div className="min-w-0 flex-1 sm:max-w-72">
+              <Input
+                value={newIngredientInput}
+                onChange={(e) => setNewIngredientInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const val = newIngredientInput.trim();
+                    if (val && !newProduct.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
+                      setNewProduct({ ...newProduct, ingredients: [...newProduct.ingredients, val] });
+                    }
+                    setNewIngredientInput("");
                   }
-                  setNewIngredientInput("");
-                }
-              }}
-              placeholder="Add an ingredient…"
-              style={{ ...styles.input, maxWidth: "280px" }}
-            />
-            <button
-              type="button"
+                }}
+                placeholder="Add an ingredient…"
+              />
+            </div>
+            <Button
+              variant="secondary"
               onClick={() => {
                 const val = newIngredientInput.trim();
                 if (val && !newProduct.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
@@ -1448,25 +1486,24 @@ export default function MycoAdminPage() {
                 }
                 setNewIngredientInput("");
               }}
-              style={styles.secondaryButton}
             >
               Add
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Flavors */}
-        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
-          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Flavors (same recipe)</strong>
-          <div style={{ ...styles.meta, marginTop: 4 }}>
+        <div className="mt-5 border-t border-bone-200 pt-4">
+          <strong className="text-sm font-semibold text-bark-700">Flavors (same recipe)</strong>
+          <div className="mt-1 text-xs text-bark-400">
             List flavor variants that share this exact recipe (mint, raspberry, original). If a flavor has a different recipe, create a separate product instead — use the Duplicate button.
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {newProduct.flavors.length === 0 && (
-              <span style={styles.meta}>No flavors added — single-flavor product</span>
+              <span className="text-xs text-bark-400">No flavors added — single-flavor product</span>
             )}
             {newProduct.flavors.map((fl) => (
-              <span key={fl} style={styles.ingredientPill}>
+              <span key={fl} className={INGREDIENT_PILL_CLASSES}>
                 {fl}
                 <button
                   type="button"
@@ -1476,7 +1513,7 @@ export default function MycoAdminPage() {
                       flavors: newProduct.flavors.filter((f) => f !== fl),
                     })
                   }
-                  style={styles.pillRemoveButton}
+                  className={PILL_REMOVE_CLASSES}
                   aria-label={`Remove ${fl}`}
                 >
                   ×
@@ -1484,25 +1521,26 @@ export default function MycoAdminPage() {
               </span>
             ))}
           </div>
-          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.6rem", alignItems: "center" }}>
-            <input
-              value={newFlavorInput}
-              onChange={(e) => setNewFlavorInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  const val = newFlavorInput.trim();
-                  if (val && !newProduct.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
-                    setNewProduct({ ...newProduct, flavors: [...newProduct.flavors, val] });
+          <div className="mt-2.5 flex items-center gap-2">
+            <div className="min-w-0 flex-1 sm:max-w-72">
+              <Input
+                value={newFlavorInput}
+                onChange={(e) => setNewFlavorInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    const val = newFlavorInput.trim();
+                    if (val && !newProduct.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
+                      setNewProduct({ ...newProduct, flavors: [...newProduct.flavors, val] });
+                    }
+                    setNewFlavorInput("");
                   }
-                  setNewFlavorInput("");
-                }
-              }}
-              placeholder="Add a flavor…"
-              style={{ ...styles.input, maxWidth: "280px" }}
-            />
-            <button
-              type="button"
+                }}
+                placeholder="Add a flavor…"
+              />
+            </div>
+            <Button
+              variant="secondary"
               onClick={() => {
                 const val = newFlavorInput.trim();
                 if (val && !newProduct.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
@@ -1510,52 +1548,45 @@ export default function MycoAdminPage() {
                 }
                 setNewFlavorInput("");
               }}
-              style={styles.secondaryButton}
             >
               Add
-            </button>
+            </Button>
           </div>
         </div>
 
         {/* Onset & Duration */}
-        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
-          <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Onset & Duration</strong>
-          <div style={{ ...styles.productGrid, marginTop: "0.5rem" }}>
-            <label style={styles.field}>
-              Onset (minutes)
-              <input
+        <div className="mt-5 border-t border-bone-200 pt-4">
+          <strong className="text-sm font-semibold text-bark-700">Onset & Duration</strong>
+          <div className="mt-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Field label="Onset (minutes)" hint="How long until effects start?">
+              <Input
                 type="number"
                 min="0"
                 value={newProduct.onsetMinutes}
                 onChange={(e) => setNewProduct({ ...newProduct, onsetMinutes: e.target.value })}
-                style={styles.input}
               />
-              <span style={styles.meta}>How long until effects start?</span>
-            </label>
-            <label style={styles.field}>
-              Duration (hours)
-              <input
+            </Field>
+            <Field label="Duration (hours)" hint="Total experience length">
+              <Input
                 type="number"
                 min="0"
                 step="0.25"
                 value={newProduct.durationMinutes}
                 onChange={(e) => setNewProduct({ ...newProduct, durationMinutes: e.target.value })}
-                style={styles.input}
               />
-              <span style={styles.meta}>Total experience length</span>
-            </label>
+            </Field>
           </div>
         </div>
 
         {/* Brand's Recommended Dose Tiers */}
-        <div style={{ marginTop: "1.25rem", borderTop: "1px solid #f1f5f9", paddingTop: "1rem" }}>
-          <button
-            type="button"
+        <div className="mt-5 border-t border-bone-200 pt-4">
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={() => setNewBrandTiersOpen((v) => !v)}
-            style={styles.linkButton}
           >
             {newBrandTiersOpen ? "Hide" : "Show"} Brand Dose Tiers
-          </button>
+          </Button>
           {newBrandTiersOpen && (
             <BrandDoseTierEditor
               tiers={newProduct.brandDoseTiers}
@@ -1569,852 +1600,865 @@ export default function MycoAdminPage() {
           )}
         </div>
 
-        <div style={{ marginTop: "1rem" }}>
-          <button onClick={() => setNewVibeOpen((v) => !v)} style={styles.linkButton}>
+        <div className="mt-4">
+          <Button variant="ghost" size="sm" onClick={() => setNewVibeOpen((v) => !v)}>
             {newVibeOpen ? "Hide" : "Show"} Effect Profile
-          </button>
+          </Button>
           {newVibeOpen && (
-            <div style={styles.vibeGrid}>
+            <div className="mt-2 grid grid-cols-1 gap-3 md:grid-cols-2">
               {VIBE_DIMENSIONS.map(({ key, label }) => (
-                <label key={key} style={styles.vibeRow}>
-                  <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{label}</span>
-                  <input
-                    type="range"
-                    min={-1}
-                    max={1}
-                    step={0.05}
-                    value={newVibe[key]}
-                    onChange={(e) => setNewVibe({ ...newVibe, [key]: Number(e.target.value) })}
-                  />
-                  <span style={styles.meta}>{newVibe[key].toFixed(2)}</span>
+                <label key={key} className="block">
+                  <span className="text-xs font-semibold text-bark-700">{label}</span>
+                  <span className="mt-1 flex items-center gap-3">
+                    <input
+                      type="range"
+                      min={-1}
+                      max={1}
+                      step={0.05}
+                      value={newVibe[key]}
+                      onChange={(e) => setNewVibe({ ...newVibe, [key]: Number(e.target.value) })}
+                      className="h-6 w-full min-w-0 accent-moss-600"
+                    />
+                    <span className="w-10 shrink-0 text-right text-xs text-bark-400">{newVibe[key].toFixed(2)}</span>
+                  </span>
                 </label>
               ))}
             </div>
           )}
         </div>
 
-        <div style={{ marginTop: "1rem" }}>
-          <button
+        <div className="mt-5">
+          <Button
             onClick={createProduct}
             disabled={saving || !newProduct.productName || !newProduct.productUnitMg}
-            style={styles.primaryButton}
+            className="w-full sm:w-auto"
           >
             {saving ? "Adding..." : "Add Product"}
-          </button>
+          </Button>
         </div>
-      </section>
+      </Card>
 
-      <section style={styles.panel}>
-        <div style={styles.panelHeader}>
-          <div>
-            <h2 style={styles.sectionTitle}>Product Catalog</h2>
-            {(() => {
-              // Full in-memory catalog, never a paginated subset (BUG_LOG lesson)
-              const activeOnes = products.filter((p) => p.active && !p.archivedAt);
-              const readyCount = activeOnes.filter((p) => p.readiness?.ready).length;
-              const needsWork = activeOnes.length - readyCount;
-              return (
-                <div style={{ fontSize: "0.8rem", color: needsWork > 0 ? "#92400e" : "#166534", marginTop: 2 }}>
-                  {readyCount} of {activeOnes.length} active products recommendation-ready
-                  {needsWork > 0 ? ` — ${needsWork} need${needsWork === 1 ? "s" : ""} attention` : " ✓"}
-                </div>
-              );
-            })()}
+      <Card className="mb-6">
+        <div className="mb-4 flex flex-col gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-bark-800">Product Catalog</h2>
+              {(() => {
+                // Full in-memory catalog, never a paginated subset (BUG_LOG lesson)
+                const activeOnes = products.filter((p) => p.active && !p.archivedAt);
+                const readyCount = activeOnes.filter((p) => p.readiness?.ready).length;
+                const needsWork = activeOnes.length - readyCount;
+                return (
+                  <div className={`mt-0.5 text-xs ${needsWork > 0 ? "text-amber-700" : "text-moss-700"}`}>
+                    {readyCount} of {activeOnes.length} active products recommendation-ready
+                    {needsWork > 0 ? ` — ${needsWork} need${needsWork === 1 ? "s" : ""} attention` : " ✓"}
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="w-full sm:w-52 sm:shrink-0">
+              <Select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)}>
+                <option value="updatedAt">Recently updated</option>
+                <option value="productName">Name</option>
+                <option value="format">Format</option>
+                <option value="brand">Brand</option>
+                <option value="active">Status</option>
+              </Select>
+            </div>
           </div>
-          <div style={styles.toolbar}>
-            <select
-              value={filter}
-              onChange={(e) => {
-                const next = e.target.value as ProductFilter;
-                setFilter(next);
-                loadData(partner.id, next === "archived");
-              }}
-              style={styles.select}
-            >
-              <option value="all">All</option>
-              <option value="needs_attention">Needs attention</option>
-              <option value="ready">Ready</option>
-              <option value="active">On</option>
-              <option value="inactive">Off</option>
-              <option value="archived">Archived</option>
-            </select>
-            <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} style={styles.select}>
-              <option value="updatedAt">Recently updated</option>
-              <option value="productName">Name</option>
-              <option value="format">Format</option>
-              <option value="brand">Brand</option>
-              <option value="active">Status</option>
-            </select>
-          </div>
+          <FilterTabs
+            tabs={PRODUCT_FILTER_TABS}
+            value={filter}
+            onChange={(next) => {
+              setFilter(next);
+              loadData(partner.id, next === "archived");
+            }}
+          />
         </div>
-        <div style={styles.cardList}>
-          {visibleProducts.map((product) => {
-            const draft = rowDrafts[product.id] ?? {
-              strengthOffset: "standard" as StrengthOffset,
-              strengthRationale: "",
-              vibe: emptyVibe(),
-              vibeOpen: false,
-            };
-            const brandName = product.brandRef?.name || product.brand || "No brand";
-            const productBrandDoseTiers = normalizeBrandDoseTiers(product);
-            const computedTotal =
-              product.productUnitMg && product.unitsPerPack
-                ? product.productUnitMg * product.unitsPerPack
-                : null;
-            const isEditing = editingId === product.id && editDraft;
-            const isArchived = product.archivedAt != null;
-            const editUnitMg = isEditing ? toMg(editDraft!.productUnitMg, editDraft!.productUnitInUnit) : null;
-            const editComputedTotal =
-              editUnitMg && Number(editDraft?.unitsPerPack) > 0
-                ? editUnitMg * Number(editDraft!.unitsPerPack)
-                : null;
-            return (
-              <div key={product.id} style={styles.card}>
-                <div style={styles.cardTop}>
-                  <label style={styles.switch}>
-                    <input
-                      type="checkbox"
-                      checked={product.active}
-                      disabled={isArchived}
-                      onChange={(e) =>
-                        patchProduct(
-                          product.id,
-                          { active: e.target.checked },
-                          e.target.checked ? "Product turned on" : "Product turned off"
-                        )
-                      }
-                    />
-                  </label>
-                  <div style={styles.productCell}>
-                    {product.photos?.[0]?.url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.photos[0].url} alt="" style={styles.thumbnail} />
-                    ) : product.photoUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={product.photoUrl} alt="" style={styles.thumbnail} />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => startEdit(product)}
-                        title="No photo yet — click to add one"
-                        style={{
-                          ...styles.thumbnail,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          background: "#fef3c7",
-                          border: "2px dashed #f59e0b",
-                          color: "#92400e",
-                          fontSize: "0.7rem",
-                          fontWeight: 600,
-                          cursor: "pointer",
-                          textAlign: "center",
-                          padding: 4,
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        📷<br/>Add photo
-                      </button>
-                    )}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={styles.productName}>
-                        {product.productName}
-                        {isArchived && (
-                          <span style={{ marginLeft: "0.5rem", fontSize: "0.7rem", color: "#92400e", background: "#fef3c7", padding: "0.1rem 0.4rem", borderRadius: "4px" }}>
-                            Archived
-                          </span>
+        {visibleProducts.length === 0 ? (
+          <EmptyState icon="leaf" title="No products match this filter" />
+        ) : (
+          <div className="flex flex-col gap-3">
+            {visibleProducts.map((product) => {
+              const draft = rowDrafts[product.id] ?? {
+                strengthOffset: "standard" as StrengthOffset,
+                strengthRationale: "",
+                vibe: emptyVibe(),
+                vibeOpen: false,
+              };
+              const brandName = product.brandRef?.name || product.brand || "No brand";
+              const productBrandDoseTiers = normalizeBrandDoseTiers(product);
+              const computedTotal =
+                product.productUnitMg && product.unitsPerPack
+                  ? product.productUnitMg * product.unitsPerPack
+                  : null;
+              const isEditing = editingId === product.id && editDraft;
+              const isArchived = product.archivedAt != null;
+              const editUnitMg = isEditing ? toMg(editDraft!.productUnitMg, editDraft!.productUnitInUnit) : null;
+              const editComputedTotal =
+                editUnitMg && Number(editDraft?.unitsPerPack) > 0
+                  ? editUnitMg * Number(editDraft!.unitsPerPack)
+                  : null;
+              return (
+                <div key={product.id} className="rounded-xl border border-bone-200 bg-bone-100/70 p-3 sm:p-4">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <label className="flex min-h-11 items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={product.active}
+                        disabled={isArchived}
+                        onChange={(e) =>
+                          patchProduct(
+                            product.id,
+                            { active: e.target.checked },
+                            e.target.checked ? "Product turned on" : "Product turned off"
+                          )
+                        }
+                        className="size-5 accent-moss-600"
+                      />
+                    </label>
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      {product.photos?.[0]?.url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.photos[0].url} alt="" className="size-14 shrink-0 rounded-lg bg-bone-200 object-cover" />
+                      ) : product.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.photoUrl} alt="" className="size-14 shrink-0 rounded-lg bg-bone-200 object-cover" />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => startEdit(product)}
+                          title="No photo yet — click to add one"
+                          className="flex size-14 shrink-0 cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-amber-400 bg-amber-100 p-1 text-center text-[0.7rem] font-semibold leading-tight text-amber-800"
+                        >
+                          📷<br/>Add photo
+                        </button>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <div className="font-extrabold text-bark-800">
+                          {product.productName}
+                          {isArchived && (
+                            <Badge tone="warning" className="ml-2 align-middle">
+                              Archived
+                            </Badge>
+                          )}
+                          {!isArchived && product.readiness && (
+                            <span
+                              className="ml-2 align-middle"
+                              title={
+                                product.readiness.ready
+                                  ? "All set — this product can be recommended to customers"
+                                  : `Missing: ${product.readiness.missing.join(", ")}`
+                              }
+                            >
+                              <Badge tone={product.readiness.ready ? "success" : "warning"} className="rounded-full">
+                                {product.readiness.ready
+                                  ? "✅ Ready"
+                                  : `⚠️ ${product.readiness.missing.length} missing`}
+                              </Badge>
+                            </span>
+                          )}
+                          {!isArchived && product.confidence && (
+                            <span
+                              className="ml-1.5 align-middle"
+                              title="How well-understood this product is, from tester reports (admin-only)"
+                            >
+                              <Badge tone={CONFIDENCE_BADGES[product.confidence].tone} className="rounded-full">
+                                {CONFIDENCE_BADGES[product.confidence].label}
+                              </Badge>
+                            </span>
+                          )}
+                        </div>
+                        {!isArchived && product.readiness && !product.readiness.ready && (
+                          <div className="mt-0.5 text-xs text-amber-800">
+                            Still needed: {product.readiness.missing.join(", ")}
+                          </div>
                         )}
-                        {!isArchived && product.readiness && (
-                          <span
-                            title={
-                              product.readiness.ready
-                                ? "All set — this product can be recommended to customers"
-                                : `Missing: ${product.readiness.missing.join(", ")}`
+                        {!isArchived && product.readiness && product.readiness.warnings.length > 0 && (
+                          <div className="mt-0.5 text-xs text-amber-700">
+                            {product.readiness.warnings.map((w) => (
+                              <div key={w}>⚠ {w}</div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-0.5 text-xs text-bark-400">
+                          {brandName} • {product.format}
+                          {product.strainSlug ? ` • ${product.strainSlug}` : ""}
+                        </div>
+                        <div className="mt-0.5 text-xs text-bark-400">
+                          Unit: {formatDose(product.productUnitMg)}
+                          {" • "}Per pack: {product.unitsPerPack ?? "—"}
+                          {" • "}Total:{" "}
+                          {product.totalDoseMg
+                            ? formatDose(product.totalDoseMg)
+                            : computedTotal
+                              ? `${formatDose(computedTotal)} (auto)`
+                              : "—"}
+                        </div>
+                        {(product.ingredients?.length ||
+                          product.flavors?.length ||
+                          product.onsetMinutes ||
+                          product.durationMinutes ||
+                          productBrandDoseTiers.length ||
+                          product.brandDoseInstructions) ? (
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-bark-400">
+                            {product.ingredients?.map((ing) => (
+                              <span key={ing} className={READONLY_PILL_CLASSES}>{ing}</span>
+                            ))}
+                            {product.flavors?.length ? (
+                              <span className="inline-flex flex-wrap items-center gap-1">
+                                <span className="text-[0.7rem] font-semibold text-moss-700">FLAVORS:</span>
+                                {product.flavors.map((fl) => (
+                                  <span key={fl} className="inline-flex items-center rounded-full bg-clay-50 px-2 py-0.5 text-[0.72rem] font-semibold text-clay-700">{fl}</span>
+                                ))}
+                              </span>
+                            ) : null}
+                            {(product.onsetMinutes || product.durationMinutes) && (
+                              <span>
+                                {product.onsetMinutes ? `Onset: ${formatDuration(product.onsetMinutes)}` : ""}
+                                {product.onsetMinutes && product.durationMinutes ? " • " : ""}
+                                {product.durationMinutes ? `Duration: ${formatDuration(product.durationMinutes)}` : ""}
+                              </span>
+                            )}
+                            {productBrandDoseTiers.length > 0 && (
+                              <span>Brand: {productBrandDoseTiers.map(formatBrandDoseTier).join(" / ")}</span>
+                            )}
+                            {product.brandDoseInstructions && (
+                              <span>Instructions: {product.brandDoseInstructions}</span>
+                            )}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto">
+                      {!isArchived && (
+                        <Button
+                          size="sm"
+                          onClick={async () => {
+                            const url = `${window.location.origin}/t/${product.id}`;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              const shareText = `Try ${product.productName} and give me your feedback: ${url}`;
+                              // Try native share on mobile, fall back to clipboard-only
+                              if (navigator.share) {
+                                try { await navigator.share({ title: product.productName, text: shareText, url }); } catch {}
+                              }
+                              alert(`Tester link copied!\n\n${url}\n\nText or AirDrop it to anyone who's tried this product.`);
+                            } catch {
+                              prompt("Copy this tester link:", url);
                             }
-                            style={{
-                              marginLeft: "0.5rem",
-                              fontSize: "0.7rem",
-                              fontWeight: 600,
-                              padding: "0.1rem 0.45rem",
-                              borderRadius: 999,
-                              background: product.readiness.ready ? "#dcfce7" : "#fef3c7",
-                              color: product.readiness.ready ? "#166534" : "#92400e",
-                            }}
-                          >
-                            {product.readiness.ready
-                              ? "✅ Ready"
-                              : `⚠️ ${product.readiness.missing.length} missing`}
-                          </span>
-                        )}
-                        {!isArchived && product.confidence && (
-                          <span
-                            title="How well-understood this product is, from tester reports (admin-only)"
-                            style={{
-                              marginLeft: "0.4rem",
-                              fontSize: "0.7rem",
-                              fontWeight: 600,
-                              padding: "0.1rem 0.45rem",
-                              borderRadius: 999,
-                              background: CONFIDENCE_BADGES[product.confidence].bg,
-                              color: CONFIDENCE_BADGES[product.confidence].color,
-                            }}
-                          >
-                            {CONFIDENCE_BADGES[product.confidence].label}
-                          </span>
-                        )}
-                      </div>
-                      {!isArchived && product.readiness && !product.readiness.ready && (
-                        <div style={{ fontSize: "0.75rem", color: "#92400e", marginTop: 2 }}>
-                          Still needed: {product.readiness.missing.join(", ")}
-                        </div>
-                      )}
-                      {!isArchived && product.readiness && product.readiness.warnings.length > 0 && (
-                        <div style={{ fontSize: "0.75rem", color: "#b45309", marginTop: 2 }}>
-                          {product.readiness.warnings.map((w) => (
-                            <div key={w}>⚠ {w}</div>
-                          ))}
-                        </div>
-                      )}
-                      <div style={styles.meta}>
-                        {brandName} • {product.format}
-                        {product.strainSlug ? ` • ${product.strainSlug}` : ""}
-                      </div>
-                      <div style={styles.meta}>
-                        Unit: {formatDose(product.productUnitMg)}
-                        {" • "}Per pack: {product.unitsPerPack ?? "—"}
-                        {" • "}Total:{" "}
-                        {product.totalDoseMg
-                          ? formatDose(product.totalDoseMg)
-                          : computedTotal
-                            ? `${formatDose(computedTotal)} (auto)`
-                            : "—"}
-                      </div>
-                      {(product.ingredients?.length ||
-                        product.flavors?.length ||
-                        product.onsetMinutes ||
-                        product.durationMinutes ||
-                        productBrandDoseTiers.length ||
-                        product.brandDoseInstructions) ? (
-                        <div style={{ ...styles.meta, display: "flex", flexWrap: "wrap", gap: "0.4rem", alignItems: "center" }}>
-                          {product.ingredients?.map((ing) => (
-                            <span key={ing} style={styles.readOnlyPill}>{ing}</span>
-                          ))}
-                          {product.flavors?.length ? (
-                            <span style={{ display: "inline-flex", gap: "0.3rem", alignItems: "center" }}>
-                              <span style={{ color: "#7c3aed", fontWeight: 600, fontSize: "0.7rem" }}>FLAVORS:</span>
-                              {product.flavors.map((fl) => (
-                                <span key={fl} style={{ ...styles.readOnlyPill, background: "#fdf2f8", color: "#9d174d" }}>{fl}</span>
-                              ))}
-                            </span>
-                          ) : null}
-                          {(product.onsetMinutes || product.durationMinutes) && (
-                            <span>
-                              {product.onsetMinutes ? `Onset: ${formatDuration(product.onsetMinutes)}` : ""}
-                              {product.onsetMinutes && product.durationMinutes ? " • " : ""}
-                              {product.durationMinutes ? `Duration: ${formatDuration(product.durationMinutes)}` : ""}
+                          }}
+                          className="bg-gradient-to-br from-moss-600 to-lichen-600 font-semibold hover:from-moss-700 hover:to-lichen-700"
+                        >
+                          🔗 Get tester link
+                          {product._count && product._count.testerVotes > 0 && (
+                            <span className="rounded-full bg-bone-50/25 px-1.5 py-px text-[0.7rem]">
+                              {product._count.testerVotes} {product._count.testerVotes === 1 ? "vote" : "votes"}
                             </span>
                           )}
-                          {productBrandDoseTiers.length > 0 && (
-                            <span>Brand: {productBrandDoseTiers.map(formatBrandDoseTier).join(" / ")}</span>
-                          )}
-                          {product.brandDoseInstructions && (
-                            <span>Instructions: {product.brandDoseInstructions}</span>
-                          )}
-                        </div>
-                      ) : null}
+                        </Button>
+                      )}
+                      {isArchived ? (
+                        <Button variant="secondary" size="sm" onClick={() => unarchiveProduct(product.id)}>
+                          Unarchive
+                        </Button>
+                      ) : isEditing ? null : (
+                        <>
+                          <Button variant="secondary" size="sm" onClick={() => startEdit(product)}>
+                            Edit
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() => duplicateProduct(product.id)}
+                            title="Duplicate this product (e.g. for a different flavor recipe)"
+                          >
+                            Duplicate
+                          </Button>
+                          <Button variant="secondary" size="sm" onClick={() => archiveProduct(product.id)}>
+                            Archive
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", alignItems: "center" }}>
-                    {!isArchived && (
-                      <button
-                        onClick={async () => {
-                          const url = `${window.location.origin}/t/${product.id}`;
-                          try {
-                            await navigator.clipboard.writeText(url);
-                            const shareText = `Try ${product.productName} and give me your feedback: ${url}`;
-                            // Try native share on mobile, fall back to clipboard-only
-                            if (navigator.share) {
-                              try { await navigator.share({ title: product.productName, text: shareText, url }); } catch {}
-                            }
-                            alert(`Tester link copied!\n\n${url}\n\nText or AirDrop it to anyone who's tried this product.`);
-                          } catch {
-                            prompt("Copy this tester link:", url);
-                          }
-                        }}
-                        style={{
-                          ...styles.secondaryButton,
-                          background: "linear-gradient(135deg, #7c3aed, #ec4899)",
-                          color: "white",
-                          border: "none",
-                          fontWeight: 600,
-                        }}
+
+                  {isEditing && editDraft && (
+                    <Modal
+                      open
+                      onClose={cancelEdit}
+                      title="Edit Product"
+                      wide
+                      footer={
+                        <>
+                          <Button variant="secondary" onClick={cancelEdit}>Cancel</Button>
+                          <Button onClick={() => saveEdit(product.id)}>Save</Button>
+                        </>
+                      }
+                    >
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <Field label="Product name">
+                          <Input
+                            value={editDraft.productName}
+                            onChange={(e) => setEditDraft({ ...editDraft, productName: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="Brand">
+                          <Select
+                            value={editDraft.brandId}
+                            onChange={(e) => setEditDraft({ ...editDraft, brandId: e.target.value })}
+                          >
+                            <option value="">— Unspecified —</option>
+                            {brands.map((b) => (
+                              <option key={b.id} value={b.id}>{b.name}</option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label="Format">
+                          <Select
+                            value={editDraft.format}
+                            onChange={(e) => {
+                              const format = e.target.value;
+                              setEditDraft({
+                                ...editDraft,
+                                format,
+                                brandDoseTiers: retargetDefaultTierUnits(
+                                  editDraft.brandDoseTiers,
+                                  editDraft.format,
+                                  format
+                                ),
+                              });
+                            }}
+                          >
+                            <option value="capsule">Capsule</option>
+                            <option value="edible">Edible</option>
+                            <option value="dried">Dried</option>
+                            <option value="tincture">Tincture</option>
+                            <option value="other">Other</option>
+                          </Select>
+                        </Field>
+                        <Field label="Strain">
+                          <Select
+                            value={editDraft.strainSlug}
+                            onChange={(e) => setEditDraft({ ...editDraft, strainSlug: e.target.value })}
+                          >
+                            <option value="">Unspecified</option>
+                            {strains.map((s) => (
+                              <option key={s.id} value={s.slug}>{s.name}</option>
+                            ))}
+                          </Select>
+                        </Field>
+                        <Field label="Dose per unit">
+                          <div className="flex w-full items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={editDraft.productUnitMg}
+                                onChange={(e) => setEditDraft({ ...editDraft, productUnitMg: e.target.value })}
+                              />
+                            </div>
+                            <div className="w-20 shrink-0">
+                              <Select
+                                value={editDraft.productUnitInUnit}
+                                onChange={(e) => setEditDraft({ ...editDraft, productUnitInUnit: e.target.value as DoseUnit })}
+                              >
+                                <option value="mg">mg</option>
+                                <option value="g">g</option>
+                              </Select>
+                            </div>
+                          </div>
+                        </Field>
+                        <Field label="Units per package">
+                          <Input
+                            type="number"
+                            min="1"
+                            value={editDraft.unitsPerPack}
+                            onChange={(e) => setEditDraft({ ...editDraft, unitsPerPack: e.target.value })}
+                          />
+                        </Field>
+                        <div>
+                          <span className="mb-1.5 block text-sm font-medium text-bark-700">Total dose</span>
+                          {!editDraft.totalDoseOverride ? (
+                            <div className="flex min-h-11 items-center gap-3 rounded-lg border border-dashed border-bone-300 bg-bone-100 px-3.5">
+                              <span className="flex-1 text-sm font-bold text-bark-800">
+                                {formatDose(editComputedTotal)}
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setEditDraft({
+                                    ...editDraft,
+                                    totalDoseOverride: true,
+                                    totalDoseMg: editComputedTotal
+                                      ? editComputedTotal >= 1000
+                                        ? String(editComputedTotal / 1000)
+                                        : String(editComputedTotal)
+                                      : "",
+                                    totalDoseInUnit: editComputedTotal && editComputedTotal >= 1000 ? "g" : "mg",
+                                  })
+                                }
+                              >
+                                Edit total
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="flex w-full items-center gap-2">
+                              <div className="min-w-0 flex-1">
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={editDraft.totalDoseMg}
+                                  onChange={(e) => setEditDraft({ ...editDraft, totalDoseMg: e.target.value })}
+                                />
+                              </div>
+                              <div className="w-20 shrink-0">
+                                <Select
+                                  value={editDraft.totalDoseInUnit}
+                                  onChange={(e) => setEditDraft({ ...editDraft, totalDoseInUnit: e.target.value as DoseUnit })}
+                                >
+                                  <option value="mg">mg</option>
+                                  <option value="g">g</option>
+                                </Select>
+                              </div>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  setEditDraft({ ...editDraft, totalDoseOverride: false, totalDoseMg: "" })
+                                }
+                              >
+                                Auto
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                        {/* Ingredients & Stacks (edit) */}
+                        <div className="border-t border-bone-200 pt-3 sm:col-span-2">
+                          <strong className="text-sm font-semibold text-bark-700">Ingredients & Stacks</strong>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {editDraft.ingredients.length === 0 && (
+                              <span className="text-xs text-bark-400">No ingredients</span>
+                            )}
+                            {editDraft.ingredients.map((ing) => (
+                              <span key={ing} className={INGREDIENT_PILL_CLASSES}>
+                                {ing}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditDraft({
+                                      ...editDraft,
+                                      ingredients: editDraft.ingredients.filter((i) => i !== ing),
+                                    })
+                                  }
+                                  className={PILL_REMOVE_CLASSES}
+                                  aria-label={`Remove ${ing}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {COMMON_INGREDIENTS.map((quick) => {
+                              const alreadyAdded = editDraft.ingredients.some(
+                                (i) => i.toLowerCase() === quick.toLowerCase()
+                              );
+                              return (
+                                <Button
+                                  key={quick}
+                                  variant="secondary"
+                                  size="sm"
+                                  disabled={alreadyAdded}
+                                  onClick={() =>
+                                    setEditDraft({
+                                      ...editDraft,
+                                      ingredients: [...editDraft.ingredients, quick],
+                                    })
+                                  }
+                                  className="rounded-full"
+                                >
+                                  + {quick}
+                                </Button>
+                              );
+                            })}
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className="min-w-0 flex-1 sm:max-w-72">
+                              <Input
+                                value={editIngredientInput}
+                                onChange={(e) => setEditIngredientInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const val = editIngredientInput.trim();
+                                    if (val && !editDraft.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
+                                      setEditDraft({ ...editDraft, ingredients: [...editDraft.ingredients, val] });
+                                    }
+                                    setEditIngredientInput("");
+                                  }
+                                }}
+                                placeholder="Add an ingredient…"
+                              />
+                            </div>
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                const val = editIngredientInput.trim();
+                                if (val && !editDraft.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
+                                  setEditDraft({ ...editDraft, ingredients: [...editDraft.ingredients, val] });
+                                }
+                                setEditIngredientInput("");
+                              }}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Flavors (edit) */}
+                        <div className="border-t border-bone-200 pt-3 sm:col-span-2">
+                          <strong className="text-sm font-semibold text-bark-700">Flavors (same recipe)</strong>
+                          <div className="mt-0.5 text-xs text-bark-400">
+                            Same recipe, different flavors. For different recipes, use Duplicate.
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {editDraft.flavors.length === 0 && (
+                              <span className="text-xs text-bark-400">No flavors — single-flavor product</span>
+                            )}
+                            {editDraft.flavors.map((fl) => (
+                              <span key={fl} className={INGREDIENT_PILL_CLASSES}>
+                                {fl}
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditDraft({
+                                      ...editDraft,
+                                      flavors: editDraft.flavors.filter((f) => f !== fl),
+                                    })
+                                  }
+                                  className={PILL_REMOVE_CLASSES}
+                                  aria-label={`Remove ${fl}`}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                          <div className="mt-2 flex items-center gap-2">
+                            <div className="min-w-0 flex-1 sm:max-w-60">
+                              <Input
+                                value={editFlavorInput}
+                                onChange={(e) => setEditFlavorInput(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    const val = editFlavorInput.trim();
+                                    if (val && !editDraft.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
+                                      setEditDraft({ ...editDraft, flavors: [...editDraft.flavors, val] });
+                                    }
+                                    setEditFlavorInput("");
+                                  }
+                                }}
+                                placeholder="Add a flavor…"
+                              />
+                            </div>
+                            <Button
+                              variant="secondary"
+                              onClick={() => {
+                                const val = editFlavorInput.trim();
+                                if (val && !editDraft.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
+                                  setEditDraft({ ...editDraft, flavors: [...editDraft.flavors, val] });
+                                }
+                                setEditFlavorInput("");
+                              }}
+                            >
+                              Add
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Onset & Duration (edit) */}
+                        <Field label="Onset (minutes)" hint="How long until effects start?">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editDraft.onsetMinutes}
+                            onChange={(e) => setEditDraft({ ...editDraft, onsetMinutes: e.target.value })}
+                          />
+                        </Field>
+                        <Field label="Duration (hours)" hint="Total experience length">
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.25"
+                            value={editDraft.durationMinutes}
+                            onChange={(e) => setEditDraft({ ...editDraft, durationMinutes: e.target.value })}
+                          />
+                        </Field>
+
+                        {/* Brand Dose Tiers (edit) */}
+                        <div className="border-t border-bone-200 pt-3 sm:col-span-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditBrandTiersOpen((v) => !v)}
+                          >
+                            {editBrandTiersOpen ? "Hide" : "Show"} Brand Dose Tiers
+                          </Button>
+                          {editBrandTiersOpen && (
+                            <BrandDoseTierEditor
+                              tiers={editDraft.brandDoseTiers}
+                              instructions={editDraft.brandDoseInstructions}
+                              defaultUnit={unitForFormat(editDraft.format)}
+                              onChange={(brandDoseTiers) => setEditDraft({ ...editDraft, brandDoseTiers })}
+                              onInstructionsChange={(brandDoseInstructions) =>
+                                setEditDraft({ ...editDraft, brandDoseInstructions })
+                              }
+                            />
+                          )}
+                        </div>
+
+                        {/* Photos (edit) — kept reachable while the modal covers the card */}
+                        <div className="border-t border-bone-200 pt-3 sm:col-span-2">
+                          <strong className="text-sm font-semibold text-bark-700">Photos</strong>
+                          <div className={PHOTO_GRID_CLASSES}>
+                            {product.photos?.map((photo) => (
+                              <div
+                                key={photo.id}
+                                className="flex flex-col items-stretch gap-1.5 rounded-lg border border-bone-300 bg-bone-50 p-1.5"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-bone-200 object-cover" />
+                                <Select
+                                  value={photo.tag}
+                                  onChange={(e) => updatePhotoTag(product.id, photo.id, e.target.value as PhotoTag)}
+                                >
+                                  {PHOTO_TAGS.map((t) => (
+                                    <option key={t} value={t}>{t}</option>
+                                  ))}
+                                </Select>
+                                <Button
+                                  variant="danger-ghost"
+                                  size="sm"
+                                  onClick={() => deletePhoto(product.id, photo.id)}
+                                >
+                                  Delete
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                          <PhotoUploader productId={product.id} onUpload={uploadExistingProductPhoto} />
+                        </div>
+                      </div>
+                    </Modal>
+                  )}
+
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <div className="sm:w-40 sm:shrink-0">
+                      <Select
+                        value={draft.strengthOffset}
+                        onChange={(e) => updateDraft(product.id, "strengthOffset", e.target.value)}
                       >
-                        🔗 Get tester link
-                        {product._count && product._count.testerVotes > 0 && (
-                          <span style={{
-                            marginLeft: 6, background: "rgba(255,255,255,0.25)",
-                            padding: "1px 6px", borderRadius: 999, fontSize: "0.7rem",
-                          }}>
-                            {product._count.testerVotes} {product._count.testerVotes === 1 ? "vote" : "votes"}
-                          </span>
-                        )}
-                      </button>
-                    )}
-                    {isArchived ? (
-                      <button onClick={() => unarchiveProduct(product.id)} style={styles.secondaryButton}>
-                        Unarchive
-                      </button>
-                    ) : isEditing ? null : (
+                        <option value="standard">Standard</option>
+                        <option value="stronger">Hits Stronger</option>
+                        <option value="lighter">Hits Lighter</option>
+                      </Select>
+                    </div>
+                    <div className="min-w-0 sm:flex-1">
+                      <Input
+                        value={draft.strengthRationale}
+                        onChange={(e) => updateDraft(product.id, "strengthRationale", e.target.value)}
+                        disabled={draft.strengthOffset === "standard"}
+                        placeholder={draft.strengthOffset === "standard" ? "" : "dense caps, dense effects"}
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() =>
+                          patchProduct(
+                            product.id,
+                            {
+                              strengthOffset: draft.strengthOffset,
+                              strengthRationale: draft.strengthRationale,
+                            },
+                            "Strength offset saved — remember to confirm it"
+                          )
+                        }
+                      >
+                        Save
+                      </Button>
+                      {product.strengthOffset?.confirmed ? (
+                        <span
+                          title={product.strengthOffset.confirmedBy ? `Confirmed by ${product.strengthOffset.confirmedBy}` : "Confirmed"}
+                        >
+                          <Badge tone="success" className="whitespace-nowrap rounded-full">
+                            ✓ Confirmed
+                          </Badge>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          title="Confirm you've reviewed this strength offset — required for the product to be recommendation-ready"
+                          onClick={() =>
+                            patchProduct(
+                              product.id,
+                              {
+                                strengthOffset: draft.strengthOffset,
+                                strengthRationale: draft.strengthRationale,
+                                strengthConfirmed: true,
+                              },
+                              "Strength offset confirmed"
+                            )
+                          }
+                          className="inline-flex min-h-11 cursor-pointer items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-bone-50 px-3 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-50"
+                        >
+                          Confirm offset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <strong className="text-sm font-semibold text-bark-700">Photos</strong>
+                    <div className={PHOTO_GRID_CLASSES}>
+                      {product.photos?.map((photo) => (
+                        <div
+                          key={photo.id}
+                          className="flex flex-col items-stretch gap-1.5 rounded-lg border border-bone-300 bg-bone-50 p-1.5"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-bone-200 object-cover" />
+                          <Select
+                            value={photo.tag}
+                            onChange={(e) => updatePhotoTag(product.id, photo.id, e.target.value as PhotoTag)}
+                          >
+                            {PHOTO_TAGS.map((t) => (
+                              <option key={t} value={t}>{t}</option>
+                            ))}
+                          </Select>
+                          {product.flavors?.length > 0 && (
+                            <Select
+                              value={photo.flavor ?? ""}
+                              onChange={(e) => updatePhotoFlavor(product.id, photo.id, e.target.value)}
+                            >
+                              <option value="">All flavors</option>
+                              {product.flavors.map((f) => (
+                                <option key={f} value={f}>{f}</option>
+                              ))}
+                            </Select>
+                          )}
+                          <Button
+                            variant="danger-ghost"
+                            size="sm"
+                            onClick={() => deletePhoto(product.id, photo.id)}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    <PhotoUploader productId={product.id} onUpload={uploadExistingProductPhoto} />
+                  </div>
+
+                  <div className="mt-3">
+                    <Button variant="ghost" size="sm" onClick={() => toggleDraftVibeOpen(product.id)}>
+                      {draft.vibeOpen ? "Hide" : "Show"} Effect Profile
+                    </Button>
+                    {draft.vibeOpen && (
                       <>
-                        <button onClick={() => startEdit(product)} style={styles.secondaryButton}>
-                          Edit
-                        </button>
-                        <button onClick={() => duplicateProduct(product.id)} style={styles.secondaryButton} title="Duplicate this product (e.g. for a different flavor recipe)">
-                          Duplicate
-                        </button>
-                        <button onClick={() => archiveProduct(product.id)} style={styles.secondaryButton}>
-                          Archive
-                        </button>
+                        <div className="my-2 grid grid-cols-1 gap-3 md:grid-cols-2">
+                          {VIBE_DIMENSIONS.map(({ key, label }) => {
+                            const communityValue = product.community?.scores?.[key];
+                            const delta =
+                              typeof communityValue === "number"
+                                ? communityValue - draft.vibe[key]
+                                : null;
+                            return (
+                              <label key={key} className="block">
+                                <span className="text-xs font-semibold text-bark-700">{label}</span>
+                                <span className="mt-1 flex items-center gap-3">
+                                  <input
+                                    type="range"
+                                    min={-1}
+                                    max={1}
+                                    step={0.05}
+                                    value={draft.vibe[key]}
+                                    onChange={(e) => updateDraftVibe(product.id, key, Number(e.target.value))}
+                                    className="h-6 w-full min-w-0 accent-moss-600"
+                                  />
+                                  <span className="shrink-0 whitespace-nowrap text-right text-xs text-bark-400">
+                                    {draft.vibe[key].toFixed(2)}
+                                    {typeof communityValue === "number" && (
+                                      <span
+                                        title={`Community average from ${product.community?.voteCount ?? 0} tester reports`}
+                                        className={
+                                          delta !== null && Math.abs(delta) >= 0.3
+                                            ? "ml-1.5 font-bold text-amber-700"
+                                            : "ml-1.5 text-bark-400"
+                                        }
+                                      >
+                                        👥 {communityValue.toFixed(2)}
+                                      </span>
+                                    )}
+                                  </span>
+                                </span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={() =>
+                              patchProduct(product.id, { vibeScores: draft.vibe }, "Effects saved")
+                            }
+                          >
+                            Save Effects
+                          </Button>
+                          {product.community?.scores && (
+                            <button
+                              type="button"
+                              title="Replace the admin profile with the community average from tester reports"
+                              onClick={() => {
+                                if (
+                                  confirm(
+                                    `Replace this product's effect profile with the community average from ${product.community?.voteCount} tester report${product.community?.voteCount === 1 ? "" : "s"}?`
+                                  )
+                                ) {
+                                  patchProduct(
+                                    product.id,
+                                    { acceptCommunityVibe: true },
+                                    "Community profile adopted"
+                                  );
+                                }
+                              }}
+                              className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-lg border border-moss-300 bg-bone-50 px-3 text-sm font-medium text-moss-700 transition-colors hover:bg-moss-50"
+                            >
+                              👥 Accept community profile (n={product.community.voteCount})
+                            </button>
+                          )}
+                          {product.vibeProfile?.source === "flywheel" && (
+                            <span className="text-xs text-moss-700">
+                              Current profile sourced from community feedback
+                            </span>
+                          )}
+                        </div>
                       </>
                     )}
                   </div>
                 </div>
-
-                {isEditing && editDraft && (
-                  <div style={{ ...styles.productGrid, marginTop: "0.75rem", padding: "0.75rem", background: "white", border: "1px solid #e5e7eb", borderRadius: "6px" }}>
-                    <label style={styles.field}>
-                      Product name
-                      <input
-                        value={editDraft.productName}
-                        onChange={(e) => setEditDraft({ ...editDraft, productName: e.target.value })}
-                        style={styles.input}
-                      />
-                    </label>
-                    <label style={styles.field}>
-                      Brand
-                      <select
-                        value={editDraft.brandId}
-                        onChange={(e) => setEditDraft({ ...editDraft, brandId: e.target.value })}
-                        style={styles.select}
-                      >
-                        <option value="">— Unspecified —</option>
-                        {brands.map((b) => (
-                          <option key={b.id} value={b.id}>{b.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label style={styles.field}>
-                      Format
-                      <select
-                        value={editDraft.format}
-                        onChange={(e) => {
-                          const format = e.target.value;
-                          setEditDraft({
-                            ...editDraft,
-                            format,
-                            brandDoseTiers: retargetDefaultTierUnits(
-                              editDraft.brandDoseTiers,
-                              editDraft.format,
-                              format
-                            ),
-                          });
-                        }}
-                        style={styles.select}
-                      >
-                        <option value="capsule">Capsule</option>
-                        <option value="edible">Edible</option>
-                        <option value="dried">Dried</option>
-                        <option value="tincture">Tincture</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </label>
-                    <label style={styles.field}>
-                      Strain
-                      <select
-                        value={editDraft.strainSlug}
-                        onChange={(e) => setEditDraft({ ...editDraft, strainSlug: e.target.value })}
-                        style={styles.select}
-                      >
-                        <option value="">Unspecified</option>
-                        {strains.map((s) => (
-                          <option key={s.id} value={s.slug}>{s.name}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label style={styles.field}>
-                      Dose per unit
-                      <div style={styles.inlineRow}>
-                        <input
-                          type="number"
-                          min="0"
-                          step="any"
-                          value={editDraft.productUnitMg}
-                          onChange={(e) => setEditDraft({ ...editDraft, productUnitMg: e.target.value })}
-                          style={{ ...styles.input, flex: 1, minWidth: 0 }}
-                        />
-                        <select
-                          value={editDraft.productUnitInUnit}
-                          onChange={(e) => setEditDraft({ ...editDraft, productUnitInUnit: e.target.value as DoseUnit })}
-                          style={styles.unitSelect}
-                        >
-                          <option value="mg">mg</option>
-                          <option value="g">g</option>
-                        </select>
-                      </div>
-                    </label>
-                    <label style={styles.field}>
-                      Units per package
-                      <input
-                        type="number"
-                        min="1"
-                        value={editDraft.unitsPerPack}
-                        onChange={(e) => setEditDraft({ ...editDraft, unitsPerPack: e.target.value })}
-                        style={styles.input}
-                      />
-                    </label>
-                    <div style={styles.field}>
-                      <span>Total dose</span>
-                      {!editDraft.totalDoseOverride ? (
-                        <div>
-                          <div style={{ padding: "0.65rem 0", fontWeight: 700 }}>
-                            {formatDose(editComputedTotal)}
-                          </div>
-                          <button
-                            onClick={() =>
-                              setEditDraft({
-                                ...editDraft,
-                                totalDoseOverride: true,
-                                totalDoseMg: editComputedTotal
-                                  ? editComputedTotal >= 1000
-                                    ? String(editComputedTotal / 1000)
-                                    : String(editComputedTotal)
-                                  : "",
-                                totalDoseInUnit: editComputedTotal && editComputedTotal >= 1000 ? "g" : "mg",
-                              })
-                            }
-                            style={styles.linkButton}
-                          >
-                            Edit total
-                          </button>
-                        </div>
-                      ) : (
-                        <div style={{ display: "flex", gap: "0.4rem" }}>
-                          <input
-                            type="number"
-                            min="0"
-                            step="any"
-                            value={editDraft.totalDoseMg}
-                            onChange={(e) => setEditDraft({ ...editDraft, totalDoseMg: e.target.value })}
-                            style={{ ...styles.input, flex: 1 }}
-                          />
-                          <select
-                            value={editDraft.totalDoseInUnit}
-                            onChange={(e) => setEditDraft({ ...editDraft, totalDoseInUnit: e.target.value as DoseUnit })}
-                            style={{ ...styles.select, minWidth: "70px" }}
-                          >
-                            <option value="mg">mg</option>
-                            <option value="g">g</option>
-                          </select>
-                          <button
-                            onClick={() =>
-                              setEditDraft({ ...editDraft, totalDoseOverride: false, totalDoseMg: "" })
-                            }
-                            style={styles.linkButton}
-                          >
-                            Auto
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {/* Ingredients & Stacks (edit) */}
-                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem" }}>
-                      <strong style={{ fontSize: "0.85rem", color: "#374151" }}>Ingredients & Stacks</strong>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
-                        {editDraft.ingredients.length === 0 && (
-                          <span style={styles.meta}>No ingredients</span>
-                        )}
-                        {editDraft.ingredients.map((ing) => (
-                          <span key={ing} style={styles.ingredientPill}>
-                            {ing}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setEditDraft({
-                                  ...editDraft,
-                                  ingredients: editDraft.ingredients.filter((i) => i !== ing),
-                                })
-                              }
-                              style={styles.pillRemoveButton}
-                              aria-label={`Remove ${ing}`}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem", marginTop: "0.5rem" }}>
-                        {COMMON_INGREDIENTS.map((quick) => {
-                          const alreadyAdded = editDraft.ingredients.some(
-                            (i) => i.toLowerCase() === quick.toLowerCase()
-                          );
-                          return (
-                            <button
-                              key={quick}
-                              type="button"
-                              disabled={alreadyAdded}
-                              onClick={() =>
-                                setEditDraft({
-                                  ...editDraft,
-                                  ingredients: [...editDraft.ingredients, quick],
-                                })
-                              }
-                              style={{
-                                ...styles.quickPickButton,
-                                opacity: alreadyAdded ? 0.4 : 1,
-                                cursor: alreadyAdded ? "default" : "pointer",
-                              }}
-                            >
-                              + {quick}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center" }}>
-                        <input
-                          value={editIngredientInput}
-                          onChange={(e) => setEditIngredientInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const val = editIngredientInput.trim();
-                              if (val && !editDraft.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
-                                setEditDraft({ ...editDraft, ingredients: [...editDraft.ingredients, val] });
-                              }
-                              setEditIngredientInput("");
-                            }
-                          }}
-                          placeholder="Add an ingredient…"
-                          style={{ ...styles.input, maxWidth: "280px" }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const val = editIngredientInput.trim();
-                            if (val && !editDraft.ingredients.some((i) => i.toLowerCase() === val.toLowerCase())) {
-                              setEditDraft({ ...editDraft, ingredients: [...editDraft.ingredients, val] });
-                            }
-                            setEditIngredientInput("");
-                          }}
-                          style={styles.secondaryButton}
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Flavors (edit) */}
-                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem", marginTop: "0.5rem" }}>
-                      <strong style={{ fontSize: "0.8rem", color: "#374151" }}>Flavors (same recipe)</strong>
-                      <div style={{ ...styles.meta, marginTop: 2 }}>
-                        Same recipe, different flavors. For different recipes, use Duplicate.
-                      </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginTop: "0.5rem" }}>
-                        {editDraft.flavors.length === 0 && (
-                          <span style={styles.meta}>No flavors — single-flavor product</span>
-                        )}
-                        {editDraft.flavors.map((fl) => (
-                          <span key={fl} style={styles.ingredientPill}>
-                            {fl}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setEditDraft({
-                                  ...editDraft,
-                                  flavors: editDraft.flavors.filter((f) => f !== fl),
-                                })
-                              }
-                              style={styles.pillRemoveButton}
-                              aria-label={`Remove ${fl}`}
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                      <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center" }}>
-                        <input
-                          value={editFlavorInput}
-                          onChange={(e) => setEditFlavorInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              e.preventDefault();
-                              const val = editFlavorInput.trim();
-                              if (val && !editDraft.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
-                                setEditDraft({ ...editDraft, flavors: [...editDraft.flavors, val] });
-                              }
-                              setEditFlavorInput("");
-                            }
-                          }}
-                          placeholder="Add a flavor…"
-                          style={{ ...styles.input, maxWidth: "240px" }}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const val = editFlavorInput.trim();
-                            if (val && !editDraft.flavors.some((f) => f.toLowerCase() === val.toLowerCase())) {
-                              setEditDraft({ ...editDraft, flavors: [...editDraft.flavors, val] });
-                            }
-                            setEditFlavorInput("");
-                          }}
-                          style={styles.secondaryButton}
-                        >
-                          Add
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Onset & Duration (edit) */}
-                    <label style={styles.field}>
-                      Onset (minutes)
-                      <input
-                        type="number"
-                        min="0"
-                        value={editDraft.onsetMinutes}
-                        onChange={(e) => setEditDraft({ ...editDraft, onsetMinutes: e.target.value })}
-                        style={styles.input}
-                      />
-                      <span style={styles.meta}>How long until effects start?</span>
-                    </label>
-                    <label style={styles.field}>
-                      Duration (hours)
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.25"
-                        value={editDraft.durationMinutes}
-                        onChange={(e) => setEditDraft({ ...editDraft, durationMinutes: e.target.value })}
-                        style={styles.input}
-                      />
-                      <span style={styles.meta}>Total experience length</span>
-                    </label>
-
-                    {/* Brand Dose Tiers (edit) */}
-                    <div style={{ gridColumn: "1 / -1", borderTop: "1px solid #f1f5f9", paddingTop: "0.75rem" }}>
-                      <button
-                        type="button"
-                        onClick={() => setEditBrandTiersOpen((v) => !v)}
-                        style={styles.linkButton}
-                      >
-                        {editBrandTiersOpen ? "Hide" : "Show"} Brand Dose Tiers
-                      </button>
-                      {editBrandTiersOpen && (
-                        <BrandDoseTierEditor
-                          tiers={editDraft.brandDoseTiers}
-                          instructions={editDraft.brandDoseInstructions}
-                          defaultUnit={unitForFormat(editDraft.format)}
-                          onChange={(brandDoseTiers) => setEditDraft({ ...editDraft, brandDoseTiers })}
-                          onInstructionsChange={(brandDoseInstructions) =>
-                            setEditDraft({ ...editDraft, brandDoseInstructions })
-                          }
-                        />
-                      )}
-                    </div>
-                    <div style={{ gridColumn: "1 / -1", display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                      <button onClick={cancelEdit} style={styles.secondaryButton}>Cancel</button>
-                      <button onClick={() => saveEdit(product.id)} style={styles.primaryButton}>Save</button>
-                    </div>
-                  </div>
-                )}
-
-                <div style={styles.strengthRow}>
-                  <select
-                    value={draft.strengthOffset}
-                    onChange={(e) => updateDraft(product.id, "strengthOffset", e.target.value)}
-                    style={styles.select}
-                  >
-                    <option value="standard">Standard</option>
-                    <option value="stronger">Hits Stronger</option>
-                    <option value="lighter">Hits Lighter</option>
-                  </select>
-                  <input
-                    value={draft.strengthRationale}
-                    onChange={(e) => updateDraft(product.id, "strengthRationale", e.target.value)}
-                    disabled={draft.strengthOffset === "standard"}
-                    placeholder={draft.strengthOffset === "standard" ? "" : "dense caps, dense effects"}
-                    style={styles.input}
-                  />
-                  <button
-                    onClick={() =>
-                      patchProduct(
-                        product.id,
-                        {
-                          strengthOffset: draft.strengthOffset,
-                          strengthRationale: draft.strengthRationale,
-                        },
-                        "Strength offset saved — remember to confirm it"
-                      )
-                    }
-                    style={styles.secondaryButton}
-                  >
-                    Save
-                  </button>
-                  {product.strengthOffset?.confirmed ? (
-                    <span
-                      title={product.strengthOffset.confirmedBy ? `Confirmed by ${product.strengthOffset.confirmedBy}` : "Confirmed"}
-                      style={{ fontSize: "0.75rem", color: "#166534", background: "#dcfce7", padding: "0.25rem 0.5rem", borderRadius: 999, fontWeight: 600, whiteSpace: "nowrap" }}
-                    >
-                      ✓ Confirmed
-                    </span>
-                  ) : (
-                    <button
-                      title="Confirm you've reviewed this strength offset — required for the product to be recommendation-ready"
-                      onClick={() =>
-                        patchProduct(
-                          product.id,
-                          {
-                            strengthOffset: draft.strengthOffset,
-                            strengthRationale: draft.strengthRationale,
-                            strengthConfirmed: true,
-                          },
-                          "Strength offset confirmed"
-                        )
-                      }
-                      style={{ ...styles.secondaryButton, borderColor: "#f59e0b", color: "#92400e", whiteSpace: "nowrap" }}
-                    >
-                      Confirm offset
-                    </button>
-                  )}
-                </div>
-
-                <div style={{ marginTop: "0.75rem" }}>
-                  <strong style={{ fontSize: "0.85rem" }}>Photos</strong>
-                  <div style={styles.photoGrid}>
-                    {product.photos?.map((photo) => (
-                      <div key={photo.id} style={styles.photoCard}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={photo.url} alt="" style={styles.photoImg} />
-                        <select
-                          value={photo.tag}
-                          onChange={(e) => updatePhotoTag(product.id, photo.id, e.target.value as PhotoTag)}
-                          style={{ ...styles.select, minWidth: "auto", fontSize: "0.75rem", padding: "0.3rem" }}
-                        >
-                          {PHOTO_TAGS.map((t) => (
-                            <option key={t} value={t}>{t}</option>
-                          ))}
-                        </select>
-                        {product.flavors?.length > 0 && (
-                          <select
-                            value={photo.flavor ?? ""}
-                            onChange={(e) => updatePhotoFlavor(product.id, photo.id, e.target.value)}
-                            title="Which flavor variant this photo shows"
-                            style={{ ...styles.select, minWidth: "auto", fontSize: "0.75rem", padding: "0.3rem" }}
-                          >
-                            <option value="">All flavors</option>
-                            {product.flavors.map((f) => (
-                              <option key={f} value={f}>{f}</option>
-                            ))}
-                          </select>
-                        )}
-                        <button
-                          onClick={() => deletePhoto(product.id, photo.id)}
-                          style={styles.linkButton}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <PhotoUploader productId={product.id} onUpload={uploadExistingProductPhoto} />
-                </div>
-
-                <div style={{ marginTop: "0.75rem" }}>
-                  <button onClick={() => toggleDraftVibeOpen(product.id)} style={styles.linkButton}>
-                    {draft.vibeOpen ? "Hide" : "Show"} Effect Profile
-                  </button>
-                  {draft.vibeOpen && (
-                    <>
-                      <div style={styles.vibeGrid}>
-                        {VIBE_DIMENSIONS.map(({ key, label }) => {
-                          const communityValue = product.community?.scores?.[key];
-                          const delta =
-                            typeof communityValue === "number"
-                              ? communityValue - draft.vibe[key]
-                              : null;
-                          return (
-                            <label key={key} style={styles.vibeRow}>
-                              <span style={{ fontSize: "0.8rem", fontWeight: 600 }}>{label}</span>
-                              <input
-                                type="range"
-                                min={-1}
-                                max={1}
-                                step={0.05}
-                                value={draft.vibe[key]}
-                                onChange={(e) => updateDraftVibe(product.id, key, Number(e.target.value))}
-                              />
-                              <span style={styles.meta}>
-                                {draft.vibe[key].toFixed(2)}
-                                {typeof communityValue === "number" && (
-                                  <span
-                                    title={`Community average from ${product.community?.voteCount ?? 0} tester reports`}
-                                    style={{
-                                      marginLeft: 6,
-                                      color: delta !== null && Math.abs(delta) >= 0.3 ? "#b45309" : "#6b7280",
-                                      fontWeight: delta !== null && Math.abs(delta) >= 0.3 ? 700 : 400,
-                                    }}
-                                  >
-                                    👥 {communityValue.toFixed(2)}
-                                  </span>
-                                )}
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-                        <button
-                          onClick={() =>
-                            patchProduct(product.id, { vibeScores: draft.vibe }, "Effects saved")
-                          }
-                          style={styles.secondaryButton}
-                        >
-                          Save Effects
-                        </button>
-                        {product.community?.scores && (
-                          <button
-                            title="Replace the admin profile with the community average from tester reports"
-                            onClick={() => {
-                              if (
-                                confirm(
-                                  `Replace this product's effect profile with the community average from ${product.community?.voteCount} tester report${product.community?.voteCount === 1 ? "" : "s"}?`
-                                )
-                              ) {
-                                patchProduct(
-                                  product.id,
-                                  { acceptCommunityVibe: true },
-                                  "Community profile adopted"
-                                );
-                              }
-                            }}
-                            style={{ ...styles.secondaryButton, borderColor: "#7c3aed", color: "#6d28d9" }}
-                          >
-                            👥 Accept community profile (n={product.community.voteCount})
-                          </button>
-                        )}
-                        {product.vibeProfile?.source === "flywheel" && (
-                          <span style={{ fontSize: "0.75rem", color: "#6d28d9" }}>
-                            Current profile sourced from community feedback
-                          </span>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+              );
+            })}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
@@ -2428,12 +2472,14 @@ function PhotoUploader({
 }) {
   const [tag, setTag] = useState<PhotoTag>("stock");
   return (
-    <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-      <select value={tag} onChange={(e) => setTag(e.target.value as PhotoTag)} style={styles.select}>
-        {PHOTO_TAGS.map((t) => (
-          <option key={t} value={t}>{t}</option>
-        ))}
-      </select>
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      <div className="w-36 shrink-0">
+        <Select value={tag} onChange={(e) => setTag(e.target.value as PhotoTag)}>
+          {PHOTO_TAGS.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </Select>
+      </div>
       <input
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
@@ -2442,7 +2488,7 @@ function PhotoUploader({
           if (f) await onUpload(productId, f, tag);
           e.target.value = "";
         }}
-        style={styles.fileInput}
+        className="min-w-0 text-sm text-bark-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone-200 file:px-3 file:text-sm file:font-medium file:text-bark-700"
       />
     </div>
   );
@@ -2474,355 +2520,67 @@ function BrandDoseTierEditor({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-      <p style={{ ...styles.meta, margin: 0 }}>
+    <div className="mt-2 flex flex-col gap-4">
+      <p className="m-0 text-xs text-bark-400">
         Enter the brand&apos;s packaging guidance. Quantity accepts whole, half, quarter, and range values like 1/2, 0.5-1, or 1-3.
       </p>
       {tiers.map((tier) => (
-        <div key={tier.id} style={styles.doseTierRow}>
-          <label style={styles.field}>
-            Category
-            <select
+        <div
+          key={tier.id}
+          className="grid grid-cols-1 gap-3 rounded-lg border border-bone-200 bg-bone-100/60 p-3 sm:grid-cols-2 lg:grid-cols-[110px_minmax(0,1fr)_minmax(0,0.75fr)_minmax(0,0.55fr)_auto] lg:items-end lg:border-0 lg:bg-transparent lg:p-0"
+        >
+          <Field label="Category">
+            <Select
               value={tier.category}
               onChange={(e) => updateTier(tier.id, { category: e.target.value as BrandDoseCategory })}
-              style={styles.select}
             >
               {Object.entries(BRAND_DOSE_CATEGORY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
-            </select>
-          </label>
-          <label style={styles.field}>
-            Brand label
-            <input
+            </Select>
+          </Field>
+          <Field label="Brand label">
+            <Input
               value={tier.label}
               onChange={(e) => updateTier(tier.id, { label: e.target.value })}
               placeholder="Enlightening"
-              style={styles.input}
             />
-          </label>
-          <label style={styles.field}>
-            Quantity or range
-            <input
+          </Field>
+          <Field label="Quantity or range">
+            <Input
               value={tier.quantityText}
               onChange={(e) => updateTier(tier.id, { quantityText: e.target.value })}
               placeholder="1/2 or 1-3"
-              style={styles.input}
             />
-          </label>
-          <label style={styles.field}>
-            Unit
-            <input
+          </Field>
+          <Field label="Unit">
+            <Input
               value={tier.unit}
               onChange={(e) => updateTier(tier.id, { unit: e.target.value })}
               placeholder={defaultUnit}
-              style={styles.input}
             />
-          </label>
-          <button
-            type="button"
+          </Field>
+          <Button
+            variant="danger-ghost"
+            size="sm"
             onClick={() => removeTier(tier.id)}
-            style={{ ...styles.linkButton, alignSelf: "end", paddingBottom: "0.6rem" }}
+            className="justify-self-start sm:col-span-2 lg:col-span-1 lg:mb-1"
           >
             Remove
-          </button>
+          </Button>
         </div>
       ))}
-      <button type="button" onClick={addTier} style={{ ...styles.secondaryButton, alignSelf: "flex-start" }}>
+      <Button variant="secondary" size="sm" onClick={addTier} className="self-start">
         Add tier
-      </button>
-      <label style={styles.field}>
-        Additional Brand Dose Instructions
-        <textarea
+      </Button>
+      <Field label="Additional Brand Dose Instructions">
+        <Textarea
           value={instructions}
           onChange={(e) => onInstructionsChange(e.target.value)}
           rows={3}
           placeholder="1 day on, 2 days off; take on a light stomach"
-          style={styles.textarea}
         />
-      </label>
+      </Field>
     </div>
   );
 }
-
-const styles: Record<string, CSSProperties> = {
-  container: { padding: "2rem", color: "#111827" },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "1rem",
-    marginBottom: "1.5rem",
-  },
-  title: { fontSize: "2rem", lineHeight: 1.1, margin: 0 },
-  subtitle: { color: "#6b7280", margin: "0.35rem 0 0" },
-  panel: {
-    background: "white",
-    border: "1px solid #e5e7eb",
-    borderRadius: "8px",
-    padding: "1.25rem",
-    marginBottom: "1rem",
-    boxShadow: "0 1px 2px rgba(15, 23, 42, 0.04)",
-  },
-  panelHeader: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: "1rem",
-    marginBottom: "1rem",
-  },
-  sectionTitle: { fontSize: "1.1rem", margin: 0 },
-  settingsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: "1rem",
-  },
-  productGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: "1rem 1rem",
-    alignItems: "start",
-  },
-  field: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.35rem",
-    color: "#374151",
-    fontSize: "0.85rem",
-    fontWeight: 600,
-  },
-  input: {
-    width: "100%",
-    minWidth: 0,
-    padding: "0.55rem 0.7rem",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    fontSize: "0.9rem",
-    background: "white",
-    color: "#111827",
-  },
-  textarea: {
-    width: "100%",
-    padding: "0.6rem 0.75rem",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    fontSize: "0.9rem",
-    resize: "vertical",
-    color: "#111827",
-  },
-  select: {
-    width: "100%",
-    minWidth: 0,
-    padding: "0.55rem 0.7rem",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    background: "white",
-    color: "#111827",
-    fontSize: "0.9rem",
-    boxSizing: "border-box",
-  },
-  unitSelect: {
-    width: "58px",
-    flex: "0 0 58px",
-    padding: "0.55rem 0.25rem 0.55rem 0.4rem",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    background: "white",
-    color: "#111827",
-    fontSize: "0.85rem",
-    boxSizing: "border-box",
-  },
-  inlineRow: {
-    display: "flex",
-    gap: "0.4rem",
-    alignItems: "center",
-    width: "100%",
-  },
-  totalBox: {
-    display: "flex",
-    alignItems: "center",
-    gap: "0.6rem",
-    padding: "0.55rem 0.7rem",
-    border: "1px dashed #d1d5db",
-    borderRadius: "6px",
-    background: "#f9fafb",
-    minHeight: "calc(0.9rem + 1.1rem + 2px)",
-  },
-  totalValue: {
-    fontWeight: 700,
-    fontSize: "0.95rem",
-    color: "#111827",
-    flex: 1,
-  },
-  uploadRow: {
-    display: "flex",
-    gap: "0.6rem",
-    marginTop: "0.75rem",
-    alignItems: "center",
-    flexWrap: "wrap",
-    padding: "0.6rem 0.75rem",
-    background: "#f9fafb",
-    border: "1px dashed #e5e7eb",
-    borderRadius: "6px",
-  },
-  fileInput: { fontSize: "0.85rem" },
-  primaryButton: {
-    padding: "0.65rem 1rem",
-    border: "none",
-    borderRadius: "6px",
-    background: "#2563eb",
-    color: "white",
-    fontWeight: 700,
-    cursor: "pointer",
-  },
-  secondaryButton: {
-    padding: "0.5rem 0.75rem",
-    border: "1px solid #d1d5db",
-    borderRadius: "6px",
-    background: "white",
-    color: "#111827",
-    fontWeight: 600,
-    cursor: "pointer",
-  },
-  linkButton: {
-    padding: "0.25rem 0",
-    border: "none",
-    background: "transparent",
-    color: "#2563eb",
-    fontWeight: 600,
-    fontSize: "0.8rem",
-    cursor: "pointer",
-    textAlign: "left",
-  },
-  toolbar: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
-  cardList: { display: "flex", flexDirection: "column", gap: "0.75rem" },
-  card: {
-    border: "1px solid #f3f4f6",
-    borderRadius: "8px",
-    padding: "1rem",
-    background: "#fafafa",
-  },
-  cardTop: { display: "flex", gap: "0.75rem", alignItems: "flex-start" },
-  strengthRow: {
-    display: "grid",
-    gridTemplateColumns: "150px 1fr auto",
-    gap: "0.5rem",
-    marginTop: "0.75rem",
-    alignItems: "center",
-  },
-  productCell: { display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 },
-  thumbnail: {
-    width: "56px",
-    height: "56px",
-    borderRadius: "6px",
-    objectFit: "cover",
-    background: "#f3f4f6",
-  },
-  productName: { fontWeight: 800 },
-  meta: { color: "#6b7280", fontSize: "0.8rem", marginTop: "0.15rem" },
-  ingredientPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "0.3rem",
-    padding: "0.3rem 0.6rem",
-    background: "#eef2ff",
-    color: "#4338ca",
-    borderRadius: "999px",
-    fontSize: "0.8rem",
-    fontWeight: 600,
-  },
-  pillRemoveButton: {
-    background: "transparent",
-    border: "none",
-    color: "#4338ca",
-    cursor: "pointer",
-    fontSize: "1rem",
-    lineHeight: 1,
-    padding: 0,
-    fontWeight: 700,
-  },
-  quickPickButton: {
-    padding: "0.25rem 0.55rem",
-    background: "#f3f4f6",
-    color: "#374151",
-    border: "1px solid #e5e7eb",
-    borderRadius: "999px",
-    fontSize: "0.75rem",
-    cursor: "pointer",
-  },
-  readOnlyPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "0.15rem 0.5rem",
-    background: "#eef2ff",
-    color: "#4338ca",
-    borderRadius: "999px",
-    fontSize: "0.72rem",
-    fontWeight: 600,
-  },
-  switch: { display: "flex", alignItems: "center", justifyContent: "center" },
-  photoGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))",
-    gap: "0.5rem",
-    marginTop: "0.5rem",
-  },
-  photoCard: {
-    border: "1px solid #e5e7eb",
-    borderRadius: "6px",
-    padding: "0.4rem",
-    background: "white",
-    display: "flex",
-    flexDirection: "column",
-    gap: "0.3rem",
-    alignItems: "stretch",
-  },
-  photoImg: {
-    width: "100%",
-    height: "80px",
-    objectFit: "cover",
-    borderRadius: "4px",
-    background: "#f3f4f6",
-  },
-  vibeGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: "0.5rem",
-    marginTop: "0.5rem",
-    marginBottom: "0.5rem",
-  },
-  vibeRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 140px 40px",
-    gap: "0.5rem",
-    alignItems: "center",
-  },
-  doseTierRow: {
-    display: "grid",
-    gridTemplateColumns: "120px minmax(160px, 1fr) minmax(140px, 0.75fr) minmax(110px, 0.55fr) auto",
-    gap: "0.6rem",
-    alignItems: "end",
-  },
-  error: {
-    padding: "0.75rem 1rem",
-    borderRadius: "6px",
-    background: "#fef2f2",
-    color: "#991b1b",
-    marginBottom: "1rem",
-  },
-  message: {
-    padding: "0.75rem 1rem",
-    borderRadius: "6px",
-    background: "#ecfdf5",
-    color: "#065f46",
-    marginBottom: "1rem",
-  },
-  notice: {
-    padding: "0.6rem 0.8rem",
-    borderRadius: "6px",
-    background: "#fef9c3",
-    color: "#854d0e",
-    marginBottom: "0.75rem",
-    fontSize: "0.85rem",
-  },
-};

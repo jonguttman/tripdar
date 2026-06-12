@@ -41,3 +41,4 @@ CREATE TABLE "MycoProfileSignup" (
 
 CREATE INDEX "MycoProfileSignup_partnerId_createdAt_idx" ON "MycoProfileSignup"("partnerId", "createdAt");
 CREATE INDEX "MycoProfileSignup_email_idx" ON "MycoProfileSignup"("email");
+CREATE UNIQUE INDEX "MycoProfileSignup_partnerId_email_sessionToken_key" ON "MycoProfileSignup"("partnerId", "email", "sessionToken");

@@ -3,15 +3,22 @@
 ## [1.11.0] - 2026-06-12
 
 ### Added
+- **Admin design system — "Mushroom & forest floor"**: Tailwind CSS v4 with a custom earthy theme (`src/app/admin/admin.css`: bone/bark/moss/amber/clay/lichen palettes, serif display font), scoped to `/admin` only — the public site is unaffected. New shared component library in `src/components/admin/` (Button, Card, Badge + `statusTone`, Alert, Modal, Field/Input/Select/Textarea, PageHeader, StatCard, EmptyState, Spinner/LoadingState, FilterTabs, Icon) with conventions documented in `src/components/admin/CONVENTIONS.md`.
+- **Mobile navigation**: bottom tab bar (Dashboard, Myco, Reviews, Reports, More) + slide-out drawer + sticky top bar on small screens, replacing the fixed 260px sidebar that made admin pages unusable on phones. Desktop keeps a restyled sidebar.
 - **Recipe/flavor product model enforced**: same recipe + multiple flavors = ONE product with `flavors[]`; different recipes = Duplicate. New `src/domain/myco/flavors.ts` normalizes flavor lists server-side (trim, collapse whitespace, case-insensitive dedupe, cap 25) on create and update.
 - **Flavor attribution**: optional `TesterVote.flavor` (tester form shows a flavor picker + "Not sure" when the product has flavors; unknown values fall back to recipe-level rather than blocking) and `ProductPhoto.flavor` (per-photo flavor label in admin, validated against the product's flavor list). Tester flavor data is a recipe-smell detector — if one flavor's reports diverge, the same-recipe assumption is wrong and the product should be split. Migration `20260612120000_flavor_attribution`.
 - **Customer card flavor display**: "/m/[slug]" result cards now show "Comes in: Mint · Raspberry".
 - **Guarded recipe edits**: changing a recipe-defining field (dose/unit, format, strain, ingredients, dose tiers) now resets the strength-offset confirmation server-side, and the admin warns before saving such a change on a product that has tester reports ("if this is a different recipe, Duplicate instead").
 
 ### Changed
+- **All 9 admin pages migrated off inline `CSSProperties` styles** to Tailwind + shared components, mobile-first (usable at 375px with no horizontal scroll, 44px touch targets, 16px inputs to prevent iOS zoom): Dashboard, Myco Store, Strains, Collections, Reviews, Ratings, Trip Reports, Analytics, Partners. Presentation-only — all state, handlers, and API calls unchanged.
+- **Moderation on the go**: Reviews/Ratings/Reports use scrollable status filter pills and single-column card lists with thumb-sized side-by-side Approve/Reject buttons.
+- **Modals are bottom sheets on mobile** (shared `Modal`), with sticky full-width action footers; large edit forms (Strains, Myco product) use the wide variant.
+- Admin sign-in screens restyled (password, magic link, GitHub) with proper `autocomplete`/`inputMode` attributes.
 - **Duplicate = new recipe**: the duplicate route no longer copies flavors (new recipe declares its own), photos (wrong-package shots must not reach customers), offset confirmation (re-confirm against the new recipe), or a `flywheel` vibe source (community validation isn't inheritable — copies as `admin`). Tester votes/outcome reports/recommendation results were already never copied. A fresh duplicate intentionally lands in "Needs attention".
 
 ### Fixed
+- Removed the last remaining admin inline style object by rendering the Analytics views trend as SVG bars, and tightened shared/admin-specific controls so compact buttons, filter pills, file buttons, and sign-out actions still meet the 44px mobile touch target.
 - **Partner isolation on product-scoped admin routes** (BUG-2026-06-12-001): `[id]` PATCH, `[id]/duplicate`, and the photo routes now verify partner ownership via `resolveProductForAdmin()`; photo PATCH/DELETE are scoped to the product in the URL. Previously any authenticated admin could read/modify/delete across partners by product ID.
 
 ## [1.10.0] - 2026-06-09

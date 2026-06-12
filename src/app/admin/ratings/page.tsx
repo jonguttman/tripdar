@@ -1,6 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import {
+  Alert,
+  Card,
+  EmptyState,
+  LoadingState,
+  PageHeader,
+} from "@/components/admin";
 
 interface StrainRatingStats {
   strainSlug: string;
@@ -54,7 +61,7 @@ export default function RatingsAdminPage() {
 
     for (let i = 0; i < fullStars; i++) {
       stars.push(
-        <span key={`full-${i}`} style={{ color: "#f59e0b" }}>
+        <span key={`full-${i}`} className="text-amber-500">
           ★
         </span>
       );
@@ -62,7 +69,7 @@ export default function RatingsAdminPage() {
 
     if (hasHalfStar) {
       stars.push(
-        <span key="half" style={{ color: "#f59e0b" }}>
+        <span key="half" className="text-amber-500">
           ★
         </span>
       );
@@ -71,7 +78,7 @@ export default function RatingsAdminPage() {
     const emptyStars = 5 - Math.ceil(rating);
     for (let i = 0; i < emptyStars; i++) {
       stars.push(
-        <span key={`empty-${i}`} style={{ color: "#d1d5db" }}>
+        <span key={`empty-${i}`} className="text-bone-300">
           ★
         </span>
       );
@@ -81,157 +88,59 @@ export default function RatingsAdminPage() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h1 style={styles.title}>Strain Ratings</h1>
-        <p style={styles.subtitle}>
-          {ratings.length} strains have received ratings
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl p-4 sm:p-8">
+      <PageHeader
+        title="Strain Ratings"
+        subtitle={`${ratings.length} strains have received ratings`}
+      />
 
-      {error && <div style={styles.errorMessage}>{error}</div>}
+      {error && (
+        <Alert tone="error" className="mb-4">
+          {error}
+        </Alert>
+      )}
 
       {loading ? (
-        <div style={styles.loading}>Loading ratings...</div>
+        <LoadingState label="Loading ratings..." />
       ) : ratings.length === 0 ? (
-        <div style={styles.emptyState}>
-          <p>No ratings yet</p>
-          <p style={styles.emptySubtext}>
-            Ratings will appear here when users submit feedback via partner sites
-          </p>
-        </div>
+        <EmptyState
+          icon="star"
+          title="No ratings yet"
+          description="Ratings will appear here when users submit feedback via partner sites"
+        />
       ) : (
-        <div style={styles.ratingsGrid}>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
           {ratings.map((strain) => (
-            <div key={strain.strainSlug} style={styles.ratingCard}>
-              <div style={styles.cardHeader}>
-                <h3 style={styles.strainName}>{strain.strainSlug}</h3>
-                <div style={styles.ratingBadge}>
+            <Card key={strain.strainSlug}>
+              <div className="mb-3 flex items-start justify-between gap-2">
+                <h3 className="min-w-0 flex-1 break-words text-lg font-semibold text-bark-800">
+                  {strain.strainSlug}
+                </h3>
+                <span className="shrink-0 rounded-full bg-amber-500 px-2.5 py-0.5 text-sm font-semibold text-bone-50">
                   {strain.avgRating.toFixed(1)}
-                </div>
+                </span>
               </div>
 
-              <div style={styles.stars}>{renderStars(strain.avgRating)}</div>
+              <div className="mb-4 flex gap-0.5 text-2xl leading-none">
+                {renderStars(strain.avgRating)}
+              </div>
 
-              <div style={styles.cardStats}>
-                <div style={styles.stat}>
-                  <span style={styles.statLabel}>Ratings:</span>
-                  <span style={styles.statValue}>{strain.ratingCount}</span>
+              <div className="flex flex-col gap-2 border-t border-bone-200 pt-4 text-sm">
+                <div className="flex justify-between gap-2">
+                  <span className="text-bark-400">Ratings:</span>
+                  <span className="font-medium text-bark-800">{strain.ratingCount}</span>
                 </div>
-                <div style={styles.stat}>
-                  <span style={styles.statLabel}>Latest:</span>
-                  <span style={styles.statValue}>
+                <div className="flex justify-between gap-2">
+                  <span className="text-bark-400">Latest:</span>
+                  <span className="text-right font-medium text-bark-800">
                     {formatDate(strain.latestRatingAt)}
                   </span>
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
         </div>
       )}
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    padding: "2rem",
-    maxWidth: "1400px",
-    margin: "0 auto",
-  },
-  header: {
-    marginBottom: "2rem",
-  },
-  title: {
-    fontSize: "1.75rem",
-    fontWeight: 600,
-    color: "#111827",
-    margin: "0 0 0.5rem",
-  },
-  subtitle: {
-    color: "#6b7280",
-    margin: 0,
-  },
-  errorMessage: {
-    background: "#fee2e2",
-    color: "#991b1b",
-    padding: "0.75rem 1rem",
-    borderRadius: "8px",
-    marginBottom: "1rem",
-    fontSize: "0.875rem",
-  },
-  loading: {
-    textAlign: "center" as const,
-    padding: "3rem",
-    color: "#6b7280",
-  },
-  emptyState: {
-    textAlign: "center" as const,
-    padding: "3rem",
-    color: "#9ca3af",
-  },
-  emptySubtext: {
-    fontSize: "0.875rem",
-    marginTop: "0.5rem",
-  },
-  ratingsGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-    gap: "1.5rem",
-  },
-  ratingCard: {
-    background: "white",
-    borderRadius: "12px",
-    padding: "1.5rem",
-    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-    border: "1px solid #e5e7eb",
-    transition: "box-shadow 0.2s",
-  },
-  cardHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: "1rem",
-  },
-  strainName: {
-    fontSize: "1.125rem",
-    fontWeight: 600,
-    color: "#111827",
-    margin: 0,
-    flex: 1,
-  },
-  ratingBadge: {
-    background: "#f59e0b",
-    color: "white",
-    padding: "0.25rem 0.75rem",
-    borderRadius: "9999px",
-    fontSize: "0.875rem",
-    fontWeight: 600,
-    marginLeft: "0.5rem",
-  },
-  stars: {
-    fontSize: "1.5rem",
-    marginBottom: "1rem",
-    display: "flex",
-    gap: "0.125rem",
-  },
-  cardStats: {
-    display: "flex",
-    flexDirection: "column" as const,
-    gap: "0.5rem",
-    borderTop: "1px solid #e5e7eb",
-    paddingTop: "1rem",
-  },
-  stat: {
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: "0.875rem",
-  },
-  statLabel: {
-    color: "#6b7280",
-  },
-  statValue: {
-    color: "#111827",
-    fontWeight: 500,
-  },
-};
