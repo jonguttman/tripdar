@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { matchFlavor } from "@/domain/myco/flavors";
 import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
@@ -19,6 +20,7 @@ interface VotePayload {
   onsetBucket?: string;
   durationBucket?: string;
   unitsTaken?: number;
+  flavor?: string;
   notes?: string;
 }
 
@@ -42,11 +44,16 @@ export async function POST(req: NextRequest) {
     // Verify product exists
     const product = await prisma.storeProductCatalog.findUnique({
       where: { id: body.catalogItemId },
-      select: { id: true },
+      select: { id: true, flavors: true },
     });
     if (!product) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 });
     }
+
+    // Optional flavor attribution — only known flavors, canonical casing.
+    // Unknown values are dropped (vote stays recipe-level) rather than
+    // rejected, so a stale flavor list never blocks feedback.
+    const flavor = body.flavor ? matchFlavor(body.flavor, product.flavors) : null;
 
     // Soft dedup: same email + product within 24h
     const recent = await prisma.testerVote.findFirst({
@@ -82,6 +89,7 @@ export async function POST(req: NextRequest) {
         onsetBucket: body.onsetBucket || null,
         durationBucket: body.durationBucket || null,
         unitsTaken: body.unitsTaken ?? null,
+        flavor,
         notes: body.notes?.trim() || null,
         ipHash: hashIp(ip),
         userAgent: req.headers.get("user-agent")?.slice(0, 500) || null,

@@ -174,7 +174,7 @@ export default async function TesterPage({ params }: { params: Promise<{ id: str
           <p style={{ fontSize: "0.85rem", color: "#666", margin: "0 0 1.25rem 0", lineHeight: 1.5 }}>
             Your feedback helps shape recommendations for future shoppers. Takes about 60 seconds.
           </p>
-          <TesterVoteForm catalogItemId={product.id} />
+          <TesterVoteForm catalogItemId={product.id} flavors={product.flavors} />
         </div>
       </div>
     </div>

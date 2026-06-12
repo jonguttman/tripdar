@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { put } from "@vercel/blob";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
+import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 
 const VALID_TAGS = ["stock", "package_front", "package_back", "lifestyle", "other"] as const;
 type PhotoTag = (typeof VALID_TAGS)[number];
@@ -33,6 +34,15 @@ export async function POST(
 
   try {
     const { id } = await params;
+
+    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    if (!access.ok) {
+      return NextResponse.json(
+        { success: false, error: { message: access.message } },
+        { status: access.status }
+      );
+    }
+
     const product = await prisma.storeProductCatalog.findUnique({
       where: { id },
       select: { id: true, productName: true },

@@ -528,6 +528,9 @@ model TesterVote {
   durationBucket String?  // under_2, 2_4, 4_6, 6_plus
   // Dose taken
   unitsTaken     Float?
+  // Which flavor variant the tester tried (optional; flavors share the recipe,
+  // so this is a recipe-smell detector, not an effect dimension)
+  flavor         String?
   // Free notes
   notes          String?
   // Metadata
@@ -546,6 +549,7 @@ model ProductPhoto {
   catalogItemId String
   url           String
   tag           String // stock, package_front, package_back, lifestyle, other
+  flavor        String? // optional flavor variant this photo shows
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.11.0] - 2026-06-12
+
+### Added
+- **Recipe/flavor product model enforced**: same recipe + multiple flavors = ONE product with `flavors[]`; different recipes = Duplicate. New `src/domain/myco/flavors.ts` normalizes flavor lists server-side (trim, collapse whitespace, case-insensitive dedupe, cap 25) on create and update.
+- **Flavor attribution**: optional `TesterVote.flavor` (tester form shows a flavor picker + "Not sure" when the product has flavors; unknown values fall back to recipe-level rather than blocking) and `ProductPhoto.flavor` (per-photo flavor label in admin, validated against the product's flavor list). Tester flavor data is a recipe-smell detector — if one flavor's reports diverge, the same-recipe assumption is wrong and the product should be split. Migration `20260612120000_flavor_attribution`.
+- **Customer card flavor display**: "/m/[slug]" result cards now show "Comes in: Mint · Raspberry".
+- **Guarded recipe edits**: changing a recipe-defining field (dose/unit, format, strain, ingredients, dose tiers) now resets the strength-offset confirmation server-side, and the admin warns before saving such a change on a product that has tester reports ("if this is a different recipe, Duplicate instead").
+
+### Changed
+- **Duplicate = new recipe**: the duplicate route no longer copies flavors (new recipe declares its own), photos (wrong-package shots must not reach customers), offset confirmation (re-confirm against the new recipe), or a `flywheel` vibe source (community validation isn't inheritable — copies as `admin`). Tester votes/outcome reports/recommendation results were already never copied. A fresh duplicate intentionally lands in "Needs attention".
+
+### Fixed
+- **Partner isolation on product-scoped admin routes** (BUG-2026-06-12-001): `[id]` PATCH, `[id]/duplicate`, and the photo routes now verify partner ownership via `resolveProductForAdmin()`; photo PATCH/DELETE are scoped to the product in the URL. Previously any authenticated admin could read/modify/delete across partners by product ID.
+
 ## [1.10.0] - 2026-06-09
 
 ### Added

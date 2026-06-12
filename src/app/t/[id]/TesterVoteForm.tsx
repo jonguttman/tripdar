@@ -32,8 +32,15 @@ const RELATIONSHIPS = [
   { value: "other", label: "Other" },
 ];
 
-export default function TesterVoteForm({ catalogItemId }: { catalogItemId: string }) {
+export default function TesterVoteForm({
+  catalogItemId,
+  flavors = [],
+}: {
+  catalogItemId: string;
+  flavors?: string[];
+}) {
   const [voterName, setVoterName] = useState("");
+  const [flavor, setFlavor] = useState("");
   const [voterEmail, setVoterEmail] = useState("");
   const [voterPhone, setVoterPhone] = useState("");
   const [relationship, setRelationship] = useState("");
@@ -73,6 +80,7 @@ export default function TesterVoteForm({ catalogItemId }: { catalogItemId: strin
           onsetBucket: onsetBucket || undefined,
           durationBucket: durationBucket || undefined,
           unitsTaken: unitsTaken ? Number(unitsTaken) : undefined,
+          flavor: flavor || undefined,
           notes: notes || undefined,
         }),
       });
@@ -150,6 +158,23 @@ export default function TesterVoteForm({ catalogItemId }: { catalogItemId: strin
       <h3 style={{ fontSize: "0.85rem", textTransform: "uppercase", letterSpacing: "0.05em", color: "#7c3aed", margin: "1.5rem 0 0.75rem 0" }}>
         Your experience
       </h3>
+
+      {flavors.length > 0 && (
+        <div style={section}>
+          <label style={label}>Which flavor did you try?</label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {[...flavors, ""].map((f) => (
+              <button key={f || "_unsure"} type="button" onClick={() => setFlavor(f)} style={{
+                padding: "0.45rem 0.85rem", borderRadius: 999, fontSize: "0.85rem", cursor: "pointer",
+                border: flavor === f ? "1.5px solid #7c3aed" : "1px solid #e5e7eb",
+                background: flavor === f ? "#f5f3ff" : "white",
+                color: flavor === f ? "#7c3aed" : "#555",
+                fontWeight: flavor === f ? 600 : 400,
+              }}>{f || "Not sure"}</button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={section}>
         <label style={label}>How many units did you take?</label>
