@@ -1,0 +1,118 @@
+{
+  "preset_id": "catalog_safe.v1",
+  "version": 1,
+  "locked": true,
+  "description": "LOCKED catalog-safe (Mode 1) preset. Deterministic, non-generative. Label pixels are never modified. Do not edit these values in place; introduce a v2 preset instead.",
+  "color_space": "sRGB",
+  "background_hex": "#FFFFFF",
+  "composition": {
+    "canvas_ratio": "1:1",
+    "product_height_target_ratio": 0.76,
+    "product_height_min_ratio": 0.72,
+    "product_height_max_ratio": 0.8,
+    "horizontal_alignment": "center",
+    "vertical_alignment": "center",
+    "allow_label_repaint": false
+  },
+  "product_height_ratio": 0.76,
+  "product_height_ratio_clamp": [0.72, 0.80],
+  "canvas": {
+    "shape": "square",
+    "horizontal": "centered",
+    "vertical": "centered_with_base_room_for_shadow"
+  },
+  "white_balance": {
+    "method": "grayworld_whitepatch_hybrid",
+    "max_channel_gain": 1.35
+  },
+  "exposure": {
+    "target_bg_luma": 252,
+    "protect_product_highlights": true
+  },
+  "contrast": {
+    "method": "clahe",
+    "clip_limit": 1.5,
+    "tile": 8
+  },
+  "sharpen": {
+    "method": "unsharp",
+    "radius": 1.5,
+    "amount": 0.6,
+    "threshold": 3
+  },
+  "denoise": {
+    "method": "fastNlMeans",
+    "h": 3
+  },
+  "mask": {
+    "model": "u2net",
+    "alpha_matting": true,
+    "fg_threshold": 240,
+    "bg_threshold": 10,
+    "erode": 5
+  },
+  "shadow": {
+    "style": "soft_low_opacity_directly_beneath_slightly_wider_than_base",
+    "blur_px": 45,
+    "offset_x_pct": 0,
+    "offset_y_pct": 0.02,
+    "opacity": 0.18,
+    "spread_pct": 1.1
+  },
+  "outputs": {
+    "transparent_master": {
+      "required": true,
+      "format": "png",
+      "width": 3000,
+      "height": 3000,
+      "background": null
+    },
+    "white_master": {
+      "required": true,
+      "format": "png",
+      "width": 3000,
+      "height": 3000,
+      "background": "#FFFFFF"
+    },
+    "web": {
+      "required": true,
+      "format": "webp",
+      "width": 1200,
+      "height": 1200,
+      "background": "#FFFFFF",
+      "quality": 82
+    },
+    "thumbnail": {
+      "required": true,
+      "format": "webp",
+      "width": 600,
+      "height": 600,
+      "background": "#FFFFFF",
+      "quality": 82
+    },
+    "marketplace_white_master": {
+      "required": false,
+      "format": "jpeg",
+      "width": 2000,
+      "height": 2000,
+      "background": "#FFFFFF",
+      "quality": 90
+    },
+    "marketplace_web": {
+      "required": false,
+      "format": "webp",
+      "width": 800,
+      "height": 800,
+      "background": "#FFFFFF",
+      "quality": 82
+    },
+    "avif": {
+      "required": false,
+      "format": "avif",
+      "width": 1200,
+      "height": 1200,
+      "background": "#FFFFFF",
+      "quality": 60
+    }
+  }
+}

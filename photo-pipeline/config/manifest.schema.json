@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tripdar.local/photo-pipeline/manifest.schema.json",
+  "title": "Tripdar Photo Pipeline Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "job_id",
+    "sku",
+    "source_file",
+    "processing_mode",
+    "status",
+    "outputs",
+    "quality_score",
+    "label_fidelity_score",
+    "warnings",
+    "approved_by",
+    "approved_at"
+  ],
+  "properties": {
+    "job_id": { "type": "string", "minLength": 1 },
+    "sku": { "type": "string", "minLength": 1 },
+    "source_file": { "type": "string", "minLength": 1 },
+    "processing_mode": { "enum": ["catalog_safe", "premium"] },
+    "status": {
+      "enum": [
+        "uploaded",
+        "analyzing",
+        "processing",
+        "validating",
+        "needs_review",
+        "approved",
+        "rejected",
+        "failed"
+      ]
+    },
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transparent_master", "white_master", "web", "thumbnail"],
+      "properties": {
+        "transparent_master": { "type": ["string", "null"] },
+        "white_master": { "type": ["string", "null"] },
+        "web": { "type": ["string", "null"] },
+        "thumbnail": { "type": ["string", "null"] }
+      }
+    },
+    "quality_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "label_fidelity_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "approved_by": { "type": ["string", "null"] },
+    "approved_at": { "type": ["string", "null"], "format": "date-time" }
+  }
+}

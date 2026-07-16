@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.12.1] - 2026-07-16
+
+### Added
+- **Photo Pipeline human-facing docs** (`/docs/photo-pipeline/`): operator guide (Jon-facing folder→outputs→manifest walkthrough for the catalog-safe Phase 1 core), printable iPhone photographer's checklist, and the approved retake-reason copy library (17 specific, friendly failure-mode messages surfaced by the quality stage). Psilly voice; scoped to Phase 1 — review UI and premium-mode copy deferred to later phases. (KEWL-1952)
+
+## [1.12.0] - 2026-07-16
+
+### Added
+- **Photo Pipeline Phase 1a contracts**: Added the `PhotoJob` Prisma ledger with exact processing mode/status enums, immutable original URL, manifest JSON, cost/review fields, and unique `sourceContentHash` idempotency. Migration `20260716121500_photo_pipeline_phase_1a`.
+- **Catalog-safe photo backbone**: Added the Vercel Blob prefix contract, one-manifest-per-source JSON schema, deterministic filename sanitizer, original-overwrite guard, and locked `catalog_safe.v1` preset for 3000px masters, 1200px web, and 600px thumbnails.
+
 ## [1.11.0] - 2026-06-12
 
 ### Added
