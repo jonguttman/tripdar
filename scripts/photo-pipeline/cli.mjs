@@ -3,6 +3,7 @@ import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import sharp from "sharp";
+import { groupMixedFolder } from "./grouping.mjs";
 import { runBatch, runSingle, writeRunProof } from "./pipeline.mjs";
 
 function parseArgs(argv) {
@@ -26,11 +27,13 @@ function usage() {
   return `Tripdar catalog-safe photo pipeline
 
 Commands:
+  group --input-dir <mixed-folder> --output-dir <grouped-folder> [--model claude-sonnet-4-6]
   single --input <file> --sku <sku> --product <name> [--brand <brand>] [--variant <variant>] [--view front]
   batch --input-dir <dir> --sku <sku> --product <name> [--brand <brand>] [--variant <variant>] [--view front]
   make-fixtures --out <dir>
 
 Options:
+  --analysis-file <json>       Use a saved grouping analysis (test/replay; skips the vision call).
   --ledger prisma|filesystem   Default: prisma when DATABASE_URL is set, otherwise filesystem.
   --root <dir>                 Blob root directory. Default: tripdar-product-images.
   --operator <name>            Manifest approved_by value for auto-approved jobs.
@@ -106,6 +109,28 @@ async function main() {
     if (!args.out) throw new Error("--out is required");
     await makeFixtures(path.resolve(args.out));
     console.log(`fixtures=${path.resolve(args.out)}`);
+    return;
+  }
+
+  if (args.command === "group") {
+    if (!args["input-dir"] || !args["output-dir"]) {
+      throw new Error("group requires --input-dir and --output-dir");
+    }
+    const result = await groupMixedFolder({
+      inputDir: path.resolve(args["input-dir"]),
+      outputDir: path.resolve(args["output-dir"]),
+      analysisFile: args["analysis-file"] ? path.resolve(args["analysis-file"]) : null,
+      model: args.model,
+    });
+    console.log(
+      [
+        `groups=${result.manifest.groups.length}`,
+        `confirmations=${result.manifest.confirmations.length}`,
+        `unassigned=${result.manifest.unassigned.length}`,
+        `ready=${result.manifest.ready_for_worker}`,
+        `manifest=${result.manifestPath}`,
+      ].join(" "),
+    );
     return;
   }
 

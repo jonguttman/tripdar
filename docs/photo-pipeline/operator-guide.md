@@ -8,27 +8,48 @@ How you use this, Jon. One page. Drop in phone photos, get consistent, catalog-s
 
 ## The short version
 
-1. **Upload a folder** of phone photos to `tripdar-product-images/incoming/`.
-2. The pipeline **evaluates and processes each image automatically** — no clicks from you.
-3. **Catalog-safe outputs land** in their folders, named so you can find them.
-4. **Anything it isn't sure about** is set aside with a plain-English reason.
-5. **Read the manifest** to see what happened to any image and where its files went.
+1. **Drop untouched phone photos** into Jon's Desktop raw-drop folder. That folder is the immutable source; the pipeline never renames, edits, or sorts it in place.
+2. Number One runs the **auto-group pre-processor** once. It compares visible brand, product, flavor/variant, dose, weight, count, UPC, and package details, then copies exact-package matches into separate working groups.
+3. **Confirm anything flagged** as unreadable, low-confidence, or a near-identical variant. Different flavors, doses, counts, or recipes are never silently merged.
+4. Number One runs the existing worker **once per confirmed group**, always with explicit `--sku` and `--product` metadata (plus brand/variant/view when known).
+5. **Read the manifests** to trace every grouped copy and processed output back to the untouched raw file.
 
-That's the whole loop for Phase 1.
+That is the safe Phase 1 loop. The worker intentionally applies one product identity to one batch; it does not guess identities across a mixed folder.
 
 ---
 
-## 1. Upload a folder
+## 1. Drop raw photos, then group them safely
 
-Put your shots — JPG, JPEG, PNG, or HEIC straight off the iPhone — into:
+Jon's one obvious intake location is:
 
 ```
-tripdar-product-images/incoming/
+~/Desktop/Product Photos - Raw Drop/
 ```
 
-If you can, name files or fill in the SKU, brand, product, and variant when you upload. When that's present, outputs get real, readable names. When it isn't, the pipeline still runs and falls back to a safe unique name — nothing gets lost, you just get a less pretty filename.
+Treat it as an immutable raw drop: keep the original JPG, JPEG, PNG, or HEIC files there unchanged. Do not rename, move, edit, or process files in place.
 
-You can drop **one image or a whole batch.** Multiple angles of one product and products from different brands can go in together. Re-uploading the same file is detected by content and won't reprocess — it's safe to re-run a folder.
+From the Tripdar repo, Number One creates working groups with one command:
+
+```sh
+npm run photo:pipeline -- group \
+  --input-dir "$HOME/Desktop/Product Photos - Raw Drop" \
+  --output-dir "$HOME/Desktop/Product Photos - Grouped/$(date +%Y%m%d-%H%M%S)"
+```
+
+The command uses package-visible identity, not filename or color alone. It writes `grouping-manifest.json`, copies confident matches under `groups/<identity>/`, and puts unreadable items under `needs-confirmation/`. If two packages share brand/product artwork but differ by visible flavor, dose, weight, count, recipe, or UPC, they remain separate and the manifest asks for one human confirmation.
+
+After confirmation, run the worker separately for each group with explicit identity metadata:
+
+```sh
+npm run photo:pipeline -- batch \
+  --input-dir "$HOME/Desktop/Product Photos - Grouped/<run>/groups/<confirmed-group>" \
+  --sku "<confirmed SKU>" \
+  --brand "<confirmed brand>" \
+  --product "<confirmed product>" \
+  --variant "<confirmed variant>"
+```
+
+`--sku` and `--product` are required by design. One invocation means one confirmed product identity. Never point `batch` directly at the mixed raw-drop folder.
 
 ---
 
@@ -75,8 +96,10 @@ NF-BM20_nocturnal-farms_blue-meanies-lions-mane_front_catalog-safe_v01.webp
 
 **The other folders**, so the map is complete:
 
-- `incoming/` — where you drop new photos
-- `originals/` — the untouched source, kept forever
+- Desktop `Product Photos - Raw Drop/` — Jon's untouched mixed-source folder; never process it as one worker batch
+- grouped run `groups/` — copied working sets, one confirmed package identity per folder
+- grouped run `needs-confirmation/` — unreadable or ambiguous source copies awaiting a human decision
+- `originals/` — the worker's untouched source copy, kept forever
 - `working/` — in-progress intermediates
 - `needs-review/` — images set aside for you (see below)
 - `rejected/` — images that failed outright, with a reason
@@ -129,7 +152,7 @@ Two things are designed but arrive in later phases — so you know what you're *
 - **Review queue** — a side-by-side interface to compare original, catalog-safe, and (when generated) premium versions, with a zoomed label view, and to approve, reject, reprocess, or request a retake in one place. For now, review items wait in `needs-review/` with their reason in the manifest.
 - **Premium mode** — an optional, higher-polish generative pass. It will **never** silently replace a catalog-safe image, and any premium result will be marked *AI-enhanced — visual approval required* and checked against the source before it can become a catalog image.
 
-Until those ship, Phase 1 gives you the dependable core: clean, consistent, honest catalog-safe images, fully automatic, every one traceable to its original.
+Until those ship, Phase 1 gives you the dependable core: a one-command grouping pass with explicit human confirmation where identity is uncertain, followed by clean, consistent, honest catalog-safe processing per confirmed product group. Every output stays traceable to its original.
 
 ---
 

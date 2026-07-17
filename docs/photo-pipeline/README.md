@@ -6,7 +6,7 @@ The guides here are for the people, not the machine. They sit alongside the pipe
 
 | Doc | Who it's for | What it covers |
 |---|---|---|
-| [operator-guide.md](./operator-guide.md) | Jon | Drop in a folder → what runs automatically → where outputs land → reading the manifest |
+| [operator-guide.md](./operator-guide.md) | Jon / Number One | Immutable Desktop raw drop → one-command package grouping → human confirmation → one explicit-metadata worker run per confirmed group → reading manifests |
 | [photographer-checklist.md](./photographer-checklist.md) | Jon at the camera | A printable phone-capture checklist for shots that pass catalog-safe first try |
 | [retake-reasons.md](./retake-reasons.md) | Pipeline / operator | The approved retake-reason strings the quality stage surfaces when an image can't be safely repaired |
 

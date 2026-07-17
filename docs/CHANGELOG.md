@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.14.0] - 2026-07-17
+
+### Added
+- Mixed-folder photo auto-grouping command: `npm run photo:pipeline -- group --input-dir <raw> --output-dir <grouped>`. Claude vision compares visible package identity, preserves the raw drop, hashes every source, creates one working folder per exact package identity, and writes a traceable grouping manifest.
+- Human confirmation gates for unreadable/low-confidence photos and near-identical variants (flavor, dose, weight, count, recipe, or UPC) before the existing worker is run.
+
+### Changed
+- Corrected the Phase 1 operator guide: a mixed Desktop folder is an immutable raw drop, not a metadata-free worker batch. Number One groups it first, then invokes the worker once per confirmed group with explicit `--sku` and `--product` metadata.
+
 ## [1.13.0] - 2026-07-16
 
 ### Added
