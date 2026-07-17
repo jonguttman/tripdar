@@ -1,0 +1,32 @@
+TRIPDAR PREMIUM (MODE 2) GENERATIVE PROMPT — v1 — LOCKED — STORED ONLY, NOT EXECUTED IN MVP
+
+>>> DO NOT RUN THIS IN THE CATALOG-SAFE (MODE 1) MVP. <<<
+This file exists so the premium prompt is version-controlled and locked before Phase 2
+wiring. The catalog-safe pipeline NEVER calls any generative model or external API.
+Mode 2 must additionally pass OCR label-fidelity validation (Phase 2) before any
+generated frame is allowed to reach catalog output.
+
+--- PROMPT ---
+
+Studio product photograph of {product_name} by {brand}, a {format} cannabis/mushroom
+product. Place the exact product, unchanged, on a seamless pure-white (#FFFFFF) studio
+background. Soft, even, large-softbox key light from upper-left, subtle fill, gentle
+natural grounding contact shadow directly beneath the product. Product perfectly
+centered, upright, occupying ~76% of frame height, square 1:1 composition, generous
+even margins. Crisp commercial e-commerce catalog look, high dynamic range, true-to-life
+color, sharp focus edge to edge, no reflections, no props, no text overlays, no added
+graphics.
+
+HARD CONSTRAINTS (label fidelity):
+- Do NOT alter, repaint, translate, re-typeset, hallucinate, or "clean up" ANY text,
+  logo, barcode, dosage figure, warning, or artwork on the product label.
+- Do NOT change product shape, proportions, packaging, cap, or fill level.
+- The label region must be preserved pixel-faithful from the source; if the generator
+  cannot guarantee this, ABORT and route to human review — never ship an altered label.
+
+NEGATIVE PROMPT:
+extra products, duplicated product, warped label, garbled text, misspelled text,
+invented ingredients, invented dosage, added logos, watermark, hands, people, colored
+background, gradient background, harsh shadows, blown highlights on label, plastic look.
+
+--- END PROMPT ---

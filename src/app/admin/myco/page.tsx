@@ -1,6 +1,6 @@
 "use client";
 
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -66,8 +66,52 @@ interface EditDraft {
 }
 type SortKey = "productName" | "format" | "brand" | "active" | "updatedAt";
 type PhotoTag = "stock" | "package_front" | "package_back" | "lifestyle" | "other";
+type PhotoKind = "source" | "transparent" | "white_background" | "derivative";
 type UserRole = "super_admin" | "partner_admin";
 type DoseUnit = "mg" | "g";
+type EmployeeReviewStatus = "assigned" | "opened" | "submitted" | "not_familiar" | "overdue" | "expired";
+
+interface EmployeeReviewParticipation {
+  assigned: number;
+  opened: number;
+  submitted: number;
+  notFamiliar: number;
+  overdue: number;
+  expired: number;
+  noResponse: number;
+  responseRate: number;
+}
+
+interface EmployeeReviewGuidance {
+  sampleSize: number;
+  confidence: ConfidenceLevel;
+  recommendationReady: boolean;
+  spread: number | null;
+}
+
+interface EmployeeReviewAssignment {
+  id: string;
+  status: EmployeeReviewStatus;
+  assignedAt: string;
+  openedAt: string | null;
+  submittedAt: string | null;
+  expiresAt: string | null;
+  reminderCount: number;
+  employee: {
+    id: string;
+    name: string;
+    email: string;
+    points: number;
+    streak: number;
+    optedOut: boolean;
+  };
+}
+
+interface EmployeeReviewPanelData {
+  assignments: EmployeeReviewAssignment[];
+  participation: EmployeeReviewParticipation;
+  guidance: EmployeeReviewGuidance;
+}
 
 function toMg(value: string | number, unit: DoseUnit): number | null {
   const n = Number(value);
@@ -96,6 +140,13 @@ function formatDuration(minutes: number | null | undefined): string {
 const COMMON_INGREDIENTS = ["Lion's Mane", "Cordyceps", "Chaga", "Reishi", "L-Theanine", "Niacin"];
 
 const PHOTO_TAGS: PhotoTag[] = ["stock", "package_front", "package_back", "lifestyle", "other"];
+const PHOTO_KINDS: PhotoKind[] = ["source", "transparent", "white_background", "derivative"];
+const PHOTO_KIND_LABELS: Record<PhotoKind, string> = {
+  source: "Original",
+  transparent: "Transparent",
+  white_background: "White BG",
+  derivative: "Derivative",
+};
 const BRAND_DOSE_CATEGORY_LABELS: Record<BrandDoseCategory, string> = {
   micro: "Micro",
   mini: "Mini",
@@ -269,8 +320,12 @@ interface ProductPhoto {
   id: string;
   url: string;
   tag: PhotoTag;
+  kind: PhotoKind;
+  isPrimary: boolean;
   flavor: string | null;
   sortOrder: number;
+  provider?: string | null;
+  model?: string | null;
 }
 
 interface Product {
@@ -311,6 +366,10 @@ interface Product {
     spread: number | null;
   };
   confidence?: ConfidenceLevel;
+  employeeReviews?: {
+    participation: EmployeeReviewParticipation;
+    guidance: EmployeeReviewGuidance;
+  };
   ingredients: string[];
   onsetMinutes: number | null;
   durationMinutes: number | null;
@@ -327,6 +386,8 @@ interface PendingPhoto {
   id: string;
   file: File;
   tag: PhotoTag;
+  kind: PhotoKind;
+  isPrimary: boolean;
   previewUrl: string;
 }
 
@@ -377,6 +438,7 @@ export default function MycoAdminPage() {
   const [showNewBrand, setShowNewBrand] = useState(false);
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>([]);
   const [pendingPhotoTag, setPendingPhotoTag] = useState<PhotoTag>("stock");
+  const [pendingPhotoKind, setPendingPhotoKind] = useState<PhotoKind>("source");
   const [newVibe, setNewVibe] = useState<VibeScores>(emptyVibe());
   const [newVibeOpen, setNewVibeOpen] = useState(false);
   const [newIngredientInput, setNewIngredientInput] = useState("");
@@ -573,14 +635,27 @@ export default function MycoAdminPage() {
   function addPendingPhoto(file: File) {
     const id = `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const previewUrl = URL.createObjectURL(file);
-    setPendingPhotos((prev) => [...prev, { id, file, tag: pendingPhotoTag, previewUrl }]);
+    setPendingPhotos((prev) => [
+      // First photo defaults to the primary catalog image; the human can change it before saving.
+      ...prev,
+      { id, file, tag: pendingPhotoTag, kind: pendingPhotoKind, isPrimary: prev.length === 0, previewUrl },
+    ]);
+  }
+
+  function setPendingPhotoPrimary(id: string) {
+    setPendingPhotos((prev) => prev.map((p) => ({ ...p, isPrimary: p.id === id })));
   }
 
   function removePendingPhoto(id: string) {
     setPendingPhotos((prev) => {
       const removed = prev.find((p) => p.id === id);
       if (removed) URL.revokeObjectURL(removed.previewUrl);
-      return prev.filter((p) => p.id !== id);
+      const next = prev.filter((p) => p.id !== id);
+      // If we removed the primary, promote the first remaining photo so one stays chosen.
+      if (removed?.isPrimary && next.length > 0 && !next.some((p) => p.isPrimary)) {
+        next[0] = { ...next[0], isPrimary: true };
+      }
+      return next;
     });
   }
 
@@ -614,11 +689,21 @@ export default function MycoAdminPage() {
     });
   }
 
-  async function uploadPhotoToProduct(productId: string, file: File, tag: PhotoTag) {
-    const resized = await resizeImageFile(file);
+  async function uploadPhotoToProduct(
+    productId: string,
+    file: File,
+    tag: PhotoTag,
+    kind: PhotoKind = "source",
+    isPrimary = false
+  ) {
+    // Transparent derivatives must keep their alpha channel — never re-encode them to JPEG.
+    const isTransparent = kind === "transparent" || file.type === "image/png";
+    const upload = isTransparent ? file : await resizeImageFile(file);
     const formData = new FormData();
-    formData.append("file", resized);
+    formData.append("file", upload);
     formData.append("tag", tag);
+    formData.append("kind", kind);
+    if (isPrimary) formData.append("isPrimary", "true");
     const res = await fetch(`/api/admin/myco/${productId}/photos`, {
       method: "POST",
       body: formData,
@@ -683,7 +768,7 @@ export default function MycoAdminPage() {
       const photoErrors: string[] = [];
       for (const pp of pendingPhotos) {
         try {
-          const ph = await uploadPhotoToProduct(product.id, pp.file, pp.tag);
+          const ph = await uploadPhotoToProduct(product.id, pp.file, pp.tag, pp.kind, pp.isPrimary);
           uploaded.push(ph);
           URL.revokeObjectURL(pp.previewUrl);
         } catch (err) {
@@ -943,10 +1028,11 @@ export default function MycoAdminPage() {
   async function uploadExistingProductPhoto(
     productId: string,
     file: File,
-    tag: PhotoTag
+    tag: PhotoTag,
+    kind: PhotoKind = "source"
   ) {
     try {
-      const photo = await uploadPhotoToProduct(productId, file, tag);
+      const photo = await uploadPhotoToProduct(productId, file, tag, kind);
       setProducts((current) =>
         current.map((p) =>
           p.id === productId ? { ...p, photos: [...(p.photos || []), photo] } : p
@@ -955,6 +1041,32 @@ export default function MycoAdminPage() {
       setMessage("Photo uploaded");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload photo");
+    }
+  }
+
+  async function updatePhotoPrimary(productId: string, photoId: string) {
+    try {
+      const res = await fetch(`/api/admin/myco/${productId}/photos/${photoId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isPrimary: true }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setError(data.error?.message || "Failed to set primary photo");
+        return;
+      }
+      // Only one primary per product — reflect that locally.
+      setProducts((current) =>
+        current.map((p) =>
+          p.id === productId
+            ? { ...p, photos: p.photos.map((ph) => ({ ...ph, isPrimary: ph.id === photoId })) }
+            : p
+        )
+      );
+      setMessage("Primary catalog image updated");
+    } catch {
+      setError("Network error updating primary photo");
     }
   }
 
@@ -1373,11 +1485,30 @@ export default function MycoAdminPage() {
             {pendingPhotos.map((pp) => (
               <div
                 key={pp.id}
-                className="flex flex-col items-stretch gap-1.5 rounded-lg border border-bone-300 bg-bone-50 p-1.5"
+                className={`flex flex-col items-stretch gap-1.5 rounded-lg border bg-bone-50 p-1.5 ${
+                  pp.isPrimary ? "border-moss-500 ring-1 ring-moss-500" : "border-bone-300"
+                }`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={pp.previewUrl} alt="" className="h-20 w-full rounded-md bg-bone-200 object-cover" />
-                <div className="text-xs text-bark-400">{pp.tag}</div>
+                <img
+                  src={pp.previewUrl}
+                  alt=""
+                  className="h-20 w-full rounded-md bg-[repeating-conic-gradient(#e7e2d6_0_25%,#f5f2ea_0_50%)] bg-[length:16px_16px] object-contain"
+                />
+                <div className="flex items-center justify-between text-xs text-bark-400">
+                  <span>{pp.tag}</span>
+                  <span className="rounded bg-bone-200 px-1 py-0.5 text-[10px] font-medium text-bark-600">
+                    {PHOTO_KIND_LABELS[pp.kind]}
+                  </span>
+                </div>
+                <Button
+                  variant={pp.isPrimary ? "secondary" : "ghost"}
+                  size="sm"
+                  disabled={pp.isPrimary}
+                  onClick={() => setPendingPhotoPrimary(pp.id)}
+                >
+                  {pp.isPrimary ? "★ Primary" : "Set primary"}
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => removePendingPhoto(pp.id)}>
                   Remove
                 </Button>
@@ -1392,6 +1523,16 @@ export default function MycoAdminPage() {
               >
                 {PHOTO_TAGS.map((t) => (
                   <option key={t} value={t}>{t.replace("_", " ")}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-36 shrink-0">
+              <Select
+                value={pendingPhotoKind}
+                onChange={(e) => setPendingPhotoKind(e.target.value as PhotoKind)}
+              >
+                {PHOTO_KINDS.map((k) => (
+                  <option key={k} value={k}>{PHOTO_KIND_LABELS[k]}</option>
                 ))}
               </Select>
             </div>
@@ -1883,6 +2024,8 @@ export default function MycoAdminPage() {
                     </div>
                   </div>
 
+                  {!isArchived && <EmployeeReviewPanel product={product} />}
+
                   {isEditing && editDraft && (
                     <Modal
                       open
@@ -2229,10 +2372,15 @@ export default function MycoAdminPage() {
                             {product.photos?.map((photo) => (
                               <div
                                 key={photo.id}
-                                className="flex flex-col items-stretch gap-1.5 rounded-lg border border-bone-300 bg-bone-50 p-1.5"
+                                className={`flex flex-col items-stretch gap-1.5 rounded-lg border bg-bone-50 p-1.5 ${
+                                  photo.isPrimary ? "border-moss-500 ring-1 ring-moss-500" : "border-bone-300"
+                                }`}
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-bone-200 object-cover" />
+                                <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-[repeating-conic-gradient(#e7e2d6_0_25%,#f5f2ea_0_50%)] bg-[length:16px_16px] object-contain" />
+                                <div className="text-center text-[10px] font-medium text-bark-500">
+                                  {PHOTO_KIND_LABELS[photo.kind]}
+                                </div>
                                 <Select
                                   value={photo.tag}
                                   onChange={(e) => updatePhotoTag(product.id, photo.id, e.target.value as PhotoTag)}
@@ -2241,6 +2389,14 @@ export default function MycoAdminPage() {
                                     <option key={t} value={t}>{t}</option>
                                   ))}
                                 </Select>
+                                <Button
+                                  variant={photo.isPrimary ? "secondary" : "ghost"}
+                                  size="sm"
+                                  disabled={photo.isPrimary}
+                                  onClick={() => updatePhotoPrimary(product.id, photo.id)}
+                                >
+                                  {photo.isPrimary ? "★ Primary" : "Set primary"}
+                                </Button>
                                 <Button
                                   variant="danger-ghost"
                                   size="sm"
@@ -2330,10 +2486,15 @@ export default function MycoAdminPage() {
                       {product.photos?.map((photo) => (
                         <div
                           key={photo.id}
-                          className="flex flex-col items-stretch gap-1.5 rounded-lg border border-bone-300 bg-bone-50 p-1.5"
+                          className={`flex flex-col items-stretch gap-1.5 rounded-lg border bg-bone-50 p-1.5 ${
+                            photo.isPrimary ? "border-moss-500 ring-1 ring-moss-500" : "border-bone-300"
+                          }`}
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-bone-200 object-cover" />
+                          <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-[repeating-conic-gradient(#e7e2d6_0_25%,#f5f2ea_0_50%)] bg-[length:16px_16px] object-contain" />
+                          <div className="text-center text-[10px] font-medium text-bark-500">
+                            {PHOTO_KIND_LABELS[photo.kind]}
+                          </div>
                           <Select
                             value={photo.tag}
                             onChange={(e) => updatePhotoTag(product.id, photo.id, e.target.value as PhotoTag)}
@@ -2353,6 +2514,14 @@ export default function MycoAdminPage() {
                               ))}
                             </Select>
                           )}
+                          <Button
+                            variant={photo.isPrimary ? "secondary" : "ghost"}
+                            size="sm"
+                            disabled={photo.isPrimary}
+                            onClick={() => updatePhotoPrimary(product.id, photo.id)}
+                          >
+                            {photo.isPrimary ? "★ Primary" : "Set primary"}
+                          </Button>
                           <Button
                             variant="danger-ghost"
                             size="sm"
@@ -2468,9 +2637,10 @@ function PhotoUploader({
   onUpload,
 }: {
   productId: string;
-  onUpload: (productId: string, file: File, tag: PhotoTag) => Promise<void>;
+  onUpload: (productId: string, file: File, tag: PhotoTag, kind: PhotoKind) => Promise<void>;
 }) {
   const [tag, setTag] = useState<PhotoTag>("stock");
+  const [kind, setKind] = useState<PhotoKind>("source");
   return (
     <div className="mt-2 flex flex-wrap items-center gap-2">
       <div className="w-36 shrink-0">
@@ -2480,16 +2650,282 @@ function PhotoUploader({
           ))}
         </Select>
       </div>
+      <div className="w-36 shrink-0">
+        <Select value={kind} onChange={(e) => setKind(e.target.value as PhotoKind)}>
+          {PHOTO_KINDS.map((k) => (
+            <option key={k} value={k}>{PHOTO_KIND_LABELS[k]}</option>
+          ))}
+        </Select>
+      </div>
       <input
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         onChange={async (e) => {
           const f = e.target.files?.[0];
-          if (f) await onUpload(productId, f, tag);
+          if (f) await onUpload(productId, f, tag, kind);
           e.target.value = "";
         }}
         className="min-w-0 text-sm text-bark-600 file:mr-3 file:min-h-11 file:cursor-pointer file:rounded-lg file:border-0 file:bg-bone-200 file:px-3 file:text-sm file:font-medium file:text-bark-700"
       />
+    </div>
+  );
+}
+
+function EmployeeReviewPanel({
+  product,
+}: {
+  product: Pick<Product, "id" | "productName" | "employeeReviews">;
+}) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<EmployeeReviewPanelData | null>(
+    product.employeeReviews
+      ? {
+          assignments: [],
+          participation: product.employeeReviews.participation,
+          guidance: product.employeeReviews.guidance,
+        }
+      : null
+  );
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [sendEmail, setSendEmail] = useState(false);
+  const [lastLinks, setLastLinks] = useState<{ email: string; link: string | null; sent?: boolean; error?: string }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadReviews() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/myco/${product.id}/employee-reviews`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || "Failed to load employee reviews");
+      setData(json.data as EmployeeReviewPanelData);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load employee reviews");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function openPanel() {
+    const next = !open;
+    setOpen(next);
+    if (next) await loadReviews();
+  }
+
+  async function copyText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      prompt("Copy this review link:", text);
+    }
+  }
+
+  async function assignEmployee(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/myco/${product.id}/employee-reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ employees: [{ name, email }], send: sendEmail }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || "Failed to assign employee");
+      const assignments = (json.data.assignments || []) as { email: string; link: string | null; sent?: boolean; error?: string }[];
+      setLastLinks(assignments);
+      if (assignments.some((assignment) => assignment.link)) {
+        setName("");
+        setEmail("");
+      }
+      await loadReviews();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to assign employee");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function regenerateLink(assignment: EmployeeReviewAssignment, sendNow = false) {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/myco/${product.id}/employee-reviews`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employees: [{ name: assignment.employee.name, email: assignment.employee.email }],
+          send: sendNow,
+        }),
+      });
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || "Failed to create review link");
+      const result = json.data.assignments?.[0] as { email: string; link: string | null; sent?: boolean; error?: string } | undefined;
+      if (result) {
+        setLastLinks([result]);
+        if (result.link && !sendNow) await copyText(result.link);
+      }
+      await loadReviews();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create review link");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const participation = data?.participation ?? product.employeeReviews?.participation;
+  const guidance = data?.guidance ?? product.employeeReviews?.guidance;
+
+  return (
+    <div className="mt-3 rounded-lg border border-bone-200 bg-bone-50/70 p-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-bark-800">Employee guidance</div>
+          <div className="mt-0.5 text-xs text-bark-500">
+            {participation
+              ? `${participation.submitted} submitted, ${participation.notFamiliar} not familiar, ${participation.noResponse} no response`
+              : "No employee assignments loaded"}
+            {guidance ? ` • ${guidance.sampleSize} known-product sample${guidance.sampleSize === 1 ? "" : "s"}` : ""}
+          </div>
+        </div>
+        <Button variant="secondary" size="sm" onClick={openPanel} loading={loading}>
+          {open ? "Hide" : "Manage"}
+        </Button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          {error ? <Alert tone="error">{error}</Alert> : null}
+
+          <div className="grid gap-2 sm:grid-cols-4">
+            <div className="rounded-lg bg-bone-100 p-2 text-xs text-bark-500">
+              <div className="text-base font-bold text-bark-800">{participation?.responseRate ?? 0}%</div>
+              Response rate
+            </div>
+            <div className="rounded-lg bg-bone-100 p-2 text-xs text-bark-500">
+              <div className="text-base font-bold text-bark-800">{participation?.noResponse ?? 0}</div>
+              No response
+            </div>
+            <div className="rounded-lg bg-bone-100 p-2 text-xs text-bark-500">
+              <div className="text-base font-bold text-bark-800">{participation?.notFamiliar ?? 0}</div>
+              Not familiar
+            </div>
+            <div className="rounded-lg bg-bone-100 p-2 text-xs text-bark-500">
+              <div className="text-base font-bold text-bark-800">{participation?.overdue ?? 0}</div>
+              Overdue
+            </div>
+          </div>
+
+          {guidance && (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-bark-500">
+              <Badge tone={CONFIDENCE_BADGES[guidance.confidence].tone} className="rounded-full">
+                {CONFIDENCE_BADGES[guidance.confidence].label}
+              </Badge>
+              <span>
+                Employee aggregate {guidance.recommendationReady ? "meets" : "does not meet"} recommendation evidence rules
+                {guidance.spread !== null ? ` • spread ${guidance.spread}` : ""}
+              </span>
+            </div>
+          )}
+
+          <form onSubmit={assignEmployee} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)_auto]">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Employee name" required />
+            <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="employee@example.com" required />
+            <Button type="submit" size="sm" loading={saving} disabled={!name.trim() || !email.trim()}>
+              Assign
+            </Button>
+            <label className="flex items-center gap-2 text-xs text-bark-500 sm:col-span-3">
+              <input
+                type="checkbox"
+                checked={sendEmail}
+                onChange={(e) => setSendEmail(e.target.checked)}
+                className="h-4 w-4 rounded border-bone-300"
+              />
+              Email the review link now
+            </label>
+          </form>
+
+          {lastLinks.length > 0 && (
+            <div className="space-y-1 rounded-lg border border-bone-200 bg-bone-100 p-2 text-xs">
+              {lastLinks.map((assignment) => (
+                <div key={`${assignment.email}-${assignment.link || assignment.error}`} className="flex flex-col gap-1 sm:flex-row sm:items-center">
+                  <span className="min-w-0 flex-1 text-bark-600">
+                    {assignment.email}: {assignment.error || assignment.link || "No link created"}
+                    {assignment.sent ? " (emailed)" : ""}
+                  </span>
+                  {assignment.link && (
+                    <Button variant="ghost" size="sm" onClick={() => copyText(assignment.link!)}>
+                      Copy
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {data?.assignments.length ? (
+            <div className="overflow-hidden rounded-lg border border-bone-200">
+              {data.assignments.map((assignment) => (
+                <div
+                  key={assignment.id}
+                  className="grid gap-2 border-b border-bone-200 p-2 text-xs last:border-b-0 sm:grid-cols-[minmax(0,1.25fr)_auto_auto]"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold text-bark-800">{assignment.employee.name}</div>
+                    <div className="truncate text-bark-500">{assignment.employee.email}</div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      tone={
+                        assignment.status === "submitted"
+                          ? "success"
+                          : assignment.status === "not_familiar"
+                            ? "info"
+                            : assignment.status === "overdue" || assignment.status === "expired"
+                              ? "warning"
+                              : "neutral"
+                      }
+                      className="rounded-full"
+                    >
+                      {assignment.status.replace("_", " ")}
+                    </Badge>
+                    <span className="text-bark-400">
+                      {assignment.employee.points} pts • streak {assignment.employee.streak}
+                    </span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => regenerateLink(assignment)}
+                      loading={saving}
+                      disabled={assignment.status === "submitted" || assignment.status === "not_familiar"}
+                    >
+                      Copy link
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => regenerateLink(assignment, true)}
+                      loading={saving}
+                      disabled={assignment.status === "submitted" || assignment.status === "not_familiar"}
+                    >
+                      Email
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-bone-300 p-3 text-sm text-bark-500">
+              No employees assigned to this product yet.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,64 @@
+{
+  "description": "Output profiles for the catalog-safe pipeline. All sRGB. Products are padded to fit, never stretched.",
+  "profiles": {
+    "transparent_master": {
+      "required": true,
+      "format": "PNG",
+      "size": [3000, 3000],
+      "mode": "RGBA",
+      "background": null,
+      "stage": "transparent",
+      "output_dir": "transparent"
+    },
+    "white_master": {
+      "required": true,
+      "format": "PNG",
+      "size": [3000, 3000],
+      "mode": "RGB",
+      "background": "#FFFFFF",
+      "stage": "catalog-safe",
+      "output_dir": "catalog-safe"
+    },
+    "web": {
+      "required": true,
+      "format": "WEBP",
+      "size": [1200, 1200],
+      "mode": "RGB",
+      "background": "#FFFFFF",
+      "quality": 82,
+      "stage": "web",
+      "output_dir": "web"
+    },
+    "thumbnail": {
+      "required": true,
+      "format": "WEBP",
+      "size": [600, 600],
+      "mode": "RGB",
+      "background": "#FFFFFF",
+      "quality": 82,
+      "stage": "thumbnail",
+      "output_dir": "thumbnails"
+    },
+    "marketplace": {
+      "required": false,
+      "format": "JPEG",
+      "size": [2000, 2000],
+      "mode": "RGB",
+      "background": "#FFFFFF",
+      "quality": 90,
+      "stage": "marketplace",
+      "output_dir": "web"
+    },
+    "avif": {
+      "required": false,
+      "format": "AVIF",
+      "size": [1200, 1200],
+      "mode": "RGB",
+      "background": "#FFFFFF",
+      "quality": 60,
+      "stage": "avif",
+      "output_dir": "web",
+      "requires_magick": true
+    }
+  }
+}

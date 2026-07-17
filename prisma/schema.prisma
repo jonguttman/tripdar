@@ -16,6 +16,22 @@ datasource db {
 // ReferenceFrame: BASELINE, WITHIN_STRAIN, CROSS_STRAIN
 // Direction: MORE, LESS, SAME, NOT_NOTICED
 
+enum PhotoJobProcessingMode {
+  catalog_safe
+  premium
+}
+
+enum PhotoJobStatus {
+  uploaded
+  analyzing
+  processing
+  validating
+  needs_review
+  approved
+  rejected
+  failed
+}
+
 model Signal {
   // Immutability intent:
   // - Signals are append-only.
@@ -416,6 +432,7 @@ model Partner {
 
   catalogItems StoreProductCatalog[]
   adminUsers   User[]
+  employees    MycoEmployee[]
 
   @@index([apiKeyHash])
   @@index([active])
@@ -464,6 +481,8 @@ model StoreProductCatalog {
   partnerId      String
   productName    String
   format         String // capsule, edible, dried, tincture, other
+  sku            String?
+  intakeStatus   String   @default("draft") // draft, in_review, ready
   brand          String? // legacy free-text (kept for back-compat)
   brandId        String? // FK to Brand (new)
   strainSlug     String? // legacy free-text (kept for back-compat)
@@ -493,11 +512,13 @@ model StoreProductCatalog {
   strengthOffset ProductStrengthOffset?
   outcomeReports UserOutcomeReport[]
   testerVotes    TesterVote[]
+  employeeReviewAssignments MycoEmployeeReviewAssignment[]
   mycoResults    MycoRecommendationResult[]
 
   @@index([partnerId, active])
   @@index([strainSlug])
   @@index([brandId])
+  @@index([partnerId, intakeStatus])
 }
 
 model Brand {
@@ -551,12 +572,129 @@ model ProductPhoto {
   url           String
   tag           String // stock, package_front, package_back, lifestyle, other
   flavor        String? // optional flavor variant this photo shows
+  kind          String   @default("source") // source, transparent, white_background, derivative
+  sourceUrl     String?
+  isPrimary     Boolean  @default(false)
+  approvedBy    String?
+  approvedAt    DateTime?
+  provider      String?
+  model         String?
+  costCents     Int      @default(0)
+  provenance    Json     @default("{}")
   sortOrder     Int      @default(0)
   createdAt     DateTime @default(now())
 
   catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
 
   @@index([catalogItemId])
+  @@index([catalogItemId, isPrimary])
+}
+
+model MycoEmployee {
+  id        String   @id @default(cuid())
+  partnerId String
+  name      String
+  email     String
+  active    Boolean  @default(true)
+  optedOut  Boolean  @default(false)
+  points    Int      @default(0)
+  streak    Int      @default(0)
+  lastRespondedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  assignments MycoEmployeeReviewAssignment[]
+
+  @@unique([partnerId, email])
+  @@index([partnerId, active])
+}
+
+model MycoEmployeeReviewAssignment {
+  id            String   @id @default(cuid())
+  catalogItemId String
+  employeeId    String
+  tokenHash     String   @unique
+  status        String   @default("assigned") // assigned, opened, submitted, not_familiar, overdue, expired
+  assignedBy    String?
+  assignedAt    DateTime @default(now())
+  openedAt      DateTime?
+  submittedAt   DateTime?
+  expiresAt     DateTime?
+  reminderCount Int      @default(0)
+  lastSentAt     DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  employee MycoEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  response MycoEmployeeProductReview?
+
+  @@unique([catalogItemId, employeeId])
+  @@index([catalogItemId, status])
+  @@index([employeeId, status])
+  @@index([expiresAt])
+}
+
+model MycoEmployeeProductReview {
+  id            String   @id @default(cuid())
+  assignmentId  String   @unique
+  catalogItemId String
+  employeeId    String
+  knowsProduct   Boolean
+  clarityCognition Int?
+  moodSocial       Int?
+  visualPattern    Int?
+  somatic          Int?
+  energyDirection  Int?
+  depthDirection   Int?
+  doseUnitsTried   Float?
+  doseUnitLabel    String?
+  onsetMinutes     Int?
+  durationMinutes  Int?
+  flavor           String?
+  confidence       Int?
+  familiarity      String?
+  notes            String?
+  pointsAwarded    Int      @default(0)
+  userAgentHash    String?
+  createdAt        DateTime @default(now())
+
+  assignment MycoEmployeeReviewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId, createdAt])
+  @@index([employeeId, createdAt])
+}
+
+// Durable ledger for the Tripdar product photo processing pipeline.
+// Originals are immutable in Blob storage; sourceContentHash dedupes uploads by
+// sha256(original bytes) so duplicate source images are not reprocessed.
+model PhotoJob {
+  id                 String                 @id @default(cuid())
+  jobId              String                 @unique
+  sku                String
+  brand              String?
+  productName        String
+  variant            String?
+  view               String
+  sourceFile         String
+  originalBlobUrl    String
+  sourceContentHash  String                 @unique
+  processingMode     PhotoJobProcessingMode @default(catalog_safe)
+  status             PhotoJobStatus         @default(uploaded)
+  qualityScore       Float?
+  labelFidelityScore Float?
+  warnings           Json                   @default("[]")
+  manifest           Json                   @default("{}")
+  costCents          Int                    @default(0)
+  approvedBy         String?
+  approvedAt         DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([sku])
+  @@index([status, createdAt])
+  @@index([processingMode, status])
 }
 
 model ProductVibeProfile {

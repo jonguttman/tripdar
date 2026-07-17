@@ -11,12 +11,15 @@ import { getUserRole } from "@/domain/auth/role";
 import { computeReadiness } from "@/domain/myco/readiness";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 import { normalizeFlavors } from "@/domain/myco/flavors";
+import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
+const VALID_INTAKE_STATUSES = ["draft", "in_review", "ready"] as const;
 
 type ProductFormat = (typeof VALID_FORMATS)[number];
 type StrengthOffset = (typeof VALID_OFFSETS)[number];
+type IntakeStatus = (typeof VALID_INTAKE_STATUSES)[number];
 type BrandDoseCategory = "micro" | "mini" | "macro" | "custom";
 type BrandDoseTier = {
   id: string;
@@ -57,6 +60,12 @@ function parseOffset(value: unknown): StrengthOffset {
   return typeof value === "string" && VALID_OFFSETS.includes(value as StrengthOffset)
     ? (value as StrengthOffset)
     : "standard";
+}
+
+function parseIntakeStatus(value: unknown): IntakeStatus {
+  return typeof value === "string" && VALID_INTAKE_STATUSES.includes(value as IntakeStatus)
+    ? (value as IntakeStatus)
+    : "draft";
 }
 
 function parsePositiveInt(value: unknown): number | null {
@@ -300,12 +309,30 @@ export async function GET(request: NextRequest) {
               depthDirection: true,
             },
           },
+          employeeReviewAssignments: {
+            select: {
+              status: true,
+              expiresAt: true,
+              response: {
+                select: {
+                  knowsProduct: true,
+                  clarityCognition: true,
+                  moodSocial: true,
+                  visualPattern: true,
+                  somatic: true,
+                  energyDirection: true,
+                  depthDirection: true,
+                  confidence: true,
+                },
+              },
+            },
+          },
         },
         orderBy: [{ active: "desc" }, { updatedAt: "desc" }],
       }),
     ]);
 
-    const productsWithReadiness = products.map(({ testerVotes, ...product }) => {
+    const productsWithReadiness = products.map(({ testerVotes, employeeReviewAssignments, ...product }) => {
       const readiness = computeReadiness({
         format: product.format,
         brand: product.brand,
@@ -327,10 +354,17 @@ export async function GET(request: NextRequest) {
           : null,
       });
       const community = aggregateTesterVotes(testerVotes);
+      const employeeGuidance = aggregateEmployeeGuidance(
+        employeeReviewAssignments.flatMap((assignment) => (assignment.response ? [assignment.response] : []))
+      );
       return {
         ...product,
         readiness,
         community,
+        employeeReviews: {
+          participation: summarizeAssignments(employeeReviewAssignments),
+          guidance: employeeGuidance,
+        },
         confidence: computeConfidence(community.voteCount, community.spread),
       };
     });
@@ -493,6 +527,8 @@ export async function POST(request: NextRequest) {
         partnerId,
         productName,
         format,
+        sku: cleanText(body.sku) ?? null,
+        intakeStatus: parseIntakeStatus(body.intakeStatus),
         brand: cleanText(body.brand) ?? null,
         brandId,
         strainSlug: cleanText(body.strainSlug) ?? null,

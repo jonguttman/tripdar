@@ -1,0 +1,18 @@
+{
+  "description": "Deterministic filename template + sanitize rules.",
+  "template": "{sku}_{brand}_{product}_{variant}_{view}_{mode}_v{NN}.{ext}",
+  "version_pad": 2,
+  "default_version": 1,
+  "sanitize": {
+    "lowercase": true,
+    "non_alphanumeric_to": "-",
+    "collapse_repeats": true,
+    "strip_edge_hyphens": true,
+    "max_field_len": 60
+  },
+  "fallback": {
+    "when_field_missing": "use_placeholder",
+    "placeholder": "unknown",
+    "note": "Never emit random names. Missing optional metadata fields use the deterministic placeholder emitted by sanitizePhotoNameField()."
+  }
+}

@@ -15,7 +15,8 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
-    "resend": "^6.12.4"
+    "resend": "^6.12.4",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.0",
@@ -33,6 +34,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:vite": "vite",
+    "photo:pipeline": "node scripts/photo-pipeline/cli.mjs",
     "build": "prisma generate && NODE_ENV=production next build",
     "build:vite": "tsc && vite build",
     "start": "next start",

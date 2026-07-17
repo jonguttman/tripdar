@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.13.0] - 2026-07-16
+
+### Added
+- **Photo-first product intake in `/admin/myco`** (KEWL-1960): admins can create/update a real `StoreProductCatalog` entry starting from photos. Upload route accepts `source`/`transparent`/`white_background`/`derivative` photo kinds, preserves the immutable source, records `provider`/`model`/`costCents` provenance and `sourceUrl`, and requires an explicit human-approved primary (tracked via `approvedBy`/`approvedAt`) — AI derivatives never silently replace the source. Effect/vibe fields stay optional at intake so products can exist in a draft/review state when effects are unknown. Partner isolation enforced through `resolveProductForAdmin()`.
+- **Admin photo-approval UI controls** (KEWL-1960): the `/admin/myco` intake and edit grids now expose the photo `kind` (Original/Transparent/White BG/Derivative) on upload and per photo, plus a **Set primary** / ★ Primary control so a human explicitly approves the catalog image alongside the original and generated derivatives. The first pending photo defaults to primary and can be reassigned before save; setting a primary PATCHes a single winner and clears the rest. Transparent derivatives (PNG/alpha) bypass the JPEG resize so cutouts keep their transparency, and photos render on a checkerboard with `object-contain` so transparent/white-BG samples read correctly.
+- **The Other Path employee review loop** (KEWL-1960): new `MycoEmployee`, `MycoEmployeeReviewAssignment`, and `MycoEmployeeProductReview` models (migration `20260716190000_myco_employee_review_loop`). Admins assign a product to named employees and send unique tokenized links (`/review/myco/[token]`); tokens are stored as SHA-256 hashes only, never raw. Employees either submit structured guidance (six effect axes + dose/onset/duration/flavor/confidence/notes) or explicitly mark **not familiar** — a valid completed response distinguishable from no response. Duplicate submissions blocked by unique `assignmentId` index + terminal-status guard; user-agent hashed, no raw IP stored.
+- **Participation tracking dashboard**: per-product admin panel showing assigned/opened/submitted/not-familiar/no-response counts, response rate, copy/resend link actions, and aggregated guidance with sample size + confidence. Points reward participation honesty (opening, responding, completeness, timeliness) — never effect direction or claimed familiarity; `not_familiar` earns smaller real credit; opt-out supported.
+- **Recommendation safety**: employee guidance aggregates into vibe signals only when minimum-evidence (`minSamples`) and agreement (`maxSpread`) rules pass; conflicting responses lower confidence rather than averaging into false certainty, and only reviewers who claim actual familiarity feed the aggregate.
+
+## [1.12.1] - 2026-07-16
+
+### Added
+- **Photo Pipeline Phase 1b MVP worker** (`scripts/photo-pipeline/`): catalog-safe CLI with single-image and batch modes, immutable original copy, SHA-256 dedupe/idempotency, quality gate with Claude vision when configured plus deterministic fallback, OpenRouter/Vercel hosted background removal with provider/model/cost manifest metadata, catalog-safe geometry/white/transparent/shadow exports via `sharp`, manifest/log writes, cost tracking, and Prisma-backed `PhotoJob` updates when `DATABASE_URL` is present. Local filesystem ledger mode supports checkout-level smoke tests without production DB secrets, and local background fallback always routes to `needs_review`. (KEWL-1951)
+- **Photo Pipeline alpha-edge cleanup**: hosted cutouts now run deterministic alpha-boundary cleanup with small-component removal and conservative fringe decontamination before transparent/white/web/thumb export; heuristic QA runs cannot auto-approve without Claude Vision and remain in `needs_review` for human catalog approval. (KEWL-1951)
+- **Photo Pipeline generative policy gate**: full-image outputs from OpenRouter, Vercel AI Gateway chat-image providers, or custom hosted endpoints returning `image_base64` are now marked `processing_mode: "premium"`, named as `ai-enhanced`, saved for review only, and forced to `needs_review`; catalog-safe approval remains limited to mask/cutout-preserving paths. (KEWL-1951)
+- **Photo Pipeline human-facing docs** (`/docs/photo-pipeline/`): operator guide (Jon-facing folder→outputs→manifest walkthrough for the catalog-safe Phase 1 core), printable iPhone photographer's checklist, and the approved retake-reason copy library (17 specific, friendly failure-mode messages surfaced by the quality stage). Psilly voice; scoped to Phase 1 — review UI and premium-mode copy deferred to later phases. (KEWL-1952)
+
+## [1.12.0] - 2026-07-16
+
+### Added
+- **Photo Pipeline Phase 1a contracts**: Added the `PhotoJob` Prisma ledger with exact processing mode/status enums, immutable original URL, manifest JSON, cost/review fields, and unique `sourceContentHash` idempotency. Migration `20260716121500_photo_pipeline_phase_1a`.
+- **Catalog-safe photo backbone**: Added the Vercel Blob prefix contract, one-manifest-per-source JSON schema, deterministic filename sanitizer, original-overwrite guard, and locked `catalog_safe.v1` preset for 3000px masters, 1200px web, and 600px thumbnails.
+
 ## [1.11.0] - 2026-06-12
 
 ### Added
