@@ -391,7 +391,14 @@ async function processCatalogSafe({ normalizedPath, rootDir, job, baseName, pres
   const isGenerativeReview = processingMode === "premium";
   if (!gatewayRemoval.usedGateway) {
     warnings.push(BACKGROUND_FALLBACK_WARNING, BACKGROUND_FALLBACK_REVIEW_WARNING);
-    if (strictGateway) warnings.push("review: hosted background removal was required but unavailable");
+  }
+  // --strict-gateway requires a genuine hosted removal. Both the deterministic
+  // fallback (!usedGateway) AND the zero-cost local rembg fallback (usedGateway
+  // via local rembg) mean the hosted service was unavailable, so a strict run
+  // must still surface the hosted-removal-required warning (KEWL-2011 / Codex P2).
+  const usedHostedRemoval = gatewayRemoval.usedGateway && !gatewayRemoval.localRembg;
+  if (strictGateway && !usedHostedRemoval) {
+    warnings.push("review: hosted background removal was required but unavailable");
   }
   if (gatewayRemoval.warnings?.length) warnings.push(...gatewayRemoval.warnings);
   if (isGenerativeReview) warnings.push(GENERATIVE_REVIEW_WARNING);
@@ -533,6 +540,10 @@ async function removeBackgroundWithLocalRembg(imagePath, preset) {
     const maskBuffer = await readFile(maskPath);
     return {
       usedGateway: true,
+      // Zero-cost local fallback — NOT the hosted removal service. Strict-gateway
+      // runs use this marker to still surface that the hosted requirement was
+      // unmet (KEWL-2011 / Codex P2).
+      localRembg: true,
       maskBuffer,
       subjectBuffer: null,
       costCents: 0,
@@ -748,7 +759,7 @@ function summarizeGatewayError(responseText) {
   }
 }
 
-async function isolateSubject(imagePath, maskBuffer) {
+export async function isolateSubject(imagePath, maskBuffer) {
   const source = sharp(imagePath).rotate().removeAlpha();
   const metadata = await source.metadata();
   const width = metadata.width ?? 1;
@@ -759,7 +770,11 @@ async function isolateSubject(imagePath, maskBuffer) {
   } else {
     alpha = await buildLocalMask(imagePath, width, height);
   }
-  const rgba = await cleanAlphaBoundary(await sharp(imagePath).rotate().removeAlpha().joinChannel(alpha).png().toBuffer());
+  // sharp 0.34.5 silently drops a joined alpha when .removeAlpha() and .joinChannel()
+  // share one pipeline (output stays 3ch/opaque). Materialize the rotated RGB to a
+  // buffer first so joinChannel applies to a fresh 3ch source and yields real 4ch RGBA. (KEWL-2011)
+  const baseRgb = await sharp(imagePath).rotate().removeAlpha().png().toBuffer();
+  const rgba = await cleanAlphaBoundary(await sharp(baseRgb).joinChannel(alpha).png().toBuffer());
   const bbox = await findAlphaBoundingBox(rgba);
   const left = Math.max(0, bbox.left - 8);
   const top = Math.max(0, bbox.top - 8);
