@@ -6,12 +6,15 @@ import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community
 import { computeReadiness } from "@/domain/myco/readiness";
 import { normalizeFlavors } from "@/domain/myco/flavors";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
+import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
+const VALID_INTAKE_STATUSES = ["draft", "in_review", "ready"] as const;
 
 type ProductFormat = (typeof VALID_FORMATS)[number];
 type StrengthOffset = (typeof VALID_OFFSETS)[number];
+type IntakeStatus = (typeof VALID_INTAKE_STATUSES)[number];
 type BrandDoseCategory = "micro" | "mini" | "macro" | "custom";
 type BrandDoseTier = {
   id: string;
@@ -60,6 +63,12 @@ function parseFormat(value: unknown): ProductFormat | undefined {
 function parseOffset(value: unknown): StrengthOffset | undefined {
   return typeof value === "string" && VALID_OFFSETS.includes(value as StrengthOffset)
     ? (value as StrengthOffset)
+    : undefined;
+}
+
+function parseIntakeStatus(value: unknown): IntakeStatus | undefined {
+  return typeof value === "string" && VALID_INTAKE_STATUSES.includes(value as IntakeStatus)
+    ? (value as IntakeStatus)
     : undefined;
 }
 
@@ -253,12 +262,15 @@ export async function PATCH(
     const data: Record<string, unknown> = {};
     const productName = cleanText(body.productName);
     const format = parseFormat(body.format);
+    const intakeStatus = parseIntakeStatus(body.intakeStatus);
     const productUnitMg = parsePositiveInt(body.productUnitMg);
     const unitsPerPack = parsePositiveInt(body.unitsPerPack);
     const totalDoseMg = parsePositiveInt(body.totalDoseMg);
 
     if (productName) data.productName = productName;
     if (format) data.format = format;
+    if (intakeStatus) data.intakeStatus = intakeStatus;
+    if ("sku" in body) data.sku = cleanText(body.sku) ?? null;
     if (productUnitMg !== undefined) data.productUnitMg = productUnitMg;
     if (unitsPerPack !== undefined) data.unitsPerPack = unitsPerPack;
     if ("active" in body && typeof body.active === "boolean") data.active = body.active;
@@ -452,6 +464,24 @@ export async function PATCH(
             depthDirection: true,
           },
         },
+        employeeReviewAssignments: {
+          select: {
+            status: true,
+            expiresAt: true,
+            response: {
+              select: {
+                knowsProduct: true,
+                clarityCognition: true,
+                moodSocial: true,
+                visualPattern: true,
+                somatic: true,
+                energyDirection: true,
+                depthDirection: true,
+                confidence: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -462,7 +492,7 @@ export async function PATCH(
       );
     }
 
-    const { testerVotes, ...productData } = updatedProduct;
+    const { testerVotes, employeeReviewAssignments, ...productData } = updatedProduct;
     const readiness = computeReadiness({
       format: productData.format,
       brand: productData.brand,
@@ -484,6 +514,9 @@ export async function PATCH(
         : null,
     });
     const community = aggregateTesterVotes(testerVotes);
+    const employeeGuidance = aggregateEmployeeGuidance(
+      employeeReviewAssignments.flatMap((assignment) => (assignment.response ? [assignment.response] : []))
+    );
 
     return NextResponse.json({
       success: true,
@@ -492,6 +525,10 @@ export async function PATCH(
           ...productData,
           readiness,
           community,
+          employeeReviews: {
+            participation: summarizeAssignments(employeeReviewAssignments),
+            guidance: employeeGuidance,
+          },
           confidence: computeConfidence(community.voteCount, community.spread),
         },
       },

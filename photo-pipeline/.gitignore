@@ -1,0 +1,17 @@
+# Runtime image working tree — never commit generated images / originals / manifests / logs.
+# Keep the directory skeleton (.gitkeep) but ignore all contents.
+/tripdar-product-images/*/*
+!/tripdar-product-images/*/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.eggs/
+build/
+dist/
+.pytest_cache/
+
+# Test fixtures are generated at runtime
+tests/fixtures/*
+!tests/fixtures/.gitkeep

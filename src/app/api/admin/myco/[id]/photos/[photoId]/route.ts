@@ -6,7 +6,9 @@ import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 import { matchFlavor } from "@/domain/myco/flavors";
 
 const VALID_TAGS = ["stock", "package_front", "package_back", "lifestyle", "other"] as const;
+const VALID_KINDS = ["source", "transparent", "white_background", "derivative"] as const;
 type PhotoTag = (typeof VALID_TAGS)[number];
+type PhotoKind = (typeof VALID_KINDS)[number];
 
 async function requireAuth() {
   const session = await getServerSession(authOptions);
@@ -23,6 +25,18 @@ function parseTag(value: unknown): PhotoTag | undefined {
   return typeof value === "string" && VALID_TAGS.includes(value as PhotoTag)
     ? (value as PhotoTag)
     : undefined;
+}
+
+function parseKind(value: unknown): PhotoKind | undefined {
+  return typeof value === "string" && VALID_KINDS.includes(value as PhotoKind)
+    ? (value as PhotoKind)
+    : undefined;
+}
+
+function cleanText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export async function PATCH(
@@ -52,7 +66,22 @@ export async function PATCH(
     const body = await request.json();
     const data: Record<string, unknown> = {};
     const tag = parseTag(body.tag);
+    const kind = parseKind(body.kind);
     if (tag) data.tag = tag;
+    if (kind) data.kind = kind;
+    if ("sourceUrl" in body) data.sourceUrl = cleanText(body.sourceUrl) ?? null;
+    if ("provider" in body) data.provider = cleanText(body.provider) ?? null;
+    if ("model" in body) data.model = cleanText(body.model) ?? null;
+    if ("costCents" in body && Number.isFinite(Number(body.costCents))) {
+      data.costCents = Math.max(0, Math.round(Number(body.costCents)));
+    }
+    if (body.isPrimary === true) {
+      data.isPrimary = true;
+      data.approvedBy = auth.user!.email!;
+      data.approvedAt = new Date();
+    } else if (body.isPrimary === false) {
+      data.isPrimary = false;
+    }
     if (typeof body.sortOrder === "number" && Number.isFinite(body.sortOrder)) {
       data.sortOrder = Math.round(body.sortOrder);
     }
@@ -77,9 +106,17 @@ export async function PATCH(
     }
 
     // Scope by both ids so a photo from another product can't be modified
-    const updated = await prisma.productPhoto.updateMany({
-      where: { id: photoId, catalogItemId: id },
-      data,
+    const updated = await prisma.$transaction(async (tx) => {
+      if (body.isPrimary === true) {
+        await tx.productPhoto.updateMany({
+          where: { catalogItemId: id, isPrimary: true, NOT: { id: photoId } },
+          data: { isPrimary: false },
+        });
+      }
+      return tx.productPhoto.updateMany({
+        where: { id: photoId, catalogItemId: id },
+        data,
+      });
     });
     if (updated.count === 0) {
       return NextResponse.json(

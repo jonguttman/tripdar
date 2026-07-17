@@ -44,3 +44,7 @@ out/
 *.zip
 .vercel
 .env*.local
+
+# Photo pipeline runtime artifacts. Keep .gitkeep skeleton files only.
+/tripdar-product-images/*/*
+!/tripdar-product-images/*/.gitkeep

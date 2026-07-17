@@ -6,7 +6,9 @@ import { prisma } from "@/lib/prisma";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 
 const VALID_TAGS = ["stock", "package_front", "package_back", "lifestyle", "other"] as const;
+const VALID_KINDS = ["source", "transparent", "white_background", "derivative"] as const;
 type PhotoTag = (typeof VALID_TAGS)[number];
+type PhotoKind = (typeof VALID_KINDS)[number];
 
 async function requireAuth() {
   const session = await getServerSession(authOptions);
@@ -23,6 +25,18 @@ function parseTag(value: unknown): PhotoTag {
   return typeof value === "string" && VALID_TAGS.includes(value as PhotoTag)
     ? (value as PhotoTag)
     : "other";
+}
+
+function parseKind(value: unknown): PhotoKind {
+  return typeof value === "string" && VALID_KINDS.includes(value as PhotoKind)
+    ? (value as PhotoKind)
+    : "source";
+}
+
+function cleanText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export async function POST(
@@ -58,6 +72,12 @@ export async function POST(
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const tag = parseTag(formData.get("tag"));
+    const kind = parseKind(formData.get("kind"));
+    const isPrimary = formData.get("isPrimary") === "true";
+    const sourceUrl = cleanText(formData.get("sourceUrl"));
+    const provider = cleanText(formData.get("provider"));
+    const model = cleanText(formData.get("model"));
+    const costCents = Number(formData.get("costCents"));
 
     if (!file) {
       return NextResponse.json(
@@ -99,13 +119,36 @@ export async function POST(
     });
     const nextSort = (max._max.sortOrder ?? 0) + 1;
 
-    const photo = await prisma.productPhoto.create({
-      data: {
-        catalogItemId: product.id,
-        url: blob.url,
-        tag,
-        sortOrder: nextSort,
-      },
+    const photo = await prisma.$transaction(async (tx) => {
+      if (isPrimary) {
+        await tx.productPhoto.updateMany({
+          where: { catalogItemId: product.id, isPrimary: true },
+          data: { isPrimary: false },
+        });
+      }
+      return tx.productPhoto.create({
+        data: {
+          catalogItemId: product.id,
+          url: blob.url,
+          tag,
+          kind,
+          sourceUrl: sourceUrl ?? null,
+          isPrimary,
+          approvedBy: isPrimary ? auth.user!.email! : null,
+          approvedAt: isPrimary ? new Date() : null,
+          provider: provider ?? null,
+          model: model ?? null,
+          costCents: Number.isFinite(costCents) && costCents > 0 ? Math.round(costCents) : 0,
+          provenance: {
+            uploadedBy: auth.user!.email!,
+            originalFilename: file.name,
+            contentType: file.type,
+            size: file.size,
+            kind,
+          },
+          sortOrder: nextSort,
+        },
+      });
     });
 
     return NextResponse.json({ success: true, data: { photo } }, { status: 201 });

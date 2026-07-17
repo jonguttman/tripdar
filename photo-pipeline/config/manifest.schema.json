@@ -13,6 +13,7 @@
     "outputs",
     "quality_score",
     "label_fidelity_score",
+    "background_removal",
     "warnings",
     "approved_by",
     "approved_at"
@@ -47,6 +48,18 @@
     },
     "quality_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
     "label_fidelity_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "background_removal": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["provider", "model", "output_kind", "cost_usd", "usage"],
+      "properties": {
+        "provider": { "type": "string", "minLength": 1 },
+        "model": { "type": "string", "minLength": 1 },
+        "output_kind": { "enum": ["mask_or_cutout", "generative_image"] },
+        "cost_usd": { "type": "number", "minimum": 0 },
+        "usage": {}
+      }
+    },
     "warnings": {
       "type": "array",
       "items": { "type": "string" }

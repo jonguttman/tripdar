@@ -26,6 +26,13 @@ export interface PhotoManifest {
   outputs: PhotoManifestOutputs;
   quality_score: number | null;
   label_fidelity_score: number | null;
+  background_removal: {
+    provider: string;
+    model: string;
+    output_kind?: "mask_or_cutout" | "generative_image";
+    cost_usd: number;
+    usage: unknown;
+  } | null;
   warnings: string[];
   approved_by: string | null;
   approved_at: string | null;

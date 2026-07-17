@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tripdar-photos"
+version = "0.1.0"
+description = "Tripdar catalog-safe (Mode 1) product photo processing pipeline — deterministic, non-generative."
+requires-python = ">=3.9"
+dependencies = [
+  "pillow>=10,<13",
+  "opencv-python>=4.8,<5",
+  "rembg>=2.0,<3",
+  "numpy>=1.24,<3",
+  "pyyaml>=6,<7",
+]
+
+[project.scripts]
+tripdar-photos = "tripdar_photos.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+tripdar_photos = ["../config/*.json", "../config/*.txt"]

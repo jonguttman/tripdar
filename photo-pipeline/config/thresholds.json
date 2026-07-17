@@ -1,0 +1,16 @@
+{
+  "description": "Quality-assessment thresholds. A violation sets requires_review=true with a specific human-readable retake_reason.",
+  "blur_laplacian_min": 100,
+  "min_long_edge_px": 1200,
+  "glare_max_frac": 0.06,
+  "product_min_coverage": 0.12,
+  "product_max_coverage": 0.85,
+  "clip_edge_margin_px": 4,
+  "exposure": {
+    "underexposed_mean_max": 40,
+    "overexposed_mean_min": 235,
+    "clipped_highlight_frac_max": 0.25,
+    "clipped_shadow_frac_max": 0.25
+  },
+  "quality_score_min_auto_approve": 0.70
+}
