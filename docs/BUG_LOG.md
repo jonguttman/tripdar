@@ -4,6 +4,35 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-17-001: Phase 1 guide described unsafe metadata-free mixed-product intake
+
+**Symptoms:**
+- The operator guide said products from different brands could be processed together and that missing metadata only made filenames less readable.
+- The actual batch CLI correctly requires `--sku` and `--product` and applies that single identity to every image in the invocation.
+
+**Root Cause:**
+The human-facing guide described the intended ease of use rather than the shipped worker boundary. It omitted the required package-identity grouping stage between an immutable raw drop and the single-identity batch worker.
+
+**Fix:**
+- Rewrote the guide around the safe flow: immutable Desktop raw drop → package-visible grouping → human confirmation for ambiguity/near variants → one explicit-metadata worker invocation per confirmed group.
+- Added the `group` pre-processor, traceable source hashes/copies, exact-once coverage checks, and variant confirmation flags.
+
+**Files Modified:**
+- `docs/photo-pipeline/operator-guide.md`
+- `docs/photo-pipeline/README.md`
+- `scripts/photo-pipeline/README.md`
+- `scripts/photo-pipeline/cli.mjs`
+- `scripts/photo-pipeline/grouping.mjs`
+- `scripts/photo-pipeline/grouping.test.mjs`
+
+**Prevention:**
+Dry-run documented CLI examples before promising unattended intake. A batch option that accepts one identity must never be documented as safe for unknown mixed products.
+
+**Lesson Learned:**
+Fail closed at catalog identity boundaries. Automation may propose package groups, but visible variant ambiguity requires human confirmation before metadata reaches persistent product records.
+
+---
+
 ## BUG-2026-06-12-001: Product-scoped Myco admin routes missing partner ownership checks
 
 **Symptoms:**

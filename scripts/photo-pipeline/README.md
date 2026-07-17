@@ -5,10 +5,13 @@ Catalog-safe Phase 1 worker for product photo processing.
 ## Commands
 
 ```sh
+npm run photo:pipeline -- group --input-dir "$HOME/Desktop/Product Photos - Raw Drop" --output-dir "$HOME/Desktop/Product Photos - Grouped/$(date +%Y%m%d-%H%M%S)"
 npm run photo:pipeline -- single --input ./photo.png --sku NF-BM20 --brand "Nocturnal Farms" --product "Blue Moon" --variant "20mg" --view front
 npm run photo:pipeline -- batch --input-dir ./incoming --sku NF-BM20 --brand "Nocturnal Farms" --product "Blue Moon" --variant "20mg" --view front
 npm run photo:pipeline -- make-fixtures --out "$PAPERCLIP_SCRATCH_DIR/photo-fixtures"
 ```
+
+`group` is the safe mixed-folder pre-processor. It uses Claude vision to compare visible package identity across up to 20 images, copies exact-package matches into separate group folders, hashes every source into `grouping-manifest.json`, and flags unreadable or near-identical variants for human confirmation. It never edits the raw drop. After confirmation, invoke `batch` once per group with explicit `--sku` and `--product`; those fields intentionally apply to the entire worker invocation.
 
 By default the worker uses Prisma when `DATABASE_URL` is set. In a local checkout with no database configured it uses `tripdar-product-images/logs/photo-job-ledger.json`; pass `--ledger prisma` to require the DB-backed path.
 
