@@ -4,6 +4,40 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-25-001: Myco product strain typos silently dropped canonical strain data
+
+**Symptoms:**
+- A `StoreProductCatalog` product stored `strainSlug` as `"Golden Teacher"` instead of `"golden-teacher"`.
+- Customer-facing strain enrichment failed silently because the join expected the canonical strain id.
+
+**Root Cause:**
+The Myco admin form historically allowed free-text strain entry, and server write routes persisted that text without resolving it against the canonical strain catalog.
+
+**Fix:**
+- Added shared `normalizeStrainSlug()` / `isValidStrainSlug()` helpers in `src/domain/strain/data.ts`.
+- Myco create, update, and duplicate write paths normalize valid strain names/ids to canonical ids and reject unresolved non-empty values with HTTP 400.
+- Admin create/edit forms use the existing strain dropdown with a blank "none" option.
+- Added a drift check script for non-null `StoreProductCatalog.strainSlug` values.
+
+**Files Modified:**
+- `src/domain/strain/data.ts`
+- `src/app/api/admin/myco/route.ts`
+- `src/app/api/admin/myco/[id]/route.ts`
+- `src/app/api/admin/myco/[id]/duplicate/route.ts`
+- `src/app/api/v1/dosing-guide/[token]/route.tsx`
+- `src/app/admin/myco/page.tsx`
+- `scripts/check-myco-strain-slug-drift.mts`
+- `package.json`
+
+**Prevention:**
+- Catalog-like fields must resolve through the domain owner before persistence; UI dropdowns are guardrails, not the source of truth.
+- Read paths should warn on non-null lookup misses so drift becomes visible before users report missing data.
+
+**Lesson Learned:**
+Free-text joins against a fixed catalog fail quietly unless writes normalize and unresolved values are rejected at the boundary.
+
+---
+
 ## BUG-2026-06-12-001: Product-scoped Myco admin routes missing partner ownership checks
 
 **Symptoms:**

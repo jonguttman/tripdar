@@ -19,6 +19,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
+import { normalizeStrainSlug } from "@/domain/strain/data";
 
 export async function POST(
   _req: NextRequest,
@@ -52,6 +53,14 @@ export async function POST(
       return NextResponse.json({ success: false, error: { message: "Source product not found" } }, { status: 404 });
     }
 
+    const strainSlug = source.strainSlug ? normalizeStrainSlug(source.strainSlug) : null;
+    if (source.strainSlug && !strainSlug) {
+      return NextResponse.json(
+        { success: false, error: { message: `Unknown strainSlug "${source.strainSlug}"` } },
+        { status: 400 }
+      );
+    }
+
     const duplicated = await prisma.storeProductCatalog.create({
       data: {
         partnerId: source.partnerId,
@@ -59,7 +68,7 @@ export async function POST(
         format: source.format,
         brand: source.brand,
         brandId: source.brandId,
-        strainSlug: source.strainSlug,
+        strainSlug,
         productUnitMg: source.productUnitMg,
         unitsPerPack: source.unitsPerPack,
         totalDoseMg: source.totalDoseMg,

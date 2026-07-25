@@ -7,6 +7,7 @@ import { computeReadiness } from "@/domain/myco/readiness";
 import { normalizeFlavors } from "@/domain/myco/flavors";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
+import { normalizeStrainSlug } from "@/domain/strain/data";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -52,6 +53,15 @@ function cleanText(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseStrainSlug(value: unknown): { ok: true; value: string | null } | { ok: false; raw: string } {
+  const raw = cleanText(value);
+  if (!raw) return { ok: true, value: null };
+
+  const normalized = normalizeStrainSlug(raw);
+  if (!normalized) return { ok: false, raw };
+  return { ok: true, value: normalized };
 }
 
 function parseFormat(value: unknown): ProductFormat | undefined {
@@ -284,7 +294,19 @@ export async function PATCH(
     }
     if ("brand" in body) data.brand = cleanText(body.brand) ?? null;
     if ("brandId" in body) data.brandId = cleanText(body.brandId) ?? null;
-    if ("strainSlug" in body) data.strainSlug = cleanText(body.strainSlug) ?? null;
+    if ("strainSlug" in body) {
+      const strainSlug = parseStrainSlug(body.strainSlug);
+      if (!strainSlug.ok) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: { message: `Unknown strainSlug "${strainSlug.raw}"` },
+          },
+          { status: 400 }
+        );
+      }
+      data.strainSlug = strainSlug.value;
+    }
     if ("photoUrl" in body) data.photoUrl = cleanText(body.photoUrl) ?? null;
     if ("notes" in body) data.notes = cleanText(body.notes) ?? null;
     if ("onsetMinutes" in body) {

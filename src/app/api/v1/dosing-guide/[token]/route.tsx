@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { list } from "@vercel/blob";
 import { loadStrainData } from "@/domain/strain/blob-store";
-import { getStrainById } from "@/domain/strain/data";
+import { getStrainById, normalizeStrainSlug } from "@/domain/strain/data";
 import { mapDoseSensitivity } from "@/domain/recommendation-engine/strain-profiles";
 import { calculateAllDoseRanges } from "@/domain/dosing-guide/utils";
 
@@ -69,13 +69,16 @@ export async function GET(
 
   // Load strain data
   const strains = await loadStrainData();
-  const strain = strains.find(
-    (s) =>
-      s.id === guide.strainSlug ||
-      s.name.toLowerCase().replace(/\s+/g, "-") === guide.strainSlug
-  );
+  const normalizedStrainSlug = normalizeStrainSlug(guide.strainSlug);
+  const strain = normalizedStrainSlug
+    ? strains.find((s) => s.id === normalizedStrainSlug)
+    : undefined;
 
   if (!strain) {
+    console.warn("[dosing-guide] strain lookup miss", {
+      productId: guide.id,
+      strainSlug: guide.strainSlug,
+    });
     return NextResponse.json(
       {
         success: false,

@@ -12,6 +12,7 @@ import { computeReadiness } from "@/domain/myco/readiness";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 import { normalizeFlavors } from "@/domain/myco/flavors";
 import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
+import { normalizeStrainSlug } from "@/domain/strain/data";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -48,6 +49,15 @@ function cleanText(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function parseStrainSlug(value: unknown): { ok: true; value: string | null } | { ok: false; raw: string } {
+  const raw = cleanText(value);
+  if (!raw) return { ok: true, value: null };
+
+  const normalized = normalizeStrainSlug(raw);
+  if (!normalized) return { ok: false, raw };
+  return { ok: true, value: normalized };
 }
 
 function parseFormat(value: unknown): ProductFormat | null {
@@ -464,6 +474,7 @@ export async function POST(request: NextRequest) {
     const brandMicroUnits = parsePositiveIntOrNull(body.brandMicroUnits);
     const brandMiniUnits = parsePositiveIntOrNull(body.brandMiniUnits);
     const brandMacroUnits = parsePositiveIntOrNull(body.brandMacroUnits);
+    const strainSlug = parseStrainSlug(body.strainSlug);
     const brandDoseTiers = sanitizeBrandDoseTiers(body.brandDoseTiers);
     const legacyUnits = deriveLegacyBrandUnits(brandDoseTiers);
     if (countSubmittedBrandDoseTiers(body.brandDoseTiers) > brandDoseTiers.length) {
@@ -494,6 +505,16 @@ export async function POST(request: NextRequest) {
           error: {
             message: "partnerId, productName, format, and productUnitMg are required",
           },
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!strainSlug.ok) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: { message: `Unknown strainSlug "${strainSlug.raw}"` },
         },
         { status: 400 }
       );
@@ -531,7 +552,7 @@ export async function POST(request: NextRequest) {
         intakeStatus: parseIntakeStatus(body.intakeStatus),
         brand: cleanText(body.brand) ?? null,
         brandId,
-        strainSlug: cleanText(body.strainSlug) ?? null,
+        strainSlug: strainSlug.value,
         productUnitMg,
         unitsPerPack: unitsPerPack ?? null,
         totalDoseMg: totalDoseMg ?? null,
