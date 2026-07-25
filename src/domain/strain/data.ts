@@ -289,11 +289,14 @@ function slugifyStrainValue(value: string): string {
     .replace(/^-|-$/g, "");
 }
 
-export function normalizeStrainSlug(value: string): string | null {
+export function normalizeStrainSlug(
+  value: string,
+  catalog: ReadonlyArray<Pick<InternalStrain, "id" | "name">> = STRAIN_DATA
+): string | null {
   const slug = slugifyStrainValue(value);
   if (!slug) return null;
 
-  const strain = STRAIN_DATA.find(s => s.id === slug || slugifyStrainValue(s.name) === slug);
+  const strain = catalog.find(s => s.id === slug || slugifyStrainValue(s.name) === slug);
   return strain?.id ?? null;
 }
 

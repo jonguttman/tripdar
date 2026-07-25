@@ -69,7 +69,7 @@ export async function GET(
 
   // Load strain data
   const strains = await loadStrainData();
-  const normalizedStrainSlug = normalizeStrainSlug(guide.strainSlug);
+  const normalizedStrainSlug = normalizeStrainSlug(guide.strainSlug, strains);
   const strain = normalizedStrainSlug
     ? strains.find((s) => s.id === normalizedStrainSlug)
     : undefined;

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
+import { loadStrainData } from "../src/domain/strain/blob-store.ts";
 import { normalizeStrainSlug } from "../src/domain/strain/data.ts";
 
 function loadDotenvFile(path: string) {
@@ -30,6 +31,7 @@ loadDotenvFile(resolve(process.cwd(), ".env.local"));
 const prisma = new PrismaClient();
 
 try {
+  const strains = await loadStrainData();
   const products = await prisma.storeProductCatalog.findMany({
     where: { strainSlug: { not: null } },
     select: { id: true, productName: true, strainSlug: true },
@@ -38,7 +40,7 @@ try {
 
   const nonEmptyProducts = products.filter((product) => product.strainSlug?.trim());
   const misses = nonEmptyProducts.filter(
-    (product) => product.strainSlug && !normalizeStrainSlug(product.strainSlug)
+    (product) => product.strainSlug && !normalizeStrainSlug(product.strainSlug, strains)
   );
 
   if (misses.length > 0) {
