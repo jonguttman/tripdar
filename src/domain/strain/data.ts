@@ -281,20 +281,36 @@ export function getStrainById(id: string): InternalStrain | undefined {
   return STRAIN_DATA.find(s => s.id === id);
 }
 
+function slugifyStrainValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+export function normalizeStrainSlug(
+  value: string,
+  catalog: ReadonlyArray<Pick<InternalStrain, "id" | "name">> = STRAIN_DATA
+): string | null {
+  const slug = slugifyStrainValue(value);
+  if (!slug) return null;
+
+  const strain = catalog.find(s => s.id === slug || slugifyStrainValue(s.name) === slug);
+  return strain?.id ?? null;
+}
+
+export function isValidStrainSlug(value: string): boolean {
+  return normalizeStrainSlug(value) !== null;
+}
+
 /**
  * Get strain by slug (URL-safe name)
  */
 export function getStrainBySlug(slug: string): InternalStrain | undefined {
-  return STRAIN_DATA.find(s => {
-    // Check by ID first (handles cases like B+ where id="b-plus" but name-derived slug="b")
-    if (s.id === slug) return true;
-    // Then check by name-derived slug
-    const strainSlug = s.name
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-    return strainSlug === slug;
-  });
+  const normalized = normalizeStrainSlug(slug);
+  if (!normalized) return undefined;
+  return getStrainById(normalized);
 }
 
 /**

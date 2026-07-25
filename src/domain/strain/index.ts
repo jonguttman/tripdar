@@ -11,4 +11,6 @@ export {
   getStrainById,
   getStrainBySlug,
   getStrainCount,
+  isValidStrainSlug,
+  normalizeStrainSlug,
 } from "./data";

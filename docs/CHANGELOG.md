@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.13.1] - 2026-07-25
+
+### Fixed
+- Myco admin product `strainSlug` writes now normalize against the canonical strain catalog and reject unresolved values with HTTP 400. Added a StoreProductCatalog drift check script and warning logs for dosing-guide strain lookup misses.
+
 ## [1.13.0] - 2026-07-16
 
 ### Added

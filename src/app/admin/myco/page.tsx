@@ -1327,7 +1327,7 @@ export default function MycoAdminPage() {
               value={newProduct.strainSlug}
               onChange={(e) => setNewProduct({ ...newProduct, strainSlug: e.target.value })}
             >
-              <option value="">Unspecified</option>
+              <option value="">— none —</option>
               {strains.map((s) => (
                 <option key={s.id} value={s.slug}>{s.name}</option>
               ))}
@@ -2085,7 +2085,7 @@ export default function MycoAdminPage() {
                             value={editDraft.strainSlug}
                             onChange={(e) => setEditDraft({ ...editDraft, strainSlug: e.target.value })}
                           >
-                            <option value="">Unspecified</option>
+                            <option value="">— none —</option>
                             {strains.map((s) => (
                               <option key={s.id} value={s.slug}>{s.name}</option>
                             ))}
