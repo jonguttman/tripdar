@@ -25,14 +25,17 @@ interface Reviewer {
   id: string;
   name: string;
   hasPin: boolean;
+  /** False only for an unclaimed name once the enrollment window has shut (KEWL-2379). */
+  claimable: boolean;
   lockedOut: boolean;
 }
 
 interface Bootstrap {
   partnerName: string;
-  /** The link identifies the reviewer (KEWL-2364) — there is no "pick your name" step. */
-  signedIn: boolean;
-  reviewer: Reviewer;
+  /** One shared link for the roster (KEWL-2379) — you pick your name, then your PIN. */
+  signedInAs: string | null;
+  enrollment: { open: boolean; closesAt: string | null };
+  reviewers: Reviewer[];
 }
 
 interface SessionResult {
@@ -254,12 +257,12 @@ export default function StaffReviewClient({ token }: { token: string }) {
     [token]
   );
 
-  /** Session expired mid-flow — drop back to the PIN screen without losing the link. */
+  /** Session expired mid-flow — drop back to the picker without losing the link. */
   const requireSignIn = useCallback(() => {
     setDetail(null);
     setList(null);
     setScreen("identify");
-    setBootstrap((prev) => (prev ? { ...prev, signedIn: false } : prev));
+    setBootstrap((prev) => (prev ? { ...prev, signedInAs: null } : prev));
   }, []);
 
   const loadList = useCallback(async () => {
@@ -378,7 +381,7 @@ export default function StaffReviewClient({ token }: { token: string }) {
         return;
       }
       setBootstrap(res.data);
-      if (res.data.signedIn) {
+      if (res.data.signedInAs) {
         setScreen("list");
         void loadList();
       }
@@ -453,19 +456,18 @@ function IdentifyScreen({
   onSignedIn: () => void;
   request: <T,>(path: string, init?: RequestInit) => Promise<ApiResult<T>>;
 }) {
-  const reviewer = bootstrap.reviewer;
+  const [picked, setPicked] = useState<Reviewer | null>(null);
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function signIn() {
+  async function signIn(reviewer: Reviewer) {
     setSubmitting(true);
     setError(null);
-    // No employeeId: the link says who this is. Sending it would be the KEWL-2364 hole.
     const res = await request<SessionResult>("/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ employeeId: reviewer.id, pin }),
     });
     setSubmitting(false);
     if (!res.ok) {
@@ -476,29 +478,110 @@ function IdentifyScreen({
     onSignedIn();
   }
 
-  return (
-    <main className="mx-auto max-w-2xl p-4 sm:p-6">
+  const header = (
+    <>
       <p className="text-sm text-neutral-500">{bootstrap.partnerName || "Staff review"}</p>
       <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Catalog review</h1>
+    </>
+  );
 
-      {reviewer.lockedOut ? (
-        <section className="mt-6">
+  /* --- Step 1: who are you? One shared link, so the roster is the picker. --- */
+  if (!picked) {
+    return (
+      <main className="mx-auto max-w-2xl p-4 sm:p-6">
+        {header}
+        <h2 className="mt-6 text-base font-medium text-neutral-800">Who are you?</h2>
+        <p className="mt-1 text-sm text-neutral-600">
+          Tap your name. First time, you'll pick a 4-digit PIN — after that it's just your PIN.
+        </p>
+
+        <ul className="mt-4 divide-y divide-neutral-200 rounded-lg border border-neutral-300">
+          {bootstrap.reviewers.map((reviewer) => {
+            // Unclaimed + window shut: say so here rather than after a wasted PIN attempt.
+            const blocked = !reviewer.claimable;
+            return (
+              <li key={reviewer.id}>
+                <button
+                  type="button"
+                  disabled={blocked}
+                  onClick={() => {
+                    setPicked(reviewer);
+                    setPin("");
+                    setError(null);
+                  }}
+                  className="flex min-h-[64px] w-full items-center justify-between gap-3 px-4 py-3 text-left disabled:opacity-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-base font-medium text-neutral-950">
+                      {reviewer.name}
+                    </span>
+                    <span className="block text-xs text-neutral-500">
+                      {blocked
+                        ? "PIN sign-up closed — ask Jon"
+                        : reviewer.hasPin
+                          ? "Enter your PIN"
+                          : "Pick your PIN"}
+                    </span>
+                  </span>
+                  <span aria-hidden className="shrink-0 text-neutral-400">
+                    ›
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        {bootstrap.enrollment.open ? (
+          <p className="mt-4 text-xs text-neutral-500">
+            New sign-ups close{" "}
+            {bootstrap.enrollment.closesAt
+              ? new Date(bootstrap.enrollment.closesAt).toLocaleString()
+              : "once everyone has set a PIN"}
+            .
+          </p>
+        ) : (
+          <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+            PIN sign-up is closed. If you haven't set one yet, ask Jon to reopen it.
+          </p>
+        )}
+      </main>
+    );
+  }
+
+  /* --- Step 2: PIN for the picked name. --- */
+  return (
+    <main className="mx-auto max-w-2xl p-4 sm:p-6">
+      {header}
+
+      <button
+        type="button"
+        onClick={() => {
+          setPicked(null);
+          setPin("");
+          setError(null);
+        }}
+        className="mt-4 min-h-[44px] text-sm font-medium text-neutral-700 underline"
+      >
+        ← Not {picked.name}?
+      </button>
+
+      {picked.lockedOut ? (
+        <section className="mt-4">
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
             Too many PIN tries. Try again in a few minutes.
           </p>
         </section>
       ) : (
-        <section className="mt-6 space-y-4">
+        <section className="mt-4 space-y-4">
           <div>
             <h2 className="text-base font-medium text-neutral-800">
-              {reviewer.hasPin
-                ? `Hi ${reviewer.name} — enter your PIN`
-                : `Hi ${reviewer.name} — pick a PIN`}
+              {picked.hasPin ? `Hi ${picked.name} — enter your PIN` : `Hi ${picked.name} — pick a PIN`}
             </h2>
             <p className="mt-1 text-sm text-neutral-600">
-              {reviewer.hasPin
+              {picked.hasPin
                 ? "Four digits, so your reviews stay filed under your name."
-                : "This link is yours. Choose 4 digits you'll remember — it keeps anyone else who gets the link out of your reviews. Pick something other than 1234."}
+                : "Choose 4 digits you'll remember — it keeps anyone else who gets this link out of your reviews. Pick something other than 1234."}
             </p>
           </div>
 
@@ -522,11 +605,11 @@ function IdentifyScreen({
 
           <button
             type="button"
-            onClick={() => void signIn()}
+            onClick={() => void signIn(picked)}
             disabled={submitting || pin.length !== 4}
             className="min-h-[52px] w-full rounded-lg bg-neutral-950 px-4 text-base font-medium text-white disabled:opacity-50"
           >
-            {submitting ? "Checking…" : reviewer.hasPin ? "Start reviewing" : "Set PIN and start"}
+            {submitting ? "Checking…" : picked.hasPin ? "Start reviewing" : "Set PIN and start"}
           </button>
         </section>
       )}

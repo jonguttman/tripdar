@@ -87,7 +87,17 @@ describe("reviewer session", () => {
     expect(verifyReviewerSession(value, { tokenId: "tok-1", secret: SECRET })).toEqual({
       ok: true,
       employeeId: "emp-1",
+      // Returned so an admin PIN reset can retire sessions signed before it (KEWL-2379).
+      issuedAt: base.issuedAt,
     });
+  });
+
+  it("will not accept a back-dated issuedAt — it is inside the HMAC'd payload", () => {
+    // The reset-revocation check trusts `issuedAt`, so a client must not be able to move it.
+    const value = signReviewerSession(base);
+    const tampered = value.replace(String(base.issuedAt), String(base.issuedAt - 60_000));
+
+    expect(verifyReviewerSession(tampered, { tokenId: "tok-1", secret: SECRET }).ok).toBe(false);
   });
 
   it("cannot be replayed on a different staff link", () => {

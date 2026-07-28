@@ -125,10 +125,14 @@ export function signReviewerSession(input: {
 
 export const REVIEWER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // remembered per device
 
+/**
+ * `issuedAt` is returned so callers can retire sessions signed before a PIN was reset
+ * (KEWL-2379). It is inside the HMAC'd payload, so it cannot be back-dated by a client.
+ */
 export function verifyReviewerSession(
   value: string | null | undefined,
   input: { tokenId: string; secret: string; now?: number }
-): { ok: true; employeeId: string } | { ok: false } {
+): { ok: true; employeeId: string; issuedAt: number } | { ok: false } {
   if (!value) return { ok: false };
   const parts = value.split(".");
   if (parts.length !== 4) return { ok: false };
@@ -147,5 +151,5 @@ export function verifyReviewerSession(
   const expectedBuffer = Buffer.from(expected);
   if (macBuffer.length !== expectedBuffer.length) return { ok: false };
   if (!crypto.timingSafeEqual(macBuffer, expectedBuffer)) return { ok: false };
-  return { ok: true, employeeId };
+  return { ok: true, employeeId, issuedAt };
 }
