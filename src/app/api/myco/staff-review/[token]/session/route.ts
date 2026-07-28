@@ -1,8 +1,12 @@
 /**
- * KEWL-2335 — reviewer identification.
+ * KEWL-2335 — reviewer sign-in.
  *
- * POST { employeeId, pin } — sets the PIN on first use, verifies it thereafter.
+ * POST { pin } — sets the PIN on first use, verifies it thereafter.
  * DELETE — signs out on this device.
+ *
+ * The reviewer is whoever the link was issued to. `employeeId` is deliberately NOT
+ * accepted from the request body: per KEWL-2364, letting the client name the employee
+ * turned first-use PIN setup into an unauthenticated identity claim.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -20,7 +24,7 @@ import {
   verifyPin,
 } from "@/domain/myco/reviewerPin";
 import {
-  resolveStaffLink,
+  resolveBoundReviewer,
   REVIEWER_SESSION_COOKIE,
   reviewerSessionSecret,
 } from "@/domain/myco/staffReviewAuth";
@@ -33,24 +37,18 @@ function fail(message: string, status: number, extra: Record<string, unknown> = 
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const link = await resolveStaffLink(token);
-  if (!link.ok) return link.response;
+  const bound = await resolveBoundReviewer(token);
+  if (!bound.ok) return bound.response;
+  const reviewer = bound.reviewer;
 
-  const body = (await request.json().catch(() => ({}))) as { employeeId?: string; pin?: string };
-  const employeeId = typeof body.employeeId === "string" ? body.employeeId : "";
+  const body = (await request.json().catch(() => ({}))) as { pin?: unknown };
   const pin = body.pin;
 
   if (!isValidPinFormat(pin)) return fail("Your PIN is 4 digits.", 400);
 
-  const employee = await prisma.mycoEmployee.findFirst({
-    where: { id: employeeId, partnerId: link.partnerId, active: true, optedOut: false },
-    select: { id: true, name: true, pinHash: true, pinFailedAttempts: true, pinLockedUntil: true },
-  });
-  if (!employee) return fail("Pick your name from the list.", 404);
-
   const lockState = {
-    pinFailedAttempts: employee.pinFailedAttempts,
-    pinLockedUntil: employee.pinLockedUntil,
+    pinFailedAttempts: reviewer.pinFailedAttempts,
+    pinLockedUntil: reviewer.pinLockedUntil,
   };
   if (isLockedOut(lockState)) {
     return fail(
@@ -60,18 +58,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     );
   }
 
-  const firstUse = !employee.pinHash;
+  const firstUse = !reviewer.pinHash;
   if (firstUse) {
     if (isTooObviousPin(pin)) return fail("Pick a less guessable 4 digits.", 400);
-    await prisma.mycoEmployee.update({
-      where: { id: employee.id },
+    // `pinHash: null` in the WHERE clause makes enrollment a compare-and-set: two devices
+    // racing first use cannot both win, and a set PIN can never be overwritten here.
+    const claimed = await prisma.mycoEmployee.updateMany({
+      where: { id: reviewer.id, pinHash: null },
       data: { pinHash: await hashPin(pin), pinSetAt: new Date(), ...successfulAttemptPatch() },
     });
+    if (claimed.count === 0) return fail("That PIN doesn't match.", 401);
   } else {
-    const valid = await verifyPin(pin, employee.pinHash);
+    const valid = await verifyPin(pin, reviewer.pinHash);
     if (!valid) {
       const patch = failedAttemptPatch(lockState);
-      await prisma.mycoEmployee.update({ where: { id: employee.id }, data: patch });
+      await prisma.mycoEmployee.update({ where: { id: reviewer.id }, data: patch });
       const locked = Boolean(patch.pinLockedUntil);
       return fail(
         locked ? "Too many tries. Locked for 15 minutes." : "That PIN doesn't match.",
@@ -79,21 +80,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
     await prisma.mycoEmployee.update({
-      where: { id: employee.id },
+      where: { id: reviewer.id },
       data: successfulAttemptPatch(),
     });
   }
 
   const value = signReviewerSession({
-    employeeId: employee.id,
-    tokenId: link.tokenId,
+    employeeId: reviewer.id,
+    tokenId: bound.tokenId,
     issuedAt: Date.now(),
     secret: reviewerSessionSecret(),
   });
 
   const response = NextResponse.json({
     success: true,
-    data: { employeeId: employee.id, employeeName: employee.name, firstUse },
+    data: { employeeId: reviewer.id, employeeName: reviewer.name, firstUse },
   });
   response.cookies.set(REVIEWER_SESSION_COOKIE, value, {
     httpOnly: true,

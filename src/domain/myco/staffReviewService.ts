@@ -7,9 +7,11 @@
  * no parallel storage.
  */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   CATALOG_FIELD_SPECS,
+  CONFIRMED_ABSENT_VALUE,
   PHOTO_CHECK_FIELD,
   REVIEWER_NOTE_FIELD,
   type CatalogFieldSpec,
@@ -320,3 +322,117 @@ export function fieldsOwedBy(input: {
 
 /** Reserved log field names that are answers about the product, not catalog columns. */
 export const NON_COLUMN_FIELDS = new Set<string>([PHOTO_CHECK_FIELD, REVIEWER_NOTE_FIELD]);
+
+export interface ProjectionRepairResult {
+  catalogItemId: string;
+  fieldsRecomputed: number;
+  cacheRowsChanged: string[];
+  columnsChanged: string[];
+}
+
+/**
+ * Repair path for the derived projections (KEWL-2364).
+ *
+ * `CatalogFieldChange` is the append-only source of truth; `CatalogFieldVerificationState`
+ * and the `StoreProductCatalog` columns are caches derived from it. The submit route
+ * writes all three in one transaction, so they should never diverge — but because the
+ * ledger alone is authoritative, divergence must be *repairable* rather than merely
+ * unlikely. This rebuilds both projections from the log for one item and reports what it
+ * had to change; an empty report means the projections were already correct.
+ *
+ * Safe to run against healthy rows — it is idempotent and never writes to the ledger.
+ */
+export async function recomputeCatalogItemProjection(
+  catalogItemId: string
+): Promise<ProjectionRepairResult> {
+  const rules = await ensureFieldRules(null);
+
+  const item = await prisma.storeProductCatalog.findUniqueOrThrow({
+    where: { id: catalogItemId },
+    include: {
+      catalogFieldChanges: {
+        orderBy: { createdAt: "asc" },
+        select: {
+          fieldName: true,
+          submittedValue: true,
+          actorType: true,
+          actorIdentity: true,
+          source: true,
+          disposition: true,
+          createdAt: true,
+        },
+      },
+      fieldVerificationStates: true,
+    },
+  });
+
+  const fieldStates = computeFieldStates(rules, item.catalogFieldChanges);
+  const existingCache = new Map(
+    (item.fieldVerificationStates ?? []).map((row) => [row.fieldName, row])
+  );
+  const itemRecord = item as unknown as Record<string, unknown>;
+
+  const cacheRowsChanged: string[] = [];
+  const columnsChanged: string[] = [];
+  const columnUpdates: Record<string, unknown> = {};
+
+  for (const rule of rules) {
+    const state = fieldStates[rule.fieldName];
+    if (!state) continue;
+
+    const cached = existingCache.get(rule.fieldName);
+    const cacheDiverged =
+      !cached ||
+      cached.state !== state.state ||
+      cached.requiredConfirmations !== state.requiredConfirmations ||
+      cached.confirmationsCount !== state.confirmationsCount ||
+      JSON.stringify(cached.confirmedValue ?? null) !== JSON.stringify(state.confirmedValue ?? null);
+
+    if (cacheDiverged) cacheRowsChanged.push(rule.fieldName);
+
+    if (rule.catalogColumn && state.state === "confirmed") {
+      const expected =
+        state.confirmedValue === CONFIRMED_ABSENT_VALUE ? null : state.confirmedValue;
+      const actual = itemRecord[rule.catalogColumn] ?? null;
+      if (JSON.stringify(actual) !== JSON.stringify(expected ?? null)) {
+        columnUpdates[rule.catalogColumn] = expected;
+        columnsChanged.push(rule.catalogColumn);
+      }
+    }
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const fieldName of cacheRowsChanged) {
+      const state = fieldStates[fieldName];
+      const payload = {
+        state: state.state,
+        requiredConfirmations: state.requiredConfirmations,
+        confirmationsCount: state.confirmationsCount,
+        confirmedValue:
+          state.confirmedValue === null || state.confirmedValue === undefined
+            ? Prisma.DbNull
+            : (state.confirmedValue as Prisma.InputJsonValue),
+        reviewedAt: new Date(),
+      };
+      await tx.catalogFieldVerificationState.upsert({
+        where: { catalogItemId_fieldName: { catalogItemId, fieldName } },
+        create: { catalogItemId, fieldName, ...payload },
+        update: payload,
+      });
+    }
+
+    if (Object.keys(columnUpdates).length > 0) {
+      await tx.storeProductCatalog.update({
+        where: { id: catalogItemId },
+        data: columnUpdates as never,
+      });
+    }
+  });
+
+  return {
+    catalogItemId,
+    fieldsRecomputed: rules.length,
+    cacheRowsChanged,
+    columnsChanged,
+  };
+}
