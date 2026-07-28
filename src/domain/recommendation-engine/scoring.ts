@@ -14,6 +14,7 @@ import type {
   DoseSensitivity,
 } from "./types";
 import { CANONICAL_DOSE_LEVELS, DOSE_SENSITIVITY_MODIFIERS } from "./types";
+import { computeSuggestedUnits } from "./doseBasis";
 
 // =============================================================================
 // Cosine Similarity
@@ -188,7 +189,15 @@ export interface ScoreOptions {
     cautionFlags?: { show_sensitivity?: boolean; custom?: string };
     productName?: string;
     productUrl?: string;
+    /**
+     * Verified active-compound mg per unit. Active-dose fact only — NEVER a
+     * divisor for the dried-mushroom-equivalent canonical ladder.
+     */
     productUnitMg?: number;
+    /** Material mass in mg per unit; the only candidate ladder divisor. */
+    productUnitMaterialMassMg?: number;
+    /** Basis that productUnitMaterialMassMg is stated on. Must be explicit. */
+    productMaterialMassBasis?: string;
     productFormat?: string;
     productPhotoUrl?: string;
     strengthOffset?: "standard" | "stronger" | "lighter";
@@ -235,20 +244,30 @@ export function scoreStrains(options: ScoreOptions): ScoredRecommendation[] {
       highMg: Math.round(baseDoseRange.highMg * strengthMultiplier),
     };
 
-    // Product unit calculation
+    // Product recommendation — eligibility is separate from unit-count emission.
+    // A mapped product always gets name/photo/link; the unit count is added only
+    // when the product carries a divisor on the same basis as the ladder.
     let product: ScoredRecommendation["product"] | undefined;
-    if (adminConfig?.productName && adminConfig?.productUnitMg && adminConfig.productUnitMg > 0) {
-      const lowUnits = Math.ceil(doseRange.lowMg / adminConfig.productUnitMg);
-      const highUnits = Math.ceil(doseRange.highMg / adminConfig.productUnitMg);
+    if (adminConfig?.productName) {
       product = {
         name: adminConfig.productName,
         url: adminConfig.productUrl || "",
-        suggestedUnits: `${lowUnits}-${highUnits}`,
         format: adminConfig.productFormat || "capsule",
         photoUrl: adminConfig.productPhotoUrl,
         strengthOffset,
         strengthRationale: adminConfig.strengthRationale,
       };
+
+      // Like-for-like guard. productUnitMg (active-compound mg) is deliberately
+      // not consulted here: dividing dried-mushroom mg by active-compound mg is
+      // the KEWL-2346 defect and overstates counts by orders of magnitude.
+      const suggestedUnits = computeSuggestedUnits(doseRange, {
+        unitMaterialMassMg: adminConfig.productUnitMaterialMassMg,
+        materialMassBasis: adminConfig.productMaterialMassBasis,
+      });
+      if (suggestedUnits) {
+        product.suggestedUnits = suggestedUnits;
+      }
     }
 
     // Cautions

@@ -516,7 +516,13 @@
                 if (result.product) {
                     html += '<div class="tripdar-rec__result-product">';
                     html += '<span class="tripdar-rec__product-name">' + this.escapeHtml(result.product.name) + '</span>';
-                    html += '<span class="tripdar-rec__product-units">' + this.escapeHtml(result.product.suggestedUnits) + ' ' + this.escapeHtml(result.product.format) + 's</span>';
+                    // suggestedUnits is optional: it is only sent when the product
+                    // has a dose divisor on the same basis as the canonical ladder.
+                    // Omit the whole span when absent — never render a bare
+                    // "capsules"/"gummies" label with no count in front of it.
+                    if (result.product.suggestedUnits) {
+                        html += '<span class="tripdar-rec__product-units">' + this.escapeHtml(result.product.suggestedUnits) + ' ' + this.escapeHtml(result.product.format) + 's</span>';
+                    }
                     if (result.product.url) {
                         html += '<a href="' + this.escapeHtml(result.product.url) + '" class="tripdar-rec__product-link" target="_blank" rel="noopener">View Product</a>';
                     }

@@ -10,6 +10,7 @@ import { loadStrainData } from "@/domain/strain/blob-store";
 import type { RecommendationRequest, RecommendationResponse } from "./types";
 import { generateAllProfiles } from "./strain-profiles";
 import { scoreStrains } from "./scoring";
+import { isSupportedActiveCompound } from "./doseBasis";
 
 // =============================================================================
 // Main Recommendation Function
@@ -30,6 +31,8 @@ export async function generateRecommendations(
     productName?: string;
     productUrl?: string;
     productUnitMg?: number;
+    productUnitMaterialMassMg?: number;
+    productMaterialMassBasis?: string;
     productFormat?: string;
     productPhotoUrl?: string;
     availability: string;
@@ -44,6 +47,8 @@ export async function generateRecommendations(
       productName: c.productName ?? undefined,
       productUrl: c.productUrl ?? undefined,
       productUnitMg: c.productUnitMg ?? undefined,
+      productUnitMaterialMassMg: c.productUnitMaterialMassMg ?? undefined,
+      productMaterialMassBasis: c.productMaterialMassBasis ?? undefined,
       productFormat: c.productFormat ?? undefined,
       availability: c.availability,
       doseSensitivityOverride: c.doseSensitivityOverride ?? undefined,
@@ -60,11 +65,17 @@ export async function generateRecommendations(
   });
   for (const item of catalogItems) {
     if (!item.strainSlug) continue;
+    // Fail-closed compound gate: only the psilocybin family this engine's dose
+    // math is built for may enter candidates. unknown / muscimol / functional-only
+    // / unrecognized are excluded regardless of any legacy dose fields.
+    if (!isSupportedActiveCompound(item.activeCompound)) continue;
     configMap.set(item.strainSlug, {
       ...(configMap.get(item.strainSlug) ?? { availability: "in_stock" }),
       productName: item.productName,
       productUrl: "",
       productUnitMg: item.productUnitMg ?? undefined,
+      productUnitMaterialMassMg: item.unitMaterialMassMg ?? undefined,
+      productMaterialMassBasis: item.materialMassBasis ?? undefined,
       productFormat: item.format,
       productPhotoUrl: item.photoUrl ?? undefined,
       availability: "in_stock",
@@ -131,7 +142,10 @@ export async function generateRecommendations(
           doseLevel: result.doseLevel,
           doseLowMg: result.doseLowMg,
           doseHighMg: result.doseHighMg,
-          productUnits: result.product ? parseInt(result.product.suggestedUnits.split("-")[1] || "0") : null,
+          // A product without basis-compatible unit math persists null rather
+          // than a fabricated count. Historical rows carry no basis metadata,
+          // so they are not audit-quality for dose reconstruction.
+          productUnits: parseHighUnitCount(result.product?.suggestedUnits),
           cautionFlags: result.cautions.length > 0 ? JSON.stringify(result.cautions) : null,
         })),
       },
@@ -227,6 +241,17 @@ export async function upsertStrainConfig(
 // =============================================================================
 // Helpers
 // =============================================================================
+
+/**
+ * Pull the high end out of a "low-high" suggestedUnits range for persistence.
+ * Returns null when unit math was suppressed or the range is unparseable.
+ */
+export function parseHighUnitCount(suggestedUnits: string | undefined): number | null {
+  if (!suggestedUnits) return null;
+
+  const high = Number.parseInt(suggestedUnits.split("-")[1] ?? "", 10);
+  return Number.isFinite(high) ? high : null;
+}
 
 function generateSessionToken(): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
