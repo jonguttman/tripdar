@@ -14,7 +14,9 @@
  * supported active compound, but dividing the dried-mushroom-equivalent ladder
  * by 1 mg yields four-digit unit counts in the overdose direction.
  *
- * Both gates fail closed: unknown, missing, and unrecognized values are denied.
+ * The candidacy gate admits legacy unknown/missing compound values so existing
+ * catalog products keep their identity, but excludes explicitly unsupported
+ * and unrecognized non-null compounds. The dose-output gate remains fail closed.
  *
  * See docs/architecture/2026-07-28-kewl-2346-dose-ladder-basis.md.
  */
@@ -44,6 +46,16 @@ export const SUPPORTED_ACTIVE_COMPOUNDS: readonly string[] = ["psilocybin", "psi
 export function isSupportedActiveCompound(value: string | null | undefined): boolean {
   if (!value) return false;
   return SUPPORTED_ACTIVE_COMPOUNDS.includes(value);
+}
+
+/**
+ * Compounds that must not enter the current psilocybin-family recommender.
+ * Legacy unknown/blank/missing values remain candidates, but cannot emit dose
+ * output because isSupportedActiveCompound() still rejects them.
+ */
+export function isCandidacyExcludedCompound(value: string | null | undefined): boolean {
+  if (!value || value === "unknown") return false;
+  return !SUPPORTED_ACTIVE_COMPOUNDS.includes(value);
 }
 
 // =============================================================================

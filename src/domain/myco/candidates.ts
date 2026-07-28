@@ -2,13 +2,15 @@
  * Recommendation candidate loader — the single code path that decides which
  * products may ever be shown to a customer.
  *
- * Gate: active, not archived, AND recommendation-ready per computeReadiness.
- * Active compound is deliberately not a candidacy concern; unsupported or
- * unknown compounds keep their product identity but cannot emit dose guidance.
+ * Gate: active, not archived, recommendation-ready per computeReadiness, and
+ * not explicitly unsupported by the current psilocybin-family recommender.
+ * Legacy unknown/blank/missing compounds retain product identity but cannot
+ * emit dose guidance.
  * Server-only (imports prisma).
  */
 
 import { prisma } from "@/lib/prisma";
+import { isCandidacyExcludedCompound } from "@/domain/recommendation-engine/doseBasis";
 import { computeReadiness } from "./readiness";
 import { normalizeVibeScores } from "./vibes";
 import type { ProductCandidate } from "./scoring";
@@ -64,6 +66,8 @@ export async function getRecommendableProducts(partnerId: string): Promise<Produ
 
   const candidates: ProductCandidate[] = [];
   for (const item of items) {
+    if (isCandidacyExcludedCompound(item.activeCompound)) continue;
+
     const readiness = computeReadiness({
       format: item.format,
       brand: item.brand,

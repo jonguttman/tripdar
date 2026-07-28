@@ -37,7 +37,7 @@ function readyCatalogRow(id: string, activeCompound: string | null) {
   };
 }
 
-describe("getRecommendableProducts compound-independent candidacy", () => {
+describe("getRecommendableProducts compound candidacy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -53,8 +53,8 @@ describe("getRecommendableProducts compound-independent candidacy", () => {
     expect(candidates.every((candidate) => candidate.dose.activeCompound === "unknown")).toBe(true);
   });
 
-  it.each(["unknown", "muscimol", "functional-only", "lions-mane", "", null])(
-    "retains product identity for %s so compound support only gates dose output",
+  it.each(["unknown", "", null])(
+    "retains product identity for legacy %s compound values while dose output stays gated",
     async (activeCompound) => {
       prismaMock.storeProductCatalog.findMany.mockResolvedValue([
         readyCatalogRow("candidate", activeCompound),
@@ -68,6 +68,17 @@ describe("getRecommendableProducts compound-independent candidacy", () => {
         productName: "Product candidate",
         dose: { activeCompound },
       });
+    },
+  );
+
+  it.each(["muscimol", "functional-only", "lions-mane"])(
+    "excludes unsupported compound %s despite complete legacy readiness inputs",
+    async (activeCompound) => {
+      prismaMock.storeProductCatalog.findMany.mockResolvedValue([
+        readyCatalogRow("candidate", activeCompound),
+      ]);
+
+      await expect(getRecommendableProducts("partner-1")).resolves.toEqual([]);
     },
   );
 });
