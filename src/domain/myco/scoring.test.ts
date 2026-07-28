@@ -21,6 +21,7 @@ function candidate(overrides: Partial<ProductCandidate> & { id: string }): Produ
     strengthRationale: null,
     dose: {
       format: "capsule",
+      activeCompound: "psilocybin",
       productUnitMg: 100,
       brandDoseTiers: null,
       brandMicroUnits: 1,

@@ -146,6 +146,28 @@ ADMIN, ANALYST, PRODUCTION, WAREHOUSE, REP, PARTNER_ADMIN, PARTNER_OPERATOR
 | `orderService.ts` | Retailer order management |
 | `qrTokenService.ts` | QR code token management |
 
+## One-off TypeScript Scripts (probes, verification, maintenance)
+
+**This repo has no `tsx`.** `node --import tsx ...` fails with `Cannot find package 'tsx'`
+— that is expected, do not install it. Use Node's native type-stripping:
+
+```bash
+node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/<name>.mts
+```
+
+Copy `scripts/check-myco-strain-slug-drift.mts` as the template (npm script:
+`npm run check:myco-strain-drift`). Three rules that make it work:
+
+1. `import { PrismaClient } from "@prisma/client"` — resolves normally.
+2. Import project source with a **relative path and an explicit `.ts` extension**:
+   `import { normalizeStrainSlug } from "../src/domain/strain/data.ts"`.
+3. The `@/*` tsconfig alias does **not** resolve — strip-types does no tsconfig path
+   mapping. `import ... from "@/domain/strain/data.ts"` fails `ERR_MODULE_NOT_FOUND`.
+
+For env vars, do not use `node --env-file=`; reuse the template's `loadDotenvFile()`
+helper. If a script needs enums, namespaces, or param properties, swap
+`--experimental-strip-types` for `--experimental-transform-types`.
+
 ## Deployment
 
 Vercel + Neon. Build: `prisma generate && next build`

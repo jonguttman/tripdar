@@ -1,5 +1,4 @@
-import crypto from "crypto";
-import { prisma } from "@/lib/prisma";
+import { neon, type NeonQueryFunction } from "@neondatabase/serverless";
 
 export const BRAND_PUBLIC_RATE_LIMIT_WINDOW_MS = 60 * 1000;
 export const BRAND_PUBLIC_IP_LIMIT = 20;
@@ -21,12 +20,25 @@ export interface PublicWriteRateLimitResult {
   reason?: "ip" | "token" | "store_error";
 }
 
-function hashIdentifier(value: string): string {
-  return crypto.createHash("sha256").update(value).digest("hex");
+/**
+ * Web Crypto SHA-256. Runs in Edge Runtime, Node 18+, and the browser.
+ * The Node `crypto` module is deliberately not used here: this module is
+ * pulled into the Edge middleware bundle, where `node:crypto` does not exist
+ * and importing it throws at module init (KEWL-2367).
+ */
+async function hashIdentifier(value: string): Promise<string> {
+  const data = new TextEncoder().encode(value);
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-export function publicWriteIdentifier(scope: PublicWriteRateLimitScope, value: string): string {
-  return `myco:public-write:${scope}:${hashIdentifier(value)}`;
+export async function publicWriteIdentifier(
+  scope: PublicWriteRateLimitScope,
+  value: string
+): Promise<string> {
+  return `myco:public-write:${scope}:${await hashIdentifier(value)}`;
 }
 
 function quotePgIdentifier(identifier: string): string {
@@ -36,45 +48,75 @@ function quotePgIdentifier(identifier: string): string {
   return `"${identifier}"`;
 }
 
-export function createPrismaPublicWriteRateLimitStore(
-  tableName = "PublicWriteRateLimitBucket"
+/**
+ * Prisma's `resetAt` column is `timestamp(3)` — *without* time zone — holding a
+ * UTC instant. Handing a JS `Date` to the driver (in either direction) would let
+ * the session/host time zone reinterpret it and silently skew `retry-after`, so
+ * we cross the boundary in an explicitly UTC-anchored form:
+ *   - write: naive-UTC literal (no `Z`) cast to `::timestamp`
+ *   - read:  `EXTRACT(EPOCH FROM ...)`, which Postgres evaluates as if the
+ *            naive timestamp were UTC
+ */
+function toNaiveUtcLiteral(value: Date): string {
+  return value.toISOString().replace("Z", "");
+}
+
+export function createNeonPublicWriteRateLimitStore(
+  tableName = "PublicWriteRateLimitBucket",
+  connectionString?: string
 ): PublicWriteRateLimitStore {
   const table = quotePgIdentifier(tableName);
 
+  // Created lazily and memoized: `neon()` throws when no connection string is
+  // available, and this module is imported by unit tests that never touch a DB.
+  let sql: NeonQueryFunction<false, false> | undefined;
+  function client(): NeonQueryFunction<false, false> {
+    if (!sql) {
+      const url = connectionString ?? process.env.DATABASE_URL;
+      if (!url) {
+        throw new Error("DATABASE_URL is not set; public write rate limiter has no store");
+      }
+      sql = neon(url);
+    }
+    return sql;
+  }
+
   return {
     async increment(key, windowMs, now) {
-      const resetAt = new Date(now.getTime() + windowMs);
-      const rows = await prisma.$queryRawUnsafe<Array<{ count: number; resetAt: Date }>>(
+      const resetAt = toNaiveUtcLiteral(new Date(now.getTime() + windowMs));
+      const nowLiteral = toNaiveUtcLiteral(now);
+
+      const rows = (await client().query(
         `
           INSERT INTO ${table} ("key", "count", "resetAt", "updatedAt")
-          VALUES ($1, 1, $2, $3)
+          VALUES ($1, 1, $2::timestamp, $3::timestamp)
           ON CONFLICT ("key") DO UPDATE SET
             "count" = CASE
-              WHEN ${table}."resetAt" <= $3 THEN 1
+              WHEN ${table}."resetAt" <= $3::timestamp THEN 1
               ELSE ${table}."count" + 1
             END,
             "resetAt" = CASE
-              WHEN ${table}."resetAt" <= $3 THEN $2
+              WHEN ${table}."resetAt" <= $3::timestamp THEN $2::timestamp
               ELSE ${table}."resetAt"
             END,
-            "updatedAt" = $3
-          RETURNING "count", "resetAt"
+            "updatedAt" = $3::timestamp
+          RETURNING "count", (EXTRACT(EPOCH FROM "resetAt") * 1000) AS "resetAtMs"
         `,
-        key,
-        resetAt,
-        now
-      );
+        [key, resetAt, nowLiteral]
+      )) as Array<{ count: number | string; resetAtMs: number | string }>;
 
       const row = rows[0];
       if (!row) {
         throw new Error("Rate limit store did not return an updated bucket");
       }
-      return row;
+      // `count` is int4 and `resetAtMs` is numeric — pg-types hands numerics back
+      // as strings, so both are normalised here rather than trusted.
+      return { count: Number(row.count), resetAt: new Date(Number(row.resetAtMs)) };
     },
   };
 }
 
-export const prismaPublicWriteRateLimitStore = createPrismaPublicWriteRateLimitStore();
+export const neonPublicWriteRateLimitStore = createNeonPublicWriteRateLimitStore();
 
 function retryAfterSeconds(resetAt: Date, now: Date): number {
   return Math.max(1, Math.ceil((resetAt.getTime() - now.getTime()) / 1000));
@@ -83,7 +125,7 @@ function retryAfterSeconds(resetAt: Date, now: Date): number {
 export async function checkPublicWriteRateLimit({
   ip,
   token,
-  store = prismaPublicWriteRateLimitStore,
+  store = neonPublicWriteRateLimitStore,
   now = new Date(),
 }: {
   ip: string;
@@ -93,7 +135,7 @@ export async function checkPublicWriteRateLimit({
 }): Promise<PublicWriteRateLimitResult> {
   try {
     const ipBucket = await store.increment(
-      publicWriteIdentifier("ip", ip || "unknown"),
+      await publicWriteIdentifier("ip", ip || "unknown"),
       BRAND_PUBLIC_RATE_LIMIT_WINDOW_MS,
       now
     );
@@ -106,7 +148,7 @@ export async function checkPublicWriteRateLimit({
     }
 
     const tokenBucket = await store.increment(
-      publicWriteIdentifier("token", token),
+      await publicWriteIdentifier("token", token),
       BRAND_PUBLIC_RATE_LIMIT_WINDOW_MS,
       now
     );

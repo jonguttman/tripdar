@@ -4,6 +4,42 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-28-001: Dose ladder divided by active-compound mg produced overdose-direction unit counts
+
+**Symptoms:**
+- A product with a verified 1 mg psilocin unit could render a four-digit `suggestedUnits` suggestion (e.g. `1500-3500 capsules`) at Level 4.
+- A 5 mg psilocybin unit produced `300-700` unit suggestions.
+- Counts were wrong in the overdose direction and looked plausible enough to ship.
+
+**Root Cause:**
+`CANONICAL_DOSE_LEVELS` is expressed in **dried-mushroom-equivalent milligrams** (L1 `50-250`, L6 `5000-7500`; the dosing guide renders L2-L6 as quarter-gram boundaries). `scoring.ts` divided that ladder by `adminConfig.productUnitMg`, which KEWL-2033 defines as **verified active-compound milligrams**. The two quantities are on different bases, so the division was never like-for-like — it silently reinterpreted a gram-scale mushroom ladder as an active-compound ladder.
+
+An active-compound allowlist alone does **not** fix this: passing the compound gate says "this is psilocybin", not "this mass is comparable to dried mushroom mass".
+
+**Fix:**
+- Added `CANONICAL_DOSE_BASIS` next to `CANONICAL_DOSE_LEVELS` so the ladder's basis is explicit in code.
+- Added `src/domain/recommendation-engine/doseBasis.ts` holding two independent, fail-closed dose-output gates: the active-compound gate and the ladder-basis gate. Neither gate removes the product itself from candidacy.
+- `suggestedUnits` is emitted only when an explicit same-basis divisor exists (`unitMaterialMassMg` + `materialMassBasis`). A non-null material mass alone is never sufficient — extracts, proprietary blends, and net edible weight are explicitly rejected.
+- Made `suggestedUnits` optional and split product eligibility from unit emission so unsupported/unknown compounds and incompatible bases keep the name/photo/link while all dose output fails closed.
+
+**Files Modified:**
+- `src/domain/recommendation-engine/doseBasis.ts` (new)
+- `src/domain/recommendation-engine/types.ts`
+- `src/domain/recommendation-engine/scoring.ts`
+- `src/domain/recommendation-engine/service.ts`
+- `src/domain/myco/candidates.ts`
+- `wordpress-plugin/tripdar-recommendation-engine/assets/js/recommendation-engine.js`
+
+**Prevention:**
+- Any division of a dose ladder must assert that numerator and denominator share a basis. Store the basis as a structured field, never infer it from a non-null magnitude.
+- When a field's meaning is narrowed (here `productUnitMg` → active-compound only), audit every existing arithmetic consumer of it in the same change; the column can be correct while its readers are wrong.
+- Suppressing a derived value should degrade the surface, not delete the whole object — gate the smallest unsafe part.
+
+**Lesson Learned:**
+Two milligram values are not interchangeable just because both are milligrams. A unit mismatch between a ladder and its divisor produces confident, plausible, wrong numbers rather than an obvious failure — and in dose math the failure direction was toward overdose.
+
+---
+
 ## BUG-2026-07-25-001: Myco product strain typos silently dropped canonical strain data
 
 **Symptoms:**

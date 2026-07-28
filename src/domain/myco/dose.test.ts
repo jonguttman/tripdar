@@ -13,6 +13,7 @@ const INTENSITIES: DoseIntensity[] = ["gentle", "moderate", "deep"];
 function productWithTiers(): DoseProductInput {
   return {
     format: "capsule",
+    activeCompound: "psilocybin",
     productUnitMg: 100,
     brandDoseTiers: [
       { category: "micro", label: "Micro", quantityText: "1", quantityMin: 1, quantityMax: null, unit: "capsule" },
@@ -96,6 +97,19 @@ describe("computeDoseGuidance", () => {
     };
     expect(computeDoseGuidance(product, "new", "gentle")).toBeNull();
   });
+
+  it.each(["unknown", "", null, "muscimol", "functional-only", "lions-mane"])(
+    "suppresses all dose guidance for unsupported %s compound while preserving candidacy",
+    (activeCompound) => {
+      expect(
+        computeDoseGuidance(
+          { ...productWithTiers(), activeCompound },
+          "experienced",
+          "moderate"
+        )
+      ).toBeNull();
+    }
+  );
 
   it("adds the offset disclaimer for stronger and lighter products", () => {
     const stronger = computeDoseGuidance(
