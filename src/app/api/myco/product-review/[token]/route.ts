@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { checkPublicWriteRateLimit } from "@/domain/myco/publicWriteRateLimit";
+import { clientIp } from "@/domain/myco/rate-limit";
 import {
   effectiveAssignmentStatus,
   hashReviewToken,
@@ -156,6 +158,28 @@ export async function POST(
 ) {
   try {
     const { token } = await params;
+    const rateLimit = await checkPublicWriteRateLimit({
+      ip: clientIp(request),
+      token,
+    });
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message:
+              rateLimit.reason === "store_error"
+                ? "Public review submissions are temporarily unavailable"
+                : "Too many review submissions. Please try again later.",
+          },
+        },
+        {
+          status: rateLimit.reason === "store_error" ? 503 : 429,
+          headers: { "Retry-After": rateLimit.retryAfterSeconds.toString() },
+        }
+      );
+    }
+
     const assignment = await loadAssignment(token);
     if (!assignment || assignment.employee.optedOut) {
       return NextResponse.json(

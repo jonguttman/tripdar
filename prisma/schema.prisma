@@ -316,6 +316,17 @@ model MycoProfileSignup {
   @@unique([partnerId, email, sessionToken])
 }
 
+// Shared store for unauthenticated public write rate limits. Counters must live
+// outside Vercel Fluid instances so concurrent instances see the same bucket.
+model PublicWriteRateLimitBucket {
+  key       String   @id
+  count     Int      @default(0)
+  resetAt   DateTime
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
+
 model RecommendationResult {
   id           String   @id @default(cuid())
   sessionId    String
