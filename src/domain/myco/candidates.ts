@@ -2,15 +2,19 @@
  * Recommendation candidate loader — the single code path that decides which
  * products may ever be shown to a customer.
  *
- * Gate: active, not archived, AND recommendation-ready per computeReadiness.
+ * Gate: active, not archived, AND listable under the staff verification gate.
  * Server-only (imports prisma).
  */
 
 import { prisma } from "@/lib/prisma";
-import { computeReadiness } from "./readiness";
 import { normalizeVibeScores } from "./vibes";
 import type { ProductCandidate } from "./scoring";
 import type { StrengthOffsetValue } from "./dose";
+import {
+  computeFieldStates,
+  ensureFieldRules,
+  evaluateGateForItem,
+} from "./staffReviewService";
 
 type CatalogItemWithRelations = Awaited<ReturnType<typeof fetchActiveCatalog>>[number];
 
@@ -22,6 +26,17 @@ function fetchActiveCatalog(partnerId: string) {
       strengthOffset: true,
       photos: { orderBy: { sortOrder: "asc" }, take: 1 },
       brandRef: true,
+      catalogFieldChanges: {
+        select: {
+          fieldName: true,
+          submittedValue: true,
+          actorType: true,
+          actorIdentity: true,
+          source: true,
+          disposition: true,
+          createdAt: true,
+        },
+      },
     },
   });
 }
@@ -57,31 +72,26 @@ function toCandidate(item: CatalogItemWithRelations): ProductCandidate | null {
 }
 
 export async function getRecommendableProducts(partnerId: string): Promise<ProductCandidate[]> {
-  const items = await fetchActiveCatalog(partnerId);
+  const [items, rules] = await Promise.all([
+    fetchActiveCatalog(partnerId),
+    ensureFieldRules(null),
+  ]);
 
   const candidates: ProductCandidate[] = [];
   for (const item of items) {
-    const readiness = computeReadiness({
-      format: item.format,
-      brand: item.brand,
-      brandId: item.brandId,
-      productUnitMg: item.productUnitMg,
-      unitsPerPack: item.unitsPerPack,
-      totalDoseMg: item.totalDoseMg,
-      onsetMinutes: item.onsetMinutes,
-      durationMinutes: item.durationMinutes,
-      brandMicroUnits: item.brandMicroUnits,
-      brandMiniUnits: item.brandMiniUnits,
-      brandMacroUnits: item.brandMacroUnits,
-      brandDoseTiers: item.brandDoseTiers,
-      photoUrl: item.photoUrl,
-      photoCount: item.photos.length,
-      vibeScores: item.vibeProfile?.scores ?? null,
-      strengthOffset: item.strengthOffset
-        ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
-        : null,
+    const gate = evaluateGateForItem({
+      item,
+      extras: {
+        photoCount: item.photos.length,
+        vibeScores: item.vibeProfile?.scores ?? null,
+        strengthOffset: item.strengthOffset
+          ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
+          : null,
+      },
+      rules,
+      fieldStates: computeFieldStates(rules, item.catalogFieldChanges),
     });
-    if (!readiness.ready) continue;
+    if (!gate.listable) continue;
 
     const candidate = toCandidate(item);
     if (candidate) candidates.push(candidate);

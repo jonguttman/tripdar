@@ -63,10 +63,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const firstUse = !employee.pinHash;
   if (firstUse) {
     if (isTooObviousPin(pin)) return fail("Pick a less guessable 4 digits.", 400);
-    await prisma.mycoEmployee.update({
-      where: { id: employee.id },
-      data: { pinHash: await hashPin(pin), pinSetAt: new Date(), ...successfulAttemptPatch() },
+    const enrollment = await prisma.mycoEmployee.updateMany({
+      // Compare-and-set is the identity-claim boundary for the shared link. If two
+      // devices race to enroll the same roster entry, only the first hash may land.
+      where: {
+        id: employee.id,
+        partnerId: link.partnerId,
+        active: true,
+        optedOut: false,
+        pinHash: null,
+      },
+      data: {
+        pinHash: await hashPin(pin),
+        pinSetAt: new Date(),
+        ...successfulAttemptPatch(),
+      },
     });
+    if (enrollment.count !== 1) {
+      return fail("A PIN was just set for this name. Enter that PIN to continue.", 401, {
+        code: "pin_already_set",
+      });
+    }
   } else {
     const valid = await verifyPin(pin, employee.pinHash);
     if (!valid) {

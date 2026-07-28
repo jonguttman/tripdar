@@ -27,6 +27,7 @@ import {
 } from "@/domain/myco/catalogFieldSpec";
 import { reviewerStillOwesField } from "@/domain/myco/staffFieldVerification";
 import { buildCatalogFieldChange, type CatalogFieldSource } from "@/domain/myco/catalogProvenance";
+import { normalizeStrainSlug } from "@/domain/strain/data";
 
 export const dynamic = "force-dynamic";
 
@@ -73,14 +74,20 @@ function currentColumnValue(item: Record<string, unknown>, rule: FieldRuleRow): 
   return item[rule.catalogColumn] ?? null;
 }
 
-/** Normalises by input type so "250" and 250 never read as a disagreement. */
-function normalizeValue(raw: unknown, inputType: string): unknown {
-  if (inputType === "number") {
+/**
+ * Normalises and validates at the write boundary so the append-only ledger can never
+ * acquire values the catalog projection would reject.
+ */
+export function normalizeReviewValue(
+  raw: unknown,
+  rule: Pick<FieldRuleRow, "fieldName" | "inputType">
+): unknown {
+  if (rule.inputType === "number") {
     if (raw === null || raw === undefined || raw === "") return null;
     const parsed = Number(raw);
-    return Number.isFinite(parsed) ? parsed : null;
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
   }
-  if (inputType === "list") {
+  if (rule.inputType === "list") {
     const items = Array.isArray(raw)
       ? raw
       : typeof raw === "string"
@@ -89,6 +96,12 @@ function normalizeValue(raw: unknown, inputType: string): unknown {
     return items
       .map((item) => String(item).trim())
       .filter((item) => item.length > 0);
+  }
+  if (rule.fieldName === "activeCompound") {
+    return typeof raw === "string" ? raw.trim().toLowerCase() : null;
+  }
+  if (rule.fieldName === "strainSlug") {
+    return typeof raw === "string" ? normalizeStrainSlug(raw) : null;
   }
   if (typeof raw === "string") return raw.trim();
   return raw;
@@ -289,7 +302,7 @@ export async function POST(
     } else if (action === "confirm") {
       // Confirming means agreeing with what is on screen. The server resolves the value
       // so a stale client cannot silently confirm something different.
-      submittedValue = normalizeValue(previousValue, rule.inputType);
+      submittedValue = normalizeReviewValue(previousValue, rule);
       if (
         submittedValue === null ||
         submittedValue === "" ||
@@ -301,7 +314,7 @@ export async function POST(
         );
       }
     } else {
-      submittedValue = normalizeValue(answer.value, rule.inputType);
+      submittedValue = normalizeReviewValue(answer.value, rule);
       if (
         submittedValue === null ||
         submittedValue === "" ||
@@ -343,66 +356,75 @@ export async function POST(
     );
   }
 
-  await prisma.catalogFieldChange.createMany({
-    data: changeRows.map((row) => ({
-      ...row,
-      catalogItemId: item.id,
-      previousValue: toJsonInput(row.previousValue),
-      submittedValue: toJsonInput(row.submittedValue),
-    })),
-  });
-
-  // Recompute from the log (never from the request) and refresh the derived cache.
-  const refreshed = await prisma.storeProductCatalog.findUniqueOrThrow({
-    where: { id: item.id },
-    include: PRODUCT_INCLUDE,
-  });
-  const fieldStates = computeFieldStates(rules, refreshed.catalogFieldChanges);
-
   const touched = new Set(changeRows.map((row) => row.fieldName));
-  const columnUpdates: Record<string, unknown> = {};
 
-  for (const fieldName of touched) {
-    const rule = rulesByName.get(fieldName);
-    if (!rule) continue;
-    const state = fieldStates[fieldName];
-    if (!state) continue;
-
-    await prisma.catalogFieldVerificationState.upsert({
-      where: { catalogItemId_fieldName: { catalogItemId: item.id, fieldName } },
-      create: {
+  // KEWL-2364: the ledger append, the derived verification cache, and the catalog column
+  // projection are one atomic unit. Partially applied, they would leave the cache and the
+  // columns disagreeing with the append-only log that is supposed to be the source of
+  // truth — and the gate reads the projection. `recomputeCatalogItemProjection()` in
+  // staffReviewService.ts is the matching repair path if a row is ever found diverged.
+  const { refreshed, fieldStates, columnUpdates } = await prisma.$transaction(async (tx) => {
+    await tx.catalogFieldChange.createMany({
+      data: changeRows.map((row) => ({
+        ...row,
         catalogItemId: item.id,
-        fieldName,
-        state: state.state,
-        requiredConfirmations: state.requiredConfirmations,
-        confirmationsCount: state.confirmationsCount,
-        confirmedValue: toJsonInput(state.confirmedValue),
-        reviewedAt: new Date(),
-      },
-      update: {
-        state: state.state,
-        requiredConfirmations: state.requiredConfirmations,
-        confirmationsCount: state.confirmationsCount,
-        confirmedValue: toJsonInput(state.confirmedValue),
-        reviewedAt: new Date(),
-      },
+        previousValue: toJsonInput(row.previousValue),
+        submittedValue: toJsonInput(row.submittedValue),
+      })),
     });
 
-    // A field that reaches `confirmed` writes through to the catalog column — that is
-    // the point of the audit. "Confirmed absent" clears the column rather than storing
-    // the sentinel.
-    if (rule.catalogColumn && state.state === "confirmed") {
-      columnUpdates[rule.catalogColumn] =
-        state.confirmedValue === CONFIRMED_ABSENT_VALUE ? null : state.confirmedValue;
-    }
-  }
-
-  if (Object.keys(columnUpdates).length > 0) {
-    await prisma.storeProductCatalog.update({
+    // Recompute from the log (never from the request) and refresh the derived cache.
+    const refreshedItem = await tx.storeProductCatalog.findUniqueOrThrow({
       where: { id: item.id },
-      data: columnUpdates as never,
+      include: PRODUCT_INCLUDE,
     });
-  }
+    const states = computeFieldStates(rules, refreshedItem.catalogFieldChanges);
+    const updates: Record<string, unknown> = {};
+
+    for (const fieldName of touched) {
+      const rule = rulesByName.get(fieldName);
+      if (!rule) continue;
+      const state = states[fieldName];
+      if (!state) continue;
+
+      await tx.catalogFieldVerificationState.upsert({
+        where: { catalogItemId_fieldName: { catalogItemId: item.id, fieldName } },
+        create: {
+          catalogItemId: item.id,
+          fieldName,
+          state: state.state,
+          requiredConfirmations: state.requiredConfirmations,
+          confirmationsCount: state.confirmationsCount,
+          confirmedValue: toJsonInput(state.confirmedValue),
+          reviewedAt: new Date(),
+        },
+        update: {
+          state: state.state,
+          requiredConfirmations: state.requiredConfirmations,
+          confirmationsCount: state.confirmationsCount,
+          confirmedValue: toJsonInput(state.confirmedValue),
+          reviewedAt: new Date(),
+        },
+      });
+
+      // A field that reaches `confirmed` writes through to the catalog column — that is
+      // the point of the audit. "Confirmed absent" clears the column rather than storing
+      // the sentinel.
+      if (rule.catalogColumn && state.state === "confirmed") {
+        updates[rule.catalogColumn] =
+          state.confirmedValue === CONFIRMED_ABSENT_VALUE ? null : state.confirmedValue;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await tx.storeProductCatalog.update({
+        where: { id: item.id },
+        data: updates as never,
+      });
+    }
+
+    return { refreshed: refreshedItem, fieldStates: states, columnUpdates: updates };
+  });
 
   const gate = evaluateGateForItem({
     item: { ...refreshed, ...(columnUpdates as object) } as never,

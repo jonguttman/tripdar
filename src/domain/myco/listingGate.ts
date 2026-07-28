@@ -88,8 +88,8 @@ export function evaluateListingGate(input: ListingGateInput): ListingGateResult 
     hardBlockers.push(blocker);
   }
 
-  // `activeCompound = unknown` fails closed.
-  if (!input.activeCompound || input.activeCompound === "unknown") {
+  // `activeCompound = unknown` fails closed regardless of whitespace/casing.
+  if (!input.activeCompound || input.activeCompound.trim().toLowerCase() === "unknown") {
     blockers.push({
       kind: "unknown_active_compound",
       fieldName: "activeCompound",

@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
+import { getUserRole } from "@/domain/auth/role";
 import { prisma } from "@/lib/prisma";
 import {
   buildRevokedTokenPatch,
@@ -19,12 +20,32 @@ import { ensureFieldRules } from "@/domain/myco/staffReviewService";
 
 export const dynamic = "force-dynamic";
 
-async function requireAdmin() {
+type StaffLinkAdmin = {
+  email: string;
+  role: "super_admin" | "partner_admin";
+  partnerId: string | null;
+};
+
+async function requireAdmin(): Promise<StaffLinkAdmin | NextResponse> {
   const session = await getServerSession(authOptions);
   if (!session?.user?.email) {
     return NextResponse.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
   }
-  return session.user.email;
+  const email = session.user.email;
+  const role = await getUserRole(email);
+  if (role !== "super_admin" && role !== "partner_admin") {
+    return NextResponse.json({ success: false, error: { message: "Forbidden" } }, { status: 403 });
+  }
+  const user = await prisma.user.findUnique({ where: { email }, select: { partnerId: true } });
+  if (role === "partner_admin" && !user?.partnerId) {
+    return NextResponse.json({ success: false, error: { message: "Forbidden" } }, { status: 403 });
+  }
+  return { email, role, partnerId: user?.partnerId ?? null };
+}
+
+function allowedPartnerId(auth: StaffLinkAdmin, requestedPartnerId: string): string | null {
+  if (auth.role === "super_admin") return requestedPartnerId;
+  return auth.partnerId === requestedPartnerId ? requestedPartnerId : null;
 }
 
 function staffLinkUrl(token: string): string {
@@ -39,7 +60,12 @@ export async function GET() {
   if (auth instanceof NextResponse) return auth;
 
   const tokens = await prisma.catalogAccessToken.findMany({
-    where: { purpose: "staff_review", issuedToType: "staff", catalogItemId: null },
+    where: {
+      purpose: "staff_review",
+      issuedToType: "staff",
+      catalogItemId: null,
+      ...(auth.role === "partner_admin" ? { partnerId: auth.partnerId! } : {}),
+    },
     orderBy: { issuedAt: "desc" },
     select: {
       id: true,
@@ -64,7 +90,11 @@ export async function POST(request: NextRequest) {
     partnerId?: unknown;
     expiresInDays?: unknown;
   };
-  const partnerId = typeof body.partnerId === "string" ? body.partnerId : "";
+  const requestedPartnerId = typeof body.partnerId === "string" ? body.partnerId : "";
+  const partnerId = allowedPartnerId(auth, requestedPartnerId);
+  if (!partnerId) {
+    return NextResponse.json({ success: false, error: { message: "Partner not found" } }, { status: 404 });
+  }
   const partner = await prisma.partner.findUnique({ where: { id: partnerId }, select: { id: true } });
   if (!partner) {
     return NextResponse.json({ success: false, error: { message: "Partner not found" } }, { status: 404 });
@@ -79,17 +109,31 @@ export async function POST(request: NextRequest) {
   await ensureFieldRules(null);
 
   const token = createCatalogAccessToken();
-  const record = await prisma.catalogAccessToken.create({
-    data: {
-      tokenHash: hashCatalogAccessToken(token),
-      purpose: "staff_review",
-      status: "active",
-      partnerId: partner.id,
-      issuedToType: "staff",
-      issuedBy: auth,
-      expiresAt,
-    },
-    select: { id: true, issuedAt: true, expiresAt: true },
+  const record = await prisma.$transaction(async (tx) => {
+    // Exactly one active shared staff link per partner. This also revokes any
+    // reviewer-bound links minted by the superseded KEWL-2379 design.
+    await tx.catalogAccessToken.updateMany({
+      where: {
+        purpose: "staff_review",
+        partnerId: partner.id,
+        status: "active",
+        catalogItemId: null,
+      },
+      data: buildRevokedTokenPatch(auth.email, "superseded by shared staff link"),
+    });
+    return tx.catalogAccessToken.create({
+      data: {
+        tokenHash: hashCatalogAccessToken(token),
+        purpose: "staff_review",
+        status: "active",
+        partnerId: partner.id,
+        issuedToType: "staff",
+        issuedToId: null,
+        issuedBy: auth.email,
+        expiresAt,
+      },
+      select: { id: true, issuedAt: true, expiresAt: true },
+    });
   });
 
   return NextResponse.json({
@@ -112,14 +156,23 @@ export async function DELETE(request: NextRequest) {
   const id = typeof body.id === "string" ? body.id : "";
   const reason = typeof body.reason === "string" && body.reason.trim() ? body.reason.trim() : "revoked by admin";
 
-  const existing = await prisma.catalogAccessToken.findUnique({ where: { id }, select: { id: true } });
+  const existing = await prisma.catalogAccessToken.findUnique({
+    where: { id },
+    select: { id: true, partnerId: true, purpose: true },
+  });
   if (!existing) {
+    return NextResponse.json({ success: false, error: { message: "Link not found" } }, { status: 404 });
+  }
+  if (
+    existing.purpose !== "staff_review" ||
+    (auth.role === "partner_admin" && existing.partnerId !== auth.partnerId)
+  ) {
     return NextResponse.json({ success: false, error: { message: "Link not found" } }, { status: 404 });
   }
 
   await prisma.catalogAccessToken.update({
     where: { id },
-    data: buildRevokedTokenPatch(auth, reason),
+    data: buildRevokedTokenPatch(auth.email, reason),
   });
   return NextResponse.json({ success: true, data: { revoked: true } });
 }

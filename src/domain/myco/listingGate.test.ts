@@ -109,6 +109,12 @@ describe("evaluateListingGate — blocking conditions", () => {
     expect(result.blockers.some((b) => b.kind === "unknown_active_compound")).toBe(true);
   });
 
+  it("fails closed when activeCompound is unknown with different casing", () => {
+    const result = evaluateListingGate({ ...baseInput(), activeCompound: "  UNKNOWN " });
+    expect(result.listable).toBe(false);
+    expect(result.blockers.some((b) => b.kind === "unknown_active_compound")).toBe(true);
+  });
+
   it("blocks on a disputed Tier B field", () => {
     const fieldStates = allConfirmed();
     fieldStates.productUnitMg = withState({ state: "disputed", confirmationsCount: 1 });

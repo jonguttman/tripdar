@@ -14,7 +14,7 @@ import { CATALOG_FIELD_SPECS } from "../src/domain/myco/catalogFieldSpec.ts";
 
 const prisma = new PrismaClient();
 
-const REVIEWERS = ["Adrienne", "Claw", "Dani", "Devon", "Eddie", "Audrey"];
+const REVIEWERS = ["Adrienne", "Clay", "Dani", "Devon", "Eddie", "Audrey"];
 const PARTNER_NAME = "The Mushroom Top";
 
 async function main() {

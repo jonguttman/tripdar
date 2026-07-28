@@ -10,6 +10,11 @@ import { loadStrainData } from "@/domain/strain/blob-store";
 import type { RecommendationRequest, RecommendationResponse } from "./types";
 import { generateAllProfiles } from "./strain-profiles";
 import { scoreStrains } from "./scoring";
+import {
+  computeFieldStates,
+  ensureFieldRules,
+  evaluateGateForItem,
+} from "@/domain/myco/staffReviewService";
 
 // =============================================================================
 // Main Recommendation Function
@@ -50,14 +55,46 @@ export async function generateRecommendations(
     }])
   );
 
-  const catalogItems = await prisma.storeProductCatalog.findMany({
-    where: {
-      partnerId,
-      active: true,
-      strainSlug: { not: null },
-    },
-    include: { strengthOffset: true },
-  });
+  const [activeCatalogItems, fieldRules] = await Promise.all([
+    prisma.storeProductCatalog.findMany({
+      where: {
+        partnerId,
+        active: true,
+        strainSlug: { not: null },
+      },
+      include: {
+        strengthOffset: true,
+        vibeProfile: true,
+        _count: { select: { photos: true } },
+        catalogFieldChanges: {
+          select: {
+            fieldName: true,
+            submittedValue: true,
+            actorType: true,
+            actorIdentity: true,
+            source: true,
+            disposition: true,
+            createdAt: true,
+          },
+        },
+      },
+    }),
+    ensureFieldRules(null),
+  ]);
+  const catalogItems = activeCatalogItems.filter((item) =>
+    evaluateGateForItem({
+      item,
+      extras: {
+        photoCount: item._count.photos,
+        vibeScores: item.vibeProfile?.scores ?? null,
+        strengthOffset: item.strengthOffset
+          ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
+          : null,
+      },
+      rules: fieldRules,
+      fieldStates: computeFieldStates(fieldRules, item.catalogFieldChanges),
+    }).listable
+  );
   for (const item of catalogItems) {
     if (!item.strainSlug) continue;
     configMap.set(item.strainSlug, {
