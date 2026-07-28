@@ -22,6 +22,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
+import { staffReviewerWhere } from "@/domain/myco/staffReviewRoster";
 import {
   DEFAULT_ENROLLMENT_HOURS,
   enrollmentClosesAtFrom,
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
 
   const [reviewers, tokens, events] = await Promise.all([
     prisma.mycoEmployee.findMany({
-      where: { partnerId, active: true, optedOut: false },
+      where: staffReviewerWhere(partnerId),
       orderBy: { name: "asc" },
       select: { id: true, name: true, email: true, pinHash: true, pinSetAt: true, pinLockedUntil: true },
     }),
@@ -173,10 +174,12 @@ export async function POST(request: NextRequest) {
     if (action === "reset_all" && !partnerId) return badRequest("partnerId is required");
 
     const reviewers = await prisma.mycoEmployee.findMany({
+      // Both branches go through the allowlist: passing an employeeId must not be a way
+      // to reset (and so re-open enrollment for) somebody who is not an approved reviewer.
       where:
         action === "reset"
-          ? { id: employeeId }
-          : { partnerId, active: true, optedOut: false },
+          ? staffReviewerWhere(undefined, employeeId)
+          : staffReviewerWhere(partnerId),
       select: { id: true, name: true, email: true, partnerId: true, pinHash: true },
     });
     if (reviewers.length === 0) {

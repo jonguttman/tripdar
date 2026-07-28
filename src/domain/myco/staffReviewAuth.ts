@@ -25,6 +25,7 @@ import { prisma } from "@/lib/prisma";
 import { evaluateCatalogAccessToken, hashCatalogAccessToken } from "./catalogTokens";
 import { verifyReviewerSession } from "./reviewerPin";
 import { isEnrollmentOpen, isReviewerSessionStale } from "./reviewerEnrollment";
+import { staffReviewerWhere } from "./staffReviewRoster";
 
 export const REVIEWER_SESSION_COOKIE = "tmt_reviewer";
 
@@ -97,23 +98,23 @@ export type RosterResult =
 /**
  * The roster a link can act as.
  *
- * Normally the whole active roster — that is the shared link Jon asked for. If a token
+ * Normally the whole approved roster — that is the shared link Jon asked for. If a token
  * still carries `issuedToId` (the per-reviewer links minted earlier on 2026-07-28, before
  * the override), the roster is NARROWED to that one person. Honouring the binding can only
  * ever restrict a link, never widen one, so an already-issued link cannot silently gain
  * authority over the rest of the roster when this ships.
+ *
+ * "Approved roster" is `staffReviewerWhere`, not every active employee (KEWL-2402). Under a
+ * shared, unbound token this query IS the authorization boundary — whoever it returns is
+ * claimable by anyone holding the link — so it stays pinned to the six addresses Jon
+ * approved rather than to whatever a future employee import happens to mark active.
  */
 export async function resolveReviewerRoster(token: string): Promise<RosterResult> {
   const link = await resolveStaffLink(token);
   if (!link.ok) return link;
 
   const reviewers = await prisma.mycoEmployee.findMany({
-    where: {
-      partnerId: link.partnerId,
-      active: true,
-      optedOut: false,
-      ...(link.issuedToId ? { id: link.issuedToId } : {}),
-    },
+    where: staffReviewerWhere(link.partnerId, link.issuedToId ?? undefined),
     orderBy: { name: "asc" },
     select: {
       id: true,

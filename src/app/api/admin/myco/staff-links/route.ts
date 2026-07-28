@@ -24,6 +24,7 @@ import {
   hashCatalogAccessToken,
 } from "@/domain/myco/catalogTokens";
 import { ensureFieldRules } from "@/domain/myco/staffReviewService";
+import { staffReviewerWhere } from "@/domain/myco/staffReviewRoster";
 import {
   DEFAULT_ENROLLMENT_HOURS,
   enrollmentClosesAtFrom,
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
   }
 
   const reviewers = await prisma.mycoEmployee.findMany({
-    where: { partnerId: partner.id, active: true, optedOut: false },
+    where: staffReviewerWhere(partner.id),
     orderBy: { name: "asc" },
     select: { id: true, name: true, email: true, pinHash: true, pinSetAt: true },
   });

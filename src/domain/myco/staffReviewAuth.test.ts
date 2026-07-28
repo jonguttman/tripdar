@@ -9,6 +9,7 @@
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { signReviewerSession } from "./reviewerPin";
+import { STAFF_REVIEWER_EMAILS } from "./staffReviewRoster";
 
 const prismaMock = vi.hoisted(() => ({
   catalogAccessToken: { findUnique: vi.fn() },
@@ -146,15 +147,37 @@ describe("requireReviewer", () => {
     expect(prismaMock.mycoEmployee.findMany).not.toHaveBeenCalled();
   });
 
-  it("scopes the roster to the link's partner and to active, opted-in reviewers", async () => {
+  it("scopes the roster to the link's partner, to active opted-in reviewers, AND to the approved allowlist", async () => {
     const { requireReviewer } = await import("./staffReviewAuth");
     await requireReviewer("raw-token", cookieFor(CLAY));
 
+    // The email predicate is the KEWL-2402 constraint: under one shared unbound token this
+    // query IS the authorization boundary, so it must not widen with the employee table.
     expect(prismaMock.mycoEmployee.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { partnerId: PARTNER_ID, active: true, optedOut: false },
+        where: {
+          partnerId: PARTNER_ID,
+          active: true,
+          optedOut: false,
+          email: { in: [...STAFF_REVIEWER_EMAILS] },
+        },
       })
     );
+  });
+
+  it("does not admit an active employee who is not on the approved roster", async () => {
+    // The regression KEWL-2402 exists to prevent: an employee import adds an active row,
+    // and it becomes a claimable identity on a link that is already in circulation.
+    const outsider = "employee-warehouse-temp";
+    prismaMock.mycoEmployee.findMany.mockResolvedValue([]);
+
+    const { requireReviewer } = await import("./staffReviewAuth");
+    const result = await requireReviewer("raw-token", cookieFor(outsider));
+
+    expect(result.ok).toBe(false);
+    const where = prismaMock.mycoEmployee.findMany.mock.calls[0][0].where;
+    expect(where.email).toEqual({ in: [...STAFF_REVIEWER_EMAILS] });
+    expect(STAFF_REVIEWER_EMAILS).toHaveLength(6);
   });
 
   it("narrows a legacy per-reviewer link to its bound reviewer", async () => {
@@ -167,7 +190,13 @@ describe("requireReviewer", () => {
 
     expect(prismaMock.mycoEmployee.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { partnerId: PARTNER_ID, active: true, optedOut: false, id: AUDREY },
+        where: {
+          id: AUDREY,
+          partnerId: PARTNER_ID,
+          active: true,
+          optedOut: false,
+          email: { in: [...STAFF_REVIEWER_EMAILS] },
+        },
       })
     );
   });

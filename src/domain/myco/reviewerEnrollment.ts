@@ -20,6 +20,7 @@
  */
 
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { staffReviewerWhere } from "./staffReviewRoster";
 
 /** Jon's default: the link is claimable for three days after it is minted. */
 export const DEFAULT_ENROLLMENT_HOURS = 72;
@@ -159,8 +160,11 @@ export async function closeEnrollmentIfRosterComplete(
   db: PrismaLike,
   input: { tokenId: string; partnerId: string }
 ): Promise<boolean> {
+  // Counted over the approved roster only (KEWL-2402). If this counted every active
+  // employee, one unrelated active row would hold the window open past six-of-six —
+  // turning the auto-close into a no-op and leaving the link claimable to the deadline.
   const unclaimed = await db.mycoEmployee.count({
-    where: { partnerId: input.partnerId, active: true, optedOut: false, pinHash: null },
+    where: { ...staffReviewerWhere(input.partnerId), pinHash: null },
   });
   if (unclaimed > 0) return false;
 

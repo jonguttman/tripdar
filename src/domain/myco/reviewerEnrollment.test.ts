@@ -21,6 +21,7 @@ import {
   recordEnrollmentEvent,
   requestFingerprint,
 } from "./reviewerEnrollment";
+import { STAFF_REVIEWER_EMAILS } from "./staffReviewRoster";
 
 const NOW = new Date("2026-07-28T22:00:00.000Z");
 const HOUR = 60 * 60 * 1000;
@@ -170,6 +171,26 @@ describe("closeEnrollmentIfRosterComplete — auto-close at six of six", () => {
       reviewerEnrollmentEvent: { create: vi.fn().mockResolvedValue({}) },
     };
   }
+
+  it("counts unclaimed reviewers over the approved allowlist, not every active employee", async () => {
+    // KEWL-2402: if this counted the whole employee table, one unrelated active row would
+    // hold the window open past six-of-six and the auto-close would never fire.
+    const client = db(0);
+    await closeEnrollmentIfRosterComplete(client as never, {
+      tokenId: "token-1",
+      partnerId: "partner-1",
+    });
+
+    expect(client.mycoEmployee.count).toHaveBeenCalledWith({
+      where: {
+        partnerId: "partner-1",
+        active: true,
+        optedOut: false,
+        email: { in: [...STAFF_REVIEWER_EMAILS] },
+        pinHash: null,
+      },
+    });
+  });
 
   it("leaves the window open while anyone is still unclaimed", async () => {
     const client = db(1);

@@ -23,6 +23,7 @@ import {
   enrollmentClosesAtFrom,
   preMintPinWarnings,
 } from "../src/domain/myco/reviewerEnrollment.ts";
+import { staffReviewerWhere } from "../src/domain/myco/staffReviewRoster.ts";
 
 const prisma = new PrismaClient();
 const args = process.argv.slice(2);
@@ -35,7 +36,7 @@ const partner = await prisma.partner.findFirst({ where: { name: "The Mushroom To
 if (!partner) throw new Error("Partner 'The Mushroom Top' not found");
 
 const reviewers = await prisma.mycoEmployee.findMany({
-  where: { partnerId: partner.id, active: true, optedOut: false },
+  where: staffReviewerWhere(partner.id),
   orderBy: { name: "asc" },
   select: { id: true, name: true, email: true, pinHash: true, pinSetAt: true },
 });

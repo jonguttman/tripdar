@@ -11,6 +11,7 @@
 
 import { PrismaClient } from "@prisma/client";
 import { CATALOG_FIELD_SPECS } from "../src/domain/myco/catalogFieldSpec.ts";
+import { STAFF_REVIEWER_EMAILS } from "../src/domain/myco/staffReviewRoster.ts";
 
 const prisma = new PrismaClient();
 
@@ -33,6 +34,19 @@ const REVIEWERS = [
   { name: "Eddie", email: "eddie@themushroomtop.internal" },
 ];
 const PARTNER_NAME = "The Mushroom Top";
+
+// The seed and the auth allowlist must never disagree: a name seeded here but missing from
+// STAFF_REVIEWER_EMAILS would be created and then be unable to log in, and the reverse
+// would leave an approved address with no row. Fail the seed rather than ship the skew.
+{
+  const seeded = REVIEWERS.map((r) => r.email).sort();
+  const approved = [...STAFF_REVIEWER_EMAILS].sort();
+  if (seeded.join(",") !== approved.join(",")) {
+    throw new Error(
+      `Seed roster disagrees with STAFF_REVIEWER_EMAILS.\n  seeded:   ${seeded.join(", ")}\n  approved: ${approved.join(", ")}`
+    );
+  }
+}
 
 async function main() {
   const partner = await prisma.partner.findFirst({ where: { name: PARTNER_NAME } });
