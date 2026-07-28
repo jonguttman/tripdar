@@ -1,24 +1,38 @@
 /**
- * KEWL-2335 — no-login staff link auth.
+ * KEWL-2335 / KEWL-2394 — no-login staff link auth.
  *
  * Two independent factors, neither of which is an account:
  *  1. The link itself — a KEWL-2332 `CatalogAccessToken` with purpose `staff_review`,
- *     revocable and expirable. Only the SHA-256 hash is stored. Each link is issued to
- *     exactly ONE reviewer (`issuedToId`), so possession of a link is possession of that
- *     reviewer's identity claim and nothing else.
- *  2. A 4-digit PIN, which protects the link once it has been forwarded or left open on a
- *     counter tablet, and makes Tier B's distinct-reviewer rule mean something.
+ *     revocable and expirable. Only the SHA-256 hash is stored.
+ *  2. A 4-digit PIN, chosen by each reviewer the first time they open the link, which
+ *     is what keeps their reviews filed under their own name once the link has been
+ *     forwarded or left open on a counter tablet.
  *
- * KEWL-2364 (Architecture Guardian) rejected the earlier shared-roster design: with one
- * link for the whole store, any holder could select any reviewer who had not yet set a
- * PIN and enroll one for them — an unauthenticated identity claim, not merely a weak PIN.
- * Reviewer identity is therefore derived from the link and NEVER from client input.
+ * KEWL-2364 had made every link bind to exactly one reviewer. Jon overrode that on
+ * 2026-07-28 (*"make it so they all have to pick their pin the first time they click the
+ * link. I don't want to deal with emails for this."*), so ONE shared link now serves the
+ * whole roster and an unbound token is the supported case, not an error.
+ *
+ * What replaces link-binding as the bound on identity claims is `staffEnrollment.ts`: a
+ * name can only be claimed while the mint-time enrollment window is open, claiming is a
+ * one-way compare-and-set, and every attempt is on the append-only ledger. Read the
+ * header of that module for why that is the right trade rather than a weakening.
+ *
+ * Once enrolled, identity comes from the signed session cookie — never from request
+ * input — and the session is checked against the reviewer's revocation epoch so an admin
+ * PIN reset genuinely signs their devices out.
  */
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { evaluateCatalogAccessToken, hashCatalogAccessToken } from "./catalogTokens";
 import { verifyReviewerSession } from "./reviewerPin";
+import {
+  evaluateEnrollmentWindow,
+  loadRoster,
+  type EnrollmentWindowState,
+  type RosterRecord,
+} from "./staffEnrollment";
 
 export const REVIEWER_SESSION_COOKIE = "tmt_reviewer";
 
@@ -28,9 +42,15 @@ export function reviewerSessionSecret(): string {
   return secret;
 }
 
-export type StaffLinkResult =
-  | { ok: true; tokenId: string; partnerId: string; issuedToId: string | null }
-  | { ok: false; response: NextResponse };
+export interface StaffLink {
+  tokenId: string;
+  partnerId: string;
+  /** Null on a shared link. Non-null only on a legacy KEWL-2364 per-reviewer link. */
+  issuedToId: string | null;
+  window: EnrollmentWindowState;
+}
+
+export type StaffLinkResult = { ok: true; link: StaffLink } | { ok: false; response: NextResponse };
 
 function linkFailure(reason: string): NextResponse {
   // Revoked/expired links say so; anything else is indistinguishable from a bad guess.
@@ -40,102 +60,68 @@ function linkFailure(reason: string): NextResponse {
   return NextResponse.json({ success: false, error: { message } }, { status });
 }
 
-export async function resolveStaffLink(token: string): Promise<StaffLinkResult> {
+export async function resolveStaffLink(
+  token: string,
+  now: Date = new Date()
+): Promise<StaffLinkResult> {
   const record = await prisma.catalogAccessToken.findUnique({
     where: { tokenHash: hashCatalogAccessToken(token) },
   });
-  const state = evaluateCatalogAccessToken(record, "staff_review");
+  const state = evaluateCatalogAccessToken(record, "staff_review", now);
   if (!state.ok) return { ok: false, response: linkFailure(state.reason) };
   return {
     ok: true,
-    tokenId: record!.id,
-    partnerId: state.partnerId,
-    issuedToId: record!.issuedToId ?? null,
+    link: {
+      tokenId: record!.id,
+      partnerId: state.partnerId,
+      issuedToId: record!.issuedToId ?? null,
+      window: evaluateEnrollmentWindow(
+        {
+          enrollmentClosesAt: record!.enrollmentClosesAt ?? null,
+          enrollmentClosedAt: record!.enrollmentClosedAt ?? null,
+        },
+        now
+      ),
+    },
   };
 }
 
-export interface BoundReviewer {
-  id: string;
-  name: string;
-  hasPin: boolean;
-  pinHash: string | null;
-  pinFailedAttempts: number;
-  pinLockedUntil: Date | null;
-}
-
-export type BoundLinkResult =
-  | { ok: true; tokenId: string; partnerId: string; reviewer: BoundReviewer }
+export type StaffRosterResult =
+  | { ok: true; link: StaffLink; roster: RosterRecord[] }
   | { ok: false; response: NextResponse };
 
 /**
- * Resolves the ONE reviewer a staff link was issued to.
+ * Resolves the link plus the reviewers it serves.
  *
- * Fails closed on an unbound link. There is deliberately no shared-link fallback: a
- * `staff_review` token with no `issuedToId` cannot identify anybody, so honouring it
- * would reintroduce exactly the identity-claim hole KEWL-2364 flagged. Any legacy
- * shared link stops working and must be re-minted per reviewer.
+ * An empty roster is a dead link, not an open one: with nobody to pick, there is nothing
+ * a holder could do but there is also nothing useful to render, so it 410s the same way
+ * a revoked link does.
  */
-export async function resolveBoundReviewer(token: string): Promise<BoundLinkResult> {
-  const link = await resolveStaffLink(token);
-  if (!link.ok) return link;
+export async function resolveStaffRoster(
+  token: string,
+  now: Date = new Date()
+): Promise<StaffRosterResult> {
+  const resolved = await resolveStaffLink(token, now);
+  if (!resolved.ok) return resolved;
 
-  if (!link.issuedToId) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: "This link isn't set up for a specific reviewer. Ask for your own link.",
-            code: "link_not_bound",
-          },
-        },
-        { status: 410 }
-      ),
-    };
-  }
-
-  const employee = await prisma.mycoEmployee.findFirst({
-    where: {
-      id: link.issuedToId,
-      partnerId: link.partnerId,
-      active: true,
-      optedOut: false,
-    },
-    select: {
-      id: true,
-      name: true,
-      pinHash: true,
-      pinFailedAttempts: true,
-      pinLockedUntil: true,
-    },
+  const roster = await loadRoster(prisma, {
+    partnerId: resolved.link.partnerId,
+    issuedToId: resolved.link.issuedToId,
   });
-  if (!employee) {
+  if (roster.length === 0) {
     return {
       ok: false,
       response: NextResponse.json(
         {
           success: false,
-          error: { message: "This staff link is no longer active.", code: "reviewer_inactive" },
+          error: { message: "This staff link is no longer active.", code: "no_reviewers" },
         },
         { status: 410 }
       ),
     };
   }
 
-  return {
-    ok: true,
-    tokenId: link.tokenId,
-    partnerId: link.partnerId,
-    reviewer: {
-      id: employee.id,
-      name: employee.name,
-      hasPin: Boolean(employee.pinHash),
-      pinHash: employee.pinHash,
-      pinFailedAttempts: employee.pinFailedAttempts,
-      pinLockedUntil: employee.pinLockedUntil,
-    },
-  };
+  return { ok: true, link: resolved.link, roster };
 }
 
 export type ReviewerResult =
@@ -150,33 +136,53 @@ function pinRequired(message = "Enter your PIN."): NextResponse {
 }
 
 /**
- * Full gate for every write and every data read: a link bound to an active reviewer AND a
- * signed session minted from that same link for that same reviewer.
+ * Full gate for every write and every data read: a live link, plus a signed session
+ * minted from that same link for a reviewer who is still on that link's roster.
+ *
+ * The session names the reviewer. That is safe here in a way it would not be on the
+ * sign-in endpoint, because the cookie is HMAC'd server-side and bound to this token —
+ * a holder cannot mint one for a name they did not enroll.
  */
 export async function requireReviewer(
   token: string,
   cookieValue: string | undefined
 ): Promise<ReviewerResult> {
-  const bound = await resolveBoundReviewer(token);
-  if (!bound.ok) return bound;
+  const resolved = await resolveStaffRoster(token);
+  if (!resolved.ok) return resolved;
+  const { link, roster } = resolved;
 
   const session = verifyReviewerSession(cookieValue, {
-    tokenId: bound.tokenId,
+    tokenId: link.tokenId,
     secret: reviewerSessionSecret(),
   });
   if (!session.ok) return { ok: false, response: pinRequired() };
 
-  // The session is already HMAC'd and bound to this token, so this can only diverge if a
-  // link was re-issued to a different reviewer. Identity still comes from the link.
-  if (session.employeeId !== bound.reviewer.id) {
-    return { ok: false, response: pinRequired("Enter your PIN again.") };
+  const reviewer = roster.find((candidate) => candidate.id === session.employeeId);
+  // Off the roster now: deactivated, opted out, or — on a legacy bound link — the link
+  // was re-issued to somebody else after this session was minted.
+  if (!reviewer) return { ok: false, response: pinRequired("Enter your PIN again.") };
+
+  // An admin PIN reset stamps the revocation epoch, which is what actually invalidates
+  // sessions already sitting in browsers. Without this check a reset would only change
+  // the next sign-in, and the QA-enrolled devices would have stayed signed in.
+  if (
+    reviewer.pinSessionsRevokedAt &&
+    session.issuedAt <= reviewer.pinSessionsRevokedAt.getTime()
+  ) {
+    return { ok: false, response: pinRequired("Your PIN was reset. Set a new one.") };
+  }
+
+  // A reviewer whose PIN was cleared is un-enrolled; an old cookie must not carry them
+  // past the enrollment gate.
+  if (!reviewer.pinHash) {
+    return { ok: false, response: pinRequired("Your PIN was reset. Set a new one.") };
   }
 
   return {
     ok: true,
-    tokenId: bound.tokenId,
-    partnerId: bound.partnerId,
-    employeeId: bound.reviewer.id,
-    employeeName: bound.reviewer.name,
+    tokenId: link.tokenId,
+    partnerId: link.partnerId,
+    employeeId: reviewer.id,
+    employeeName: reviewer.name,
   };
 }

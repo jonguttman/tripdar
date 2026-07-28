@@ -14,23 +14,75 @@ import { CATALOG_FIELD_SPECS } from "../src/domain/myco/catalogFieldSpec.ts";
 
 const prisma = new PrismaClient();
 
-const REVIEWERS = ["Adrienne", "Claw", "Dani", "Devon", "Eddie", "Audrey"];
+/**
+ * The six reviewers.
+ *
+ * `legacyEmails` exists because of the KEWL-2394 Clay rename. The row was seeded as
+ * "Claw" — a typo — so its address is `claw@…`, and the name was later corrected by hand
+ * in Neon. The upsert key here is `partnerId_email`, so simply changing the literal to
+ * "Clay" would derive `clay@…`, miss the existing row entirely, and seed a SEVENTH
+ * reviewer. Reconciling the legacy address first is what makes the rename idempotent
+ * against a row that has already been renamed.
+ */
+const REVIEWERS = [
+  { name: "Adrienne" },
+  { name: "Audrey" },
+  { name: "Clay", legacyEmails: ["claw@themushroomtop.internal"] },
+  { name: "Dani" },
+  { name: "Devon" },
+  { name: "Eddie" },
+];
 const PARTNER_NAME = "The Mushroom Top";
+
+const emailFor = (name) => `${name.toLowerCase()}@themushroomtop.internal`;
 
 async function main() {
   const partner = await prisma.partner.findFirst({ where: { name: PARTNER_NAME } });
   if (!partner) throw new Error(`Partner "${PARTNER_NAME}" not found`);
 
   // 1. Reviewers.
-  for (const name of REVIEWERS) {
-    const email = `${name.toLowerCase()}@themushroomtop.internal`;
+  for (const { name, legacyEmails = [] } of REVIEWERS) {
+    const email = emailFor(name);
+
+    // Migrate any legacy-addressed row onto the canonical address BEFORE the upsert, so
+    // the upsert can only ever find-or-create one row per person. Skipped when a
+    // canonical row already exists, so a half-migrated database converges instead of
+    // colliding on the unique key.
+    const canonical = await prisma.mycoEmployee.findUnique({
+      where: { partnerId_email: { partnerId: partner.id, email } },
+      select: { id: true },
+    });
+    if (!canonical) {
+      const legacy = await prisma.mycoEmployee.findFirst({
+        where: { partnerId: partner.id, email: { in: legacyEmails } },
+        select: { id: true, email: true },
+      });
+      if (legacy) {
+        await prisma.mycoEmployee.update({
+          where: { id: legacy.id },
+          // PIN columns are untouched: this is a rename, not a re-enrollment.
+          data: { email, name },
+        });
+        console.log(`reviewer: migrated ${legacy.email} -> ${email}`);
+      }
+    }
+
     await prisma.mycoEmployee.upsert({
       where: { partnerId_email: { partnerId: partner.id, email } },
       create: { partnerId: partner.id, name, email, active: true },
       update: { name, active: true },
     });
   }
-  console.log(`reviewers: ${REVIEWERS.length}`);
+
+  const seeded = await prisma.mycoEmployee.count({
+    where: { partnerId: partner.id, active: true, optedOut: false },
+  });
+  console.log(`reviewers: ${REVIEWERS.length} declared, ${seeded} active in the database`);
+  if (seeded !== REVIEWERS.length) {
+    console.warn(
+      `WARNING: expected ${REVIEWERS.length} active reviewers, found ${seeded}. Check for a duplicate or stale row before minting a link.`
+    );
+  }
 
   // 2. Required-field config data.
   for (const spec of CATALOG_FIELD_SPECS) {

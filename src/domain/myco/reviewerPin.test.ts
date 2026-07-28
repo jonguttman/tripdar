@@ -84,9 +84,12 @@ describe("reviewer session", () => {
 
   it("verifies a session it signed", () => {
     const value = signReviewerSession(base);
+    // `issuedAt` comes back so callers can compare it against a reviewer's PIN-reset
+    // revocation epoch (KEWL-2394).
     expect(verifyReviewerSession(value, { tokenId: "tok-1", secret: SECRET })).toEqual({
       ok: true,
       employeeId: "emp-1",
+      issuedAt: base.issuedAt,
     });
   });
 

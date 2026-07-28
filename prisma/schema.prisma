@@ -450,6 +450,7 @@ model Partner {
   catalogItems StoreProductCatalog[]
   adminUsers   User[]
   employees    MycoEmployee[]
+  reviewerEnrollmentEvents ReviewerEnrollmentEvent[]
   catalogAccessTokens CatalogAccessToken[]
   fieldVerificationRules CatalogFieldVerificationRule[]
   brandSubmissions BrandSubmission[]
@@ -669,6 +670,15 @@ model CatalogAccessToken {
   revokedBy                  String?
   revocationReason           String?
   regeneratedFromId          String?
+  // --- KEWL-2394 shared staff link: bounded self-enrollment window. ---
+  // One shared `staff_review` link serves the whole roster, so an un-enrolled reviewer
+  // picks their own name and sets a PIN on first use. That is only safe while the link
+  // is fresh, so enrollment is time-boxed: `enrollmentClosesAt` is stamped at mint time
+  // (now + 72h) and `enrollmentClosedAt` the moment the roster is fully enrolled or an
+  // admin closes it early. Past either, an unclaimed reviewer fails closed until Jon
+  // reopens the window through the admin control.
+  enrollmentClosesAt         DateTime?
+  enrollmentClosedAt         DateTime?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -679,6 +689,7 @@ model CatalogAccessToken {
   regeneratedFrom CatalogAccessToken? @relation("CatalogTokenRegeneration", fields: [regeneratedFromId], references: [id], onDelete: SetNull)
   regenerations CatalogAccessToken[] @relation("CatalogTokenRegeneration")
   brandSubmissions BrandSubmission[]
+  enrollmentEvents ReviewerEnrollmentEvent[]
 
   @@index([partnerId, purpose, status])
   @@index([brandId, status])
@@ -816,14 +827,52 @@ model MycoEmployee {
   pinFailedAttempts Int      @default(0)
   pinLockedUntil    DateTime?
   pinLastUsedAt     DateTime?
+  // KEWL-2394: reviewer sessions are stateless signed cookies, so resetting a PIN cannot
+  // delete them. This is the revocation epoch — any session minted at or before this
+  // instant is refused, which is what makes an admin PIN reset actually sign the device
+  // out instead of merely changing the next PIN prompt.
+  pinSessionsRevokedAt DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   assignments MycoEmployeeReviewAssignment[]
+  enrollmentEvents ReviewerEnrollmentEvent[]
 
   @@unique([partnerId, email])
   @@index([partnerId, active])
+}
+
+/// KEWL-2394 — append-only enrollment ledger.
+///
+/// Every enrollment-state transition and every attempt at one lands here: a reviewer
+/// claiming a name, a denial because the window had closed, an admin reopening the
+/// window, a PIN reset. Nothing in the codebase updates or deletes a row — enrollment
+/// state is never changed by a silent `UPDATE`, so "who claimed this name, when, and
+/// under whose authority" is always answerable from the record itself.
+model ReviewerEnrollmentEvent {
+  id            String   @id @default(cuid())
+  partnerId     String
+  accessTokenId String?
+  employeeId    String?
+  /// Denormalised on purpose: the ledger has to stay readable after a reviewer row is
+  /// renamed or removed, and `onDelete: SetNull` above would otherwise orphan the entry.
+  employeeName  String?
+  event         String // enrolled, enrollment_denied, pin_verified, pin_failed, pin_reset, pin_reset_all, window_reopened, window_auto_closed, link_minted
+  outcome       String // allowed, denied
+  actorType     String // reviewer, admin, system
+  actorIdentity String
+  reason        String?
+  metadata      Json     @default("{}")
+  createdAt     DateTime @default(now())
+
+  partner     Partner             @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  accessToken CatalogAccessToken? @relation(fields: [accessTokenId], references: [id], onDelete: SetNull)
+  employee    MycoEmployee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@index([accessTokenId, createdAt])
+  @@index([employeeId, createdAt])
 }
 
 model MycoEmployeeReviewAssignment {

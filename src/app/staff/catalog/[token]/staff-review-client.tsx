@@ -28,11 +28,21 @@ interface Reviewer {
   lockedOut: boolean;
 }
 
+interface EnrollmentWindow {
+  open: boolean;
+  closesAt: string | null;
+  closedAt: string | null;
+  /** Server-authored dead-end copy, shown verbatim so the UI can't soften the refusal. */
+  closedMessage: string | null;
+}
+
 interface Bootstrap {
   partnerName: string;
-  /** The link identifies the reviewer (KEWL-2364) — there is no "pick your name" step. */
+  /** One link serves the whole store (KEWL-2394), so picking your name comes first. */
   signedIn: boolean;
-  reviewer: Reviewer;
+  signedInReviewerId: string | null;
+  enrollment: EnrollmentWindow;
+  roster: Reviewer[];
 }
 
 interface SessionResult {
@@ -444,6 +454,14 @@ export default function StaffReviewClient({ token }: { token: string }) {
 
 /* ------------------------------------------------------- screen: identify --- */
 
+/**
+ * Two steps on one screen: pick your name off the roster, then enter (or choose) a PIN.
+ *
+ * The roster is only a convenience — it does not decide anything. A name whose PIN is
+ * already set always lands on "enter your PIN", and an unclaimed name outside the
+ * enrollment window is refused by the server whatever this component renders. Disabling
+ * it here just stops staff from typing four digits before being told no.
+ */
 function IdentifyScreen({
   bootstrap,
   onSignedIn,
@@ -453,19 +471,26 @@ function IdentifyScreen({
   onSignedIn: () => void;
   request: <T,>(path: string, init?: RequestInit) => Promise<ApiResult<T>>;
 }) {
-  const reviewer = bootstrap.reviewer;
+  const roster = bootstrap.roster;
+  // A legacy per-reviewer link has a roster of one — skip a picker with no choice in it.
+  const [selectedId, setSelectedId] = useState<string | null>(
+    roster.length === 1 ? roster[0].id : null
+  );
   const [pin, setPin] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const reviewer = roster.find((candidate) => candidate.id === selectedId) ?? null;
+  const enrollmentBlocked = Boolean(reviewer && !reviewer.hasPin && !bootstrap.enrollment.open);
+
   async function signIn() {
+    if (!reviewer) return;
     setSubmitting(true);
     setError(null);
-    // No employeeId: the link says who this is. Sending it would be the KEWL-2364 hole.
     const res = await request<SessionResult>("/session", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin }),
+      body: JSON.stringify({ employeeId: reviewer.id, pin }),
     });
     setSubmitting(false);
     if (!res.ok) {
@@ -481,10 +506,59 @@ function IdentifyScreen({
       <p className="text-sm text-neutral-500">{bootstrap.partnerName || "Staff review"}</p>
       <h1 className="mt-1 text-2xl font-semibold text-neutral-950">Catalog review</h1>
 
-      {reviewer.lockedOut ? (
+      {roster.length > 1 ? (
+        <section className="mt-6">
+          <h2 className="text-base font-medium text-neutral-800">Who&rsquo;s reviewing?</h2>
+          <p className="mt-1 text-sm text-neutral-600">
+            Tap your name. First time, you&rsquo;ll pick a PIN.
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {roster.map((candidate) => {
+              const active = candidate.id === selectedId;
+              return (
+                <button
+                  key={candidate.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => {
+                    setSelectedId(candidate.id);
+                    setPin("");
+                    setError(null);
+                  }}
+                  className={`min-h-[56px] rounded-lg border px-3 text-base font-medium ${
+                    active
+                      ? "border-neutral-950 bg-neutral-950 text-white"
+                      : "border-neutral-300 bg-white text-neutral-800"
+                  }`}
+                >
+                  <span className="block">{candidate.name}</span>
+                  {!candidate.hasPin ? (
+                    <span
+                      className={`block text-xs font-normal ${
+                        active ? "text-neutral-300" : "text-neutral-500"
+                      }`}
+                    >
+                      {bootstrap.enrollment.open ? "new — pick a PIN" : "not set up"}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {!reviewer ? null : reviewer.lockedOut ? (
         <section className="mt-6">
           <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            Too many PIN tries. Try again in a few minutes.
+            Too many PIN tries for {reviewer.name}. Try again in a few minutes.
+          </p>
+        </section>
+      ) : enrollmentBlocked ? (
+        <section className="mt-6">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            {bootstrap.enrollment.closedMessage ??
+              "Enrollment for this link has closed. Ask Jon to reopen enrollment."}
           </p>
         </section>
       ) : (
@@ -498,7 +572,7 @@ function IdentifyScreen({
             <p className="mt-1 text-sm text-neutral-600">
               {reviewer.hasPin
                 ? "Four digits, so your reviews stay filed under your name."
-                : "This link is yours. Choose 4 digits you'll remember — it keeps anyone else who gets the link out of your reviews. Pick something other than 1234."}
+                : "Choose 4 digits you'll remember — it keeps anyone else who has this link out of your reviews. Pick something other than 1234."}
             </p>
           </div>
 

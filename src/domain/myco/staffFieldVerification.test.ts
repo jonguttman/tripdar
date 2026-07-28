@@ -68,7 +68,7 @@ describe("computeStaffFieldState — counting rules", () => {
 
   it("treats 'confirmed absent' as a real answer that satisfies the gate", () => {
     const state = computeStaffFieldState({
-      submissions: [sub(CONFIRMED_ABSENT_VALUE, "claw")],
+      submissions: [sub(CONFIRMED_ABSENT_VALUE, "clay")],
       rule: TIER_A,
     });
     expect(state.state).toBe("confirmed");

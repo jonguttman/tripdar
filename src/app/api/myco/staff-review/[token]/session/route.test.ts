@@ -1,13 +1,17 @@
 /**
- * KEWL-2364 — the reviewer identity-enrollment fix.
+ * KEWL-2394 — sign-in on the shared staff link.
  *
- * Architecture Guardian blocked PR #28 because first-use PIN setup took `employeeId`
- * from the request body: any holder of the shared store link could enroll a PIN as any
- * reviewer who had not set one yet, and receive a 30-day session as that person.
+ * Jon overrode the KEWL-2364 per-reviewer-link model on 2026-07-28: one link serves the
+ * whole roster and everyone picks a PIN the first time they open it. That deliberately
+ * puts `employeeId` back in the request body, so these tests pin the constraints that
+ * replace link-binding as the bound on identity claims:
  *
- * These tests pin the corrected contract: the reviewer is whoever the LINK was issued
- * to, `employeeId` in the body is inert, unbound links fail closed, and a PIN that is
- * already set can never be overwritten through this route.
+ *  - the id must be on THIS link's roster;
+ *  - an unclaimed name may only be claimed while the enrollment window is open, and
+ *    fails closed with the reopen instruction once it is not;
+ *  - claiming is a compare-and-set that exactly one racer can win;
+ *  - an already-enrolled name always demands its PIN and can never be re-claimed;
+ *  - every attempt, allowed or denied, appends to the enrollment ledger.
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -15,8 +19,9 @@ import { hashPin, verifyReviewerSession, MAX_PIN_ATTEMPTS } from "@/domain/myco/
 import { REVIEWER_SESSION_COOKIE } from "@/domain/myco/staffReviewAuth";
 
 const prismaMock = vi.hoisted(() => ({
-  catalogAccessToken: { findUnique: vi.fn() },
-  mycoEmployee: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+  catalogAccessToken: { findUnique: vi.fn(), updateMany: vi.fn() },
+  mycoEmployee: { findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+  reviewerEnrollmentEvent: { create: vi.fn() },
 }));
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
@@ -25,9 +30,12 @@ const SECRET = "test-secret-for-reviewer-sessions";
 const TOKEN_ID = "token-row-1";
 const PARTNER_ID = "partner-1";
 const ADRIENNE = "employee-adrienne";
-const COWORKER = "employee-coworker";
+const AUDREY = "employee-audrey";
+const OUTSIDER = "employee-not-on-this-roster";
 
-/** A staff link row as stored: bound to exactly one reviewer via `issuedToId`. */
+const HOUR = 60 * 60 * 1000;
+
+/** A shared staff link: `issuedToId` null, enrollment open for another day. */
 function linkRow(overrides: Record<string, unknown> = {}) {
   return {
     id: TOKEN_ID,
@@ -37,20 +45,27 @@ function linkRow(overrides: Record<string, unknown> = {}) {
     expiresAt: null,
     revokedAt: null,
     brandId: null,
-    issuedToId: ADRIENNE,
+    issuedToId: null,
+    enrollmentClosesAt: new Date(Date.now() + 24 * HOUR),
+    enrollmentClosedAt: null,
     ...overrides,
   };
 }
 
-function employeeRow(overrides: Record<string, unknown> = {}) {
+function reviewerRow(id: string, name: string, overrides: Record<string, unknown> = {}) {
   return {
-    id: ADRIENNE,
-    name: "Adrienne",
+    id,
+    name,
     pinHash: null,
     pinFailedAttempts: 0,
     pinLockedUntil: null,
+    pinSessionsRevokedAt: null,
     ...overrides,
   };
+}
+
+function roster(...rows: ReturnType<typeof reviewerRow>[]) {
+  prismaMock.mycoEmployee.findMany.mockResolvedValue(rows);
 }
 
 async function post(body: Record<string, unknown>) {
@@ -63,162 +78,321 @@ async function post(body: Record<string, unknown>) {
   return POST(request as never, { params: Promise.resolve({ token: "raw-token" }) });
 }
 
-describe("staff review session — identity comes from the link (KEWL-2364)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.NEXTAUTH_SECRET = SECRET;
-    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(linkRow());
-    prismaMock.mycoEmployee.findFirst.mockResolvedValue(employeeRow());
-    prismaMock.mycoEmployee.updateMany.mockResolvedValue({ count: 1 });
-    prismaMock.mycoEmployee.update.mockResolvedValue({});
-  });
+/** The ledger rows this request appended, in order. */
+function ledgerEvents() {
+  return prismaMock.reviewerEnrollmentEvent.create.mock.calls.map((call) => call[0].data);
+}
 
-  it("enrolls the reviewer the link is bound to, ignoring employeeId in the body", async () => {
-    // The attack: hold Adrienne's link, claim to be a co-worker who has no PIN yet.
-    const response = await post({ employeeId: COWORKER, pin: "8317" });
+beforeEach(() => {
+  vi.clearAllMocks();
+  process.env.NEXTAUTH_SECRET = SECRET;
+  prismaMock.catalogAccessToken.findUnique.mockResolvedValue(linkRow());
+  prismaMock.catalogAccessToken.updateMany.mockResolvedValue({ count: 0 });
+  prismaMock.mycoEmployee.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.mycoEmployee.update.mockResolvedValue({});
+  prismaMock.reviewerEnrollmentEvent.create.mockResolvedValue({});
+  roster(reviewerRow(ADRIENNE, "Adrienne"), reviewerRow(AUDREY, "Audrey"));
+});
+
+describe("first-use enrollment on a shared link", () => {
+  it("enrolls the reviewer the caller picked and mints their session", async () => {
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
     expect(response.status).toBe(200);
 
-    // Identity was resolved from the link, so the lookup targeted the bound reviewer...
-    expect(prismaMock.mycoEmployee.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ id: ADRIENNE }) })
-    );
-    // ...and the PIN was written for the bound reviewer, never the requested one.
+    // The PIN is written for the picked reviewer, under the compare-and-set guard.
     expect(prismaMock.mycoEmployee.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ id: ADRIENNE }) })
+      expect.objectContaining({ where: { id: AUDREY, pinHash: null } })
     );
 
     const body = await response.json();
-    expect(body.data.employeeId).toBe(ADRIENNE);
-    expect(body.data.employeeName).toBe("Adrienne");
-  });
+    expect(body.data).toMatchObject({ employeeId: AUDREY, employeeName: "Audrey", firstUse: true });
 
-  it("mints a session for the bound reviewer, not the requested one", async () => {
-    const response = await post({ employeeId: COWORKER, pin: "8317" });
     const cookie = response.cookies.get(REVIEWER_SESSION_COOKIE)?.value;
-
     const session = verifyReviewerSession(cookie, { tokenId: TOKEN_ID, secret: SECRET });
-    expect(session).toEqual({ ok: true, employeeId: ADRIENNE });
+    expect(session.ok).toBe(true);
+    if (session.ok) expect(session.employeeId).toBe(AUDREY);
   });
 
-  it("fails closed on a link that is not bound to any reviewer", async () => {
-    // A legacy shared store-wide link. It must stop working rather than fall back.
-    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(linkRow({ issuedToId: null }));
+  it("records the enrollment on the append-only ledger", async () => {
+    await post({ employeeId: AUDREY, pin: "8317" });
 
-    const response = await post({ employeeId: ADRIENNE, pin: "8317" });
+    expect(ledgerEvents()).toContainEqual(
+      expect.objectContaining({
+        event: "enrolled",
+        outcome: "allowed",
+        employeeId: AUDREY,
+        employeeName: "Audrey",
+        actorType: "reviewer",
+        accessTokenId: TOKEN_ID,
+      })
+    );
+  });
 
-    expect(response.status).toBe(410);
-    expect((await response.json()).error.code).toBe("link_not_bound");
+  it("refuses an employeeId that is not on this link's roster", async () => {
+    const response = await post({ employeeId: OUTSIDER, pin: "8317" });
+
+    expect(response.status).toBe(404);
+    expect((await response.json()).error.code).toBe("unknown_reviewer");
+    expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("leaves every other reviewer on the link untouched", async () => {
+    await post({ employeeId: AUDREY, pin: "8317" });
+
+    const touched = prismaMock.mycoEmployee.updateMany.mock.calls.map((call) => call[0].where.id);
+    expect(touched).toEqual([AUDREY]);
+    expect(prismaMock.mycoEmployee.update).not.toHaveBeenCalled();
+  });
+
+  it("loses the first-use race rather than clobbering a concurrently-set PIN", async () => {
+    prismaMock.mycoEmployee.updateMany.mockResolvedValue({ count: 0 });
+
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).error.code).toBe("already_enrolled");
+    expect(response.cookies.get(REVIEWER_SESSION_COOKIE)?.value).toBeFalsy();
+    expect(ledgerEvents()).toContainEqual(
+      expect.objectContaining({ event: "enrollment_denied", outcome: "denied" })
+    );
+  });
+
+  it("rejects an obvious PIN at enrollment", async () => {
+    const response = await post({ employeeId: AUDREY, pin: "1234" });
+
+    expect(response.status).toBe(400);
+    expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed PIN before touching the database", async () => {
+    const response = await post({ employeeId: AUDREY, pin: "12" });
+
+    expect(response.status).toBe(400);
     expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
     expect(prismaMock.mycoEmployee.update).not.toHaveBeenCalled();
   });
 
-  it("rejects a link whose bound reviewer is inactive or opted out", async () => {
-    prismaMock.mycoEmployee.findFirst.mockResolvedValue(null);
+  it("closes the window once the last unclaimed name is taken", async () => {
+    prismaMock.catalogAccessToken.updateMany.mockResolvedValue({ count: 1 });
+    // The post-enrollment re-read sees the whole roster enrolled.
+    prismaMock.mycoEmployee.findMany
+      .mockResolvedValueOnce([
+        reviewerRow(ADRIENNE, "Adrienne", { pinHash: "scrypt$set" }),
+        reviewerRow(AUDREY, "Audrey"),
+      ])
+      .mockResolvedValueOnce([
+        reviewerRow(ADRIENNE, "Adrienne", { pinHash: "scrypt$set" }),
+        reviewerRow(AUDREY, "Audrey", { pinHash: "scrypt$set" }),
+      ]);
 
-    const response = await post({ pin: "8317" });
+    await post({ employeeId: AUDREY, pin: "8317" });
 
-    expect(response.status).toBe(410);
-    expect((await response.json()).error.code).toBe("reviewer_inactive");
+    expect(prismaMock.catalogAccessToken.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: TOKEN_ID, enrollmentClosedAt: null } })
+    );
+    expect(ledgerEvents()).toContainEqual(
+      expect.objectContaining({ event: "window_auto_closed", actorType: "system" })
+    );
   });
 
-  it("cannot overwrite a PIN that is already set", async () => {
-    const stored = await hashPin("8317");
-    prismaMock.mycoEmployee.findFirst.mockResolvedValue(employeeRow({ pinHash: stored }));
+  it("leaves the window open while anyone is still unclaimed", async () => {
+    await post({ employeeId: AUDREY, pin: "8317" });
 
-    // A different PIN must be treated as a failed verification, never as re-enrollment.
-    const response = await post({ pin: "9042" });
+    expect(prismaMock.catalogAccessToken.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("enrollment window fail-closed", () => {
+  const CLOSED_MESSAGE = "Enrollment for this link has closed. Ask Jon to reopen enrollment.";
+
+  it("refuses an unclaimed name after the window has expired", async () => {
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(
+      linkRow({ enrollmentClosesAt: new Date(Date.now() - HOUR) })
+    );
+
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body.error.code).toBe("enrollment_closed");
+    expect(body.error.message).toBe(CLOSED_MESSAGE);
+    expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("refuses an unclaimed name after the window was closed early", async () => {
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(
+      linkRow({ enrollmentClosedAt: new Date(Date.now() - HOUR) })
+    );
+
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe("enrollment_closed");
+  });
+
+  it("refuses on a legacy link that never had a window", async () => {
+    // A link minted before KEWL-2394 has both columns NULL. Defaulting that to OPEN would
+    // silently turn every old link into a self-enrollment link.
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(
+      linkRow({ enrollmentClosesAt: null, enrollmentClosedAt: null })
+    );
+
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe("enrollment_closed");
+  });
+
+  it("logs the refusal instead of failing silently", async () => {
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(
+      linkRow({ enrollmentClosesAt: new Date(Date.now() - HOUR) })
+    );
+
+    await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(ledgerEvents()).toContainEqual(
+      expect.objectContaining({
+        event: "enrollment_denied",
+        outcome: "denied",
+        employeeId: AUDREY,
+        reason: CLOSED_MESSAGE,
+      })
+    );
+  });
+
+  it("still lets an ALREADY-ENROLLED reviewer sign in after the window shuts", async () => {
+    // Closing enrollment must not lock out the people who did enroll in time.
+    const stored = await hashPin("8317");
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(
+      linkRow({ enrollmentClosedAt: new Date(Date.now() - HOUR) })
+    );
+    roster(reviewerRow(ADRIENNE, "Adrienne", { pinHash: stored }), reviewerRow(AUDREY, "Audrey"));
+
+    const response = await post({ employeeId: ADRIENNE, pin: "8317" });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.firstUse).toBe(false);
+  });
+});
+
+describe("an already-enrolled reviewer", () => {
+  it("cannot be re-claimed with a different PIN", async () => {
+    const stored = await hashPin("8317");
+    roster(reviewerRow(AUDREY, "Audrey", { pinHash: stored }));
+
+    const response = await post({ employeeId: AUDREY, pin: "9042" });
 
     expect(response.status).toBe(401);
     expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
     const patch = prismaMock.mycoEmployee.update.mock.calls[0][0].data;
     expect(patch.pinHash).toBeUndefined();
     expect(patch.pinFailedAttempts).toBe(1);
-  });
-
-  it("loses the first-use race rather than clobbering a concurrently-set PIN", async () => {
-    // Compare-and-set: another device enrolled between our read and our write.
-    prismaMock.mycoEmployee.updateMany.mockResolvedValue({ count: 0 });
-
-    const response = await post({ pin: "8317" });
-
-    expect(response.status).toBe(401);
-    expect(response.cookies.get(REVIEWER_SESSION_COOKIE)?.value).toBeFalsy();
-  });
-
-  it("accepts the correct PIN and resets the failure counter", async () => {
-    const stored = await hashPin("8317");
-    prismaMock.mycoEmployee.findFirst.mockResolvedValue(
-      employeeRow({ pinHash: stored, pinFailedAttempts: 3 })
+    expect(ledgerEvents()).toContainEqual(
+      expect.objectContaining({ event: "pin_failed", outcome: "denied" })
     );
+  });
 
-    const response = await post({ pin: "8317" });
+  it("signs in with the correct PIN and clears the failure counter", async () => {
+    const stored = await hashPin("8317");
+    roster(reviewerRow(AUDREY, "Audrey", { pinHash: stored, pinFailedAttempts: 3 }));
+
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
 
     expect(response.status).toBe(200);
     const patch = prismaMock.mycoEmployee.update.mock.calls[0][0].data;
     expect(patch.pinFailedAttempts).toBe(0);
     expect(patch.pinLockedUntil).toBeNull();
+    expect(ledgerEvents()).toContainEqual(
+      expect.objectContaining({ event: "pin_verified", outcome: "allowed" })
+    );
   });
 
   it("locks out on the final failed attempt", async () => {
     const stored = await hashPin("8317");
-    prismaMock.mycoEmployee.findFirst.mockResolvedValue(
-      employeeRow({ pinHash: stored, pinFailedAttempts: MAX_PIN_ATTEMPTS - 1 })
-    );
+    roster(reviewerRow(AUDREY, "Audrey", { pinHash: stored, pinFailedAttempts: MAX_PIN_ATTEMPTS - 1 }));
 
-    const response = await post({ pin: "9042" });
+    const response = await post({ employeeId: AUDREY, pin: "9042" });
 
     expect(response.status).toBe(429);
     expect(prismaMock.mycoEmployee.update.mock.calls[0][0].data.pinLockedUntil).toBeInstanceOf(Date);
   });
 
   it("refuses to spend a scrypt verification while locked out", async () => {
-    prismaMock.mycoEmployee.findFirst.mockResolvedValue(
-      employeeRow({ pinHash: "irrelevant", pinLockedUntil: new Date(Date.now() + 60_000) })
+    roster(
+      reviewerRow(AUDREY, "Audrey", {
+        pinHash: "irrelevant",
+        pinLockedUntil: new Date(Date.now() + 60_000),
+      })
     );
 
-    const response = await post({ pin: "8317" });
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
 
     expect(response.status).toBe(429);
     expect(prismaMock.mycoEmployee.update).not.toHaveBeenCalled();
   });
+});
 
-  it("rejects a malformed PIN before touching the database", async () => {
-    const response = await post({ pin: "12" });
+describe("legacy per-reviewer links (KEWL-2364) keep working", () => {
+  it("signs in without an employeeId, because the roster has exactly one name", async () => {
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(linkRow({ issuedToId: ADRIENNE }));
+    roster(reviewerRow(ADRIENNE, "Adrienne"));
 
-    expect(response.status).toBe(400);
-    expect(prismaMock.mycoEmployee.update).not.toHaveBeenCalled();
-    expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
+    const response = await post({ pin: "8317" });
+
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.employeeId).toBe(ADRIENNE);
+    // The roster query was narrowed to the bound reviewer, so the link still can't be
+    // used to enrol anyone else.
+    expect(prismaMock.mycoEmployee.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ id: ADRIENNE }) })
+    );
   });
 
-  it("rejects an obvious PIN at enrollment", async () => {
-    const response = await post({ pin: "1234" });
+  it("cannot be used to claim a co-worker", async () => {
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(linkRow({ issuedToId: ADRIENNE }));
+    roster(reviewerRow(ADRIENNE, "Adrienne"));
 
-    expect(response.status).toBe(400);
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(response.status).toBe(404);
     expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
   });
 });
 
-describe("reviewer session replay (KEWL-2364)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.NEXTAUTH_SECRET = SECRET;
-    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(linkRow());
-    prismaMock.mycoEmployee.findFirst.mockResolvedValue(employeeRow());
-    prismaMock.mycoEmployee.updateMany.mockResolvedValue({ count: 1 });
+describe("link state", () => {
+  it("rejects a revoked link before any reviewer lookup", async () => {
+    prismaMock.catalogAccessToken.findUnique.mockResolvedValue(
+      linkRow({ status: "revoked", revokedAt: new Date() })
+    );
+
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(response.status).toBe(410);
+    expect(prismaMock.mycoEmployee.findMany).not.toHaveBeenCalled();
   });
 
+  it("rejects a link whose roster is empty", async () => {
+    roster();
+
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
+
+    expect(response.status).toBe(410);
+    expect((await response.json()).error.code).toBe("no_reviewers");
+  });
+});
+
+describe("reviewer session replay", () => {
   it("does not verify on a different staff link", async () => {
-    const response = await post({ pin: "8317" });
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
     const cookie = response.cookies.get(REVIEWER_SESSION_COOKIE)?.value;
 
-    // Same cookie presented against a token row from another link (or another partner).
     expect(verifyReviewerSession(cookie, { tokenId: "some-other-token", secret: SECRET })).toEqual({
       ok: false,
     });
   });
 
   it("does not verify under a different server secret", async () => {
-    const response = await post({ pin: "8317" });
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
     const cookie = response.cookies.get(REVIEWER_SESSION_COOKIE)?.value;
 
     expect(verifyReviewerSession(cookie, { tokenId: TOKEN_ID, secret: "other-secret" })).toEqual({
@@ -227,11 +401,11 @@ describe("reviewer session replay (KEWL-2364)", () => {
   });
 
   it("does not accept a hand-edited employee id", async () => {
-    const response = await post({ pin: "8317" });
+    const response = await post({ employeeId: AUDREY, pin: "8317" });
     const cookie = response.cookies.get(REVIEWER_SESSION_COOKIE)!.value;
 
     // Swap the identity segment; the HMAC covers it, so the whole cookie is void.
-    const forged = [COWORKER, ...cookie.split(".").slice(1)].join(".");
+    const forged = [ADRIENNE, ...cookie.split(".").slice(1)].join(".");
     expect(verifyReviewerSession(forged, { tokenId: TOKEN_ID, secret: SECRET })).toEqual({
       ok: false,
     });

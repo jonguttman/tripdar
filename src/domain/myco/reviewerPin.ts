@@ -125,10 +125,16 @@ export function signReviewerSession(input: {
 
 export const REVIEWER_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // remembered per device
 
+/**
+ * `issuedAt` comes back on success so callers can compare it against a reviewer's
+ * revocation epoch (KEWL-2394) — a stateless cookie cannot be deleted server-side, so
+ * "this session predates the reset" is the only way an admin PIN reset can sign a device
+ * out rather than merely change the next prompt.
+ */
 export function verifyReviewerSession(
   value: string | null | undefined,
   input: { tokenId: string; secret: string; now?: number }
-): { ok: true; employeeId: string } | { ok: false } {
+): { ok: true; employeeId: string; issuedAt: number } | { ok: false } {
   if (!value) return { ok: false };
   const parts = value.split(".");
   if (parts.length !== 4) return { ok: false };
@@ -147,5 +153,5 @@ export function verifyReviewerSession(
   const expectedBuffer = Buffer.from(expected);
   if (macBuffer.length !== expectedBuffer.length) return { ok: false };
   if (!crypto.timingSafeEqual(macBuffer, expectedBuffer)) return { ok: false };
-  return { ok: true, employeeId };
+  return { ok: true, employeeId, issuedAt };
 }
