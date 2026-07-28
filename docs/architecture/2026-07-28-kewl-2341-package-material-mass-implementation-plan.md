@@ -2,6 +2,8 @@
 
 Revision: 2026-07-28, KEWL-2344 sequencing update.
 
+KEWL-2346 correction: this plan's active-compound gates are necessary but not sufficient for `suggestedUnits`. The current `CANONICAL_DOSE_LEVELS` ladder is dried-mushroom-equivalent material mass, so recommendation unit math must also require a same-basis divisor. See `docs/architecture/2026-07-28-kewl-2346-dose-ladder-basis.md` before implementing scoring changes.
+
 Status: implementation plan and migration draft only. No production migration, data mutation, product activation, or dose-field clearing has been performed.
 
 ## Recommended architecture
