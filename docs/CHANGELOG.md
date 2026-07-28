@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.14.0] - 2026-07-28
+
+### Fixed
+- **Consumer-side dose safety gates** (KEWL-2356 / KEWL-2346): `product.suggestedUnits` is no longer derived by dividing the canonical dose ladder by `productUnitMg`. The ladder is dried-mushroom-equivalent mass, `productUnitMg` is verified active-compound mass, and dividing one by the other produced unit counts in the overdose direction (a 1 mg psilocin unit could yield a four-digit Level 4 suggestion). Unit math now requires an explicit same-basis divisor (`unitMaterialMassMg` + `materialMassBasis` for catalog rows, `productUnitMaterialMassMg` + `productMaterialMassBasis` for legacy config). Only `fruiting_body` and `mushroom_material` are treated as ladder-compatible; extracts, proprietary blends, net edible weight, unknown, and missing bases all fail closed.
+
+### Added
+- `CANONICAL_DOSE_BASIS` constant exported alongside `CANONICAL_DOSE_LEVELS`, plus a `doseBasis` module holding both safety gates (`isSupportedActiveCompound`, `isLadderCompatibleMaterialBasis`, `computeSuggestedUnits`).
+- Fail-closed `activeCompound` gate on dose output: only `psilocybin` and `psilocin` may emit brand-ladder guidance or canonical-ladder `suggestedUnits`. `unknown` (the column default), blank/missing, `muscimol`, `functional-only`, and unrecognized values retain product identity but emit no dose guidance.
+
+### Changed
+- `ScoredRecommendation.product.suggestedUnits` is now **optional** — a contract change for API consumers. Product recommendation eligibility is independent of `activeCompound`; name, photo, URL, and format are retained when compound or basis gates suppress unit math.
+- `RecommendationResult.productUnits` persists `null` when unit math is suppressed instead of storing a fabricated count.
+- WordPress plugin omits the entire `tripdar-rec__product-units` span when `suggestedUnits` is absent, so no stray `capsules`/`gummies` label renders without a count.
+
 ## [1.13.1] - 2026-07-25
 
 ### Fixed
