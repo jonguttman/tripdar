@@ -526,6 +526,16 @@ model StoreProductCatalog {
   activeCompound        String   @default("unknown")
   activeCompoundSource  String?
   active                Boolean  @default(true)
+  // --- KEWL-2335 listing gate ---
+  // Research-only products (G23 Lady Hyphae isolated solution) must never enter the
+  // customer path. Excluded outright rather than parked forever failing the gate.
+  researchOnly          Boolean  @default(false)
+  researchOnlyReason    String?
+  // Jon-only force-list override. Never a silent boolean — the typed reason is
+  // mandatory and is also written to the append-only CatalogFieldChange log.
+  listingOverrideAt     DateTime?
+  listingOverrideBy     String?
+  listingOverrideReason String?
   archivedAt            DateTime?
   notes                 String?
   createdAt             DateTime @default(now())
@@ -728,6 +738,22 @@ model CatalogFieldVerificationRule {
   fieldName             String
   requiredConfirmations Int      @default(1)
   active                Boolean  @default(true)
+  // --- KEWL-2335: the approved required-field set lives here as CONFIG DATA. ---
+  // KEWL-2033 renames the dose fields; when it lands we update rows, not code.
+  tier                  String   @default("A") // A, B, C, D
+  requiresDistinctReviewers Boolean @default(false) // Tier B: 2 different people
+  gateRequired          Boolean  @default(true) // Tier D rows are false — excluded from the listing gate
+  readinessKey          String? // maps to a computeReadiness() `missing[]` key, so Tier D exclusion is data
+  catalogColumn         String? // StoreProductCatalog column this field writes to; null = log-only field.
+  // ^ this is what makes the KEWL-2033 dose rename a row update instead of a code change.
+  label                 String? // reviewer-facing field label
+  helpText              String? // reviewer-facing hint
+  inputType             String   @default("text") // text, number, list, strain, photo_check
+  allowsConfirmedAbsent Boolean  @default(true) // "genuinely has no strain claim" satisfies the gate
+  // Which confirmed answers actually satisfy the gate. Empty = any confirmed value does.
+  // The photo check uses ["yes"], so a product confirmed to have the WRONG photo stays blocked.
+  gateSatisfyingValues  String[] @default([])
+  sortOrder             Int      @default(0)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -735,6 +761,7 @@ model CatalogFieldVerificationRule {
 
   @@unique([partnerId, fieldName])
   @@index([fieldName, active])
+  @@index([tier, active])
 }
 
 model BrandSubmission {
@@ -781,6 +808,14 @@ model MycoEmployee {
   points    Int      @default(0)
   streak    Int      @default(0)
   lastRespondedAt DateTime?
+  // --- KEWL-2335 staff catalog review: first-use 4-digit PIN. ---
+  // Deterrence-grade only (10,000 combinations), not security-grade. Slow-hashed
+  // (scrypt) with a per-reviewer lockout so the small keyspace cannot be walked.
+  pinHash           String?
+  pinSetAt          DateTime?
+  pinFailedAttempts Int      @default(0)
+  pinLockedUntil    DateTime?
+  pinLastUsedAt     DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
