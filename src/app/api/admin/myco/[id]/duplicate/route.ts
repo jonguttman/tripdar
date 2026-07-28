@@ -20,9 +20,10 @@ import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 import { normalizeStrainSlug } from "@/domain/strain/data";
+import { sanitizeDoseProvenanceInput } from "../../doseProvenance";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
@@ -32,6 +33,14 @@ export async function POST(
 
   try {
     const { id } = await params;
+    const body = await req.json().catch(() => ({}));
+    const doseProvenance = sanitizeDoseProvenanceInput(body);
+    if (!doseProvenance.ok) {
+      return NextResponse.json(
+        { success: false, error: { message: doseProvenance.message } },
+        { status: 400 }
+      );
+    }
 
     const access = await resolveProductForAdmin(session.user.email, id);
     if (!access.ok) {
@@ -82,6 +91,30 @@ export async function POST(
         brandDoseTiers: source.brandDoseTiers === null ? undefined : source.brandDoseTiers,
         brandDoseInstructions: source.brandDoseInstructions,
         photoUrl: null,
+        packageMaterialMassMg:
+          "packageMaterialMassMg" in doseProvenance.data
+            ? (doseProvenance.data.packageMaterialMassMg as number | null)
+            : source.packageMaterialMassMg,
+        unitMaterialMassMg:
+          "unitMaterialMassMg" in doseProvenance.data
+            ? (doseProvenance.data.unitMaterialMassMg as number | null)
+            : source.unitMaterialMassMg,
+        materialMassBasis:
+          "materialMassBasis" in doseProvenance.data
+            ? (doseProvenance.data.materialMassBasis as string | null)
+            : source.materialMassBasis,
+        materialMassSource:
+          "materialMassSource" in doseProvenance.data
+            ? (doseProvenance.data.materialMassSource as string | null)
+            : source.materialMassSource,
+        activeCompound:
+          "activeCompound" in doseProvenance.data
+            ? (doseProvenance.data.activeCompound as string)
+            : source.activeCompound,
+        activeCompoundSource:
+          "activeCompoundSource" in doseProvenance.data
+            ? (doseProvenance.data.activeCompoundSource as string | null)
+            : source.activeCompoundSource,
         active: true,
         notes: source.notes,
         strengthOffset: {

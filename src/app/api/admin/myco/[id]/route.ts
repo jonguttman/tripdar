@@ -8,6 +8,7 @@ import { normalizeFlavors } from "@/domain/myco/flavors";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
 import { normalizeStrainSlug } from "@/domain/strain/data";
+import { sanitizeDoseProvenanceInput } from "../doseProvenance";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -238,6 +239,13 @@ export async function PATCH(
     const body = await request.json();
     const offset = parseOffset(body.strengthOffset);
     const rationale = cleanText(body.strengthRationale);
+    const doseProvenance = sanitizeDoseProvenanceInput(body);
+    if (!doseProvenance.ok) {
+      return NextResponse.json(
+        { success: false, error: { message: doseProvenance.message } },
+        { status: 400 }
+      );
+    }
 
     if (offset && offset !== "standard" && !rationale) {
       return NextResponse.json(
@@ -364,6 +372,7 @@ export async function PATCH(
     if ("flavors" in body) {
       data.flavors = normalizeFlavors(body.flavors);
     }
+    Object.assign(data, doseProvenance.data);
 
     // Auto-recompute totalDoseMg when not explicitly provided but both
     // productUnitMg and unitsPerPack are present (incoming or existing).

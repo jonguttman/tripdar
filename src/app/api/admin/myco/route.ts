@@ -13,6 +13,7 @@ import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community
 import { normalizeFlavors } from "@/domain/myco/flavors";
 import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
 import { normalizeStrainSlug } from "@/domain/strain/data";
+import { sanitizeDoseProvenanceInput } from "./doseProvenance";
 
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other"] as const;
 const VALID_OFFSETS = ["standard", "stronger", "lighter"] as const;
@@ -476,6 +477,13 @@ export async function POST(request: NextRequest) {
     const brandMacroUnits = parsePositiveIntOrNull(body.brandMacroUnits);
     const strainSlug = parseStrainSlug(body.strainSlug);
     const brandDoseTiers = sanitizeBrandDoseTiers(body.brandDoseTiers);
+    const doseProvenance = sanitizeDoseProvenanceInput(body);
+    if (!doseProvenance.ok) {
+      return NextResponse.json(
+        { success: false, error: { message: doseProvenance.message } },
+        { status: 400 }
+      );
+    }
     const legacyUnits = deriveLegacyBrandUnits(brandDoseTiers);
     if (countSubmittedBrandDoseTiers(body.brandDoseTiers) > brandDoseTiers.length) {
       return NextResponse.json(
@@ -566,6 +574,7 @@ export async function POST(request: NextRequest) {
         brandDoseTiers: brandDoseTiers.length > 0 ? brandDoseTiers : Prisma.JsonNull,
         brandDoseInstructions: cleanText(body.brandDoseInstructions) ?? null,
         photoUrl: cleanText(body.photoUrl) ?? null,
+        ...doseProvenance.data,
         active: typeof body.active === "boolean" ? body.active : true,
         strengthOffset: {
           create: {
