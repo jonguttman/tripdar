@@ -10,10 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  checkPublicWriteRateLimit,
-  publicWriteIdentifier,
-} from "@/domain/myco/publicWriteRateLimit";
+import { checkPublicWriteRateLimit } from "@/domain/myco/publicWriteRateLimit";
 
 // =============================================================================
 // Configuration
@@ -30,8 +27,6 @@ const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 // This is a simplified version for the edge layer
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const DEFAULT_RATE_LIMIT = 60; // requests per minute for unknown keys
-const BRAND_PUBLIC_IP_LIMIT = 20;
-const BRAND_PUBLIC_TOKEN_LIMIT = 12;
 
 // =============================================================================
 // Utility Functions
@@ -114,7 +109,7 @@ function checkEdgeRateLimit(identifier: string, limit: number): RateLimitResult 
 // Middleware Handler
 // =============================================================================
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isBrandPublicWritePath = pathname.startsWith(BRAND_PUBLIC_WRITE_PREFIX);
@@ -151,23 +146,12 @@ export function middleware(request: NextRequest) {
 
     const ip = extractClientIp(request);
     const token = extractBrandPortalToken(pathname);
-    const tokenHash = token ? hashKey(token) : null;
-    const ipLimit = checkPublicWriteRateLimit(
-      rateLimitStore,
-      publicWriteIdentifier({ ip, tokenHash, scope: "ip" }),
-      BRAND_PUBLIC_IP_LIMIT,
-      RATE_LIMIT_WINDOW_MS
-    );
-    const tokenLimit = checkPublicWriteRateLimit(
-      rateLimitStore,
-      publicWriteIdentifier({ ip, tokenHash, scope: "token" }),
-      BRAND_PUBLIC_TOKEN_LIMIT,
-      RATE_LIMIT_WINDOW_MS
-    );
+    const rlResult = await checkPublicWriteRateLimit({
+      ip: ip ?? "unknown",
+      token: token ?? "unknown",
+    });
 
-    if (!ipLimit.allowed || !tokenLimit.allowed) {
-      const failed = ipLimit.allowed ? tokenLimit : ipLimit;
-      const retryAfter = Math.ceil((failed.resetAt - Date.now()) / 1000);
+    if (!rlResult.allowed) {
       return NextResponse.json(
         {
           success: false,
@@ -177,10 +161,8 @@ export function middleware(request: NextRequest) {
           status: 429,
           headers: {
             "X-Request-ID": requestId,
-            "X-RateLimit-Limit": failed.limit.toString(),
             "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": failed.resetAt.toString(),
-            "Retry-After": retryAfter.toString(),
+            "Retry-After": rlResult.retryAfterSeconds.toString(),
           },
         }
       );
@@ -189,9 +171,6 @@ export function middleware(request: NextRequest) {
     const response = NextResponse.next();
     response.headers.set("X-Request-ID", requestId);
     response.headers.set("X-Request-Start", startTime.toString());
-    response.headers.set("X-RateLimit-Limit", Math.min(ipLimit.limit, tokenLimit.limit).toString());
-    response.headers.set("X-RateLimit-Remaining", Math.min(ipLimit.remaining, tokenLimit.remaining).toString());
-    response.headers.set("X-RateLimit-Reset", Math.min(ipLimit.resetAt, tokenLimit.resetAt).toString());
     return response;
   }
 
