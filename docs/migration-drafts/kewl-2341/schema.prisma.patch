@@ -1,0 +1,63 @@
+diff --git a/prisma/schema.prisma b/prisma/schema.prisma
+index 0000000..0000000 100644
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@
+ model StrainRecommendationConfig {
+   id                      String   @id @default(cuid())
+   strainSlug              String   @unique
+   productName             String?
+   productUrl              String?
+-  productUnitMg           Int?
++  productUnitMg           Int? // mg of verified active compound per consumer unit; never package/material mass
++  productActiveCompound   String   @default("unknown") // psilocybin, psilocin, muscimol, functional-only, unknown
++  productActiveCompoundSource String?
++  productPackageMaterialMassMg Int?
++  productUnitMaterialMassMg Int?
++  productMaterialMassBasis String? // fruiting_body, mushroom_material, whole_fruit_body_extract, proprietary_blend, net_edible_weight, unknown
++  productMaterialMassSource String?
+   productFormat           String? // capsule, chocolate, gummy, dried
+   availability            String   @default("in_stock") // in_stock, out_of_stock, seasonal
+   doseSensitivityOverride String? // null = use algorithm default
+@@
+ model StoreProductCatalog {
+   id             String   @id @default(cuid())
+   partnerId      String
+   productName    String
+   format         String // capsule, edible, dried, tincture, other
+@@
+   intakeStatus   String   @default("draft") // draft, in_review, ready
+   brand          String? // legacy free-text (kept for back-compat)
+   brandId        String? // FK to Brand (new)
+   strainSlug     String? // legacy free-text (kept for back-compat)
+-  productUnitMg  Int? // mg of psilocybin per single unit
++  productUnitMg  Int? // mg of verified active compound per consumer unit; never package/material mass
+   unitsPerPack   Int? // # of units in the package
+-  totalDoseMg    Int? // computed total mg for the package
++  totalDoseMg    Int? // computed total mg of verified active compound for the package
++  activeCompound String  @default("unknown") // psilocybin, psilocin, muscimol, functional-only, unknown
++  activeCompoundSource String?
++  packageMaterialMassMg Int? // total package mushroom/material/blend mass in mg
++  unitMaterialMassMg Int? // per consumer unit mushroom/material/blend mass in mg
++  materialMassBasis String? // fruiting_body, mushroom_material, whole_fruit_body_extract, proprietary_blend, net_edible_weight, unknown
++  materialMassSource String?
+   ingredients    String[] // stacked ingredients/nootropics (Lion's Mane, Cordyceps, etc.)
+   flavors        String[] // flavor variants sharing this recipe (Mint, Raspberry, Original)
+@@
+ model UnverifiedProduct {
+   id               String   @id @default(cuid())
+   sessionHash      String
+   retailerName     String
+   retailerLocation String?
+   productName      String
+   format           String?
+   dosageInfo       String?
++  activeCompound   String   @default("unknown") // psilocybin, psilocin, muscimol, functional-only, unknown
++  activeCompoundSource String?
++  packageMaterialMassMg Int?
++  unitMaterialMassMg Int?
++  materialMassBasis String?
++  materialMassSource String?
+   photoUrls        Json?
+   status           String   @default("pending") // pending, verified, rejected
+   notes            String?
