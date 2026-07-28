@@ -12,6 +12,7 @@
  */
 
 import type { ExperienceLevel } from "@/domain/recommendation-engine/types";
+import { isSupportedActiveCompound } from "@/domain/recommendation-engine/doseBasis";
 
 export type DoseIntensity = "gentle" | "moderate" | "deep";
 export type StrengthOffsetValue = "standard" | "stronger" | "lighter";
@@ -27,6 +28,7 @@ const TIER_FALLBACK_LABELS: Record<DoseTierCategory, string> = {
 
 export interface DoseProductInput {
   format: string;
+  activeCompound: string | null;
   productUnitMg: number | null;
   brandDoseTiers: unknown;
   brandMicroUnits: number | null;
@@ -138,6 +140,10 @@ export function computeDoseGuidance(
   experience: ExperienceLevel,
   intensity: DoseIntensity
 ): DoseGuidance | null {
+  // Unknown/blank compounds may keep a legacy product card visible during the
+  // KEWL-2378 compatibility phase, but they cannot emit dose units or mg.
+  if (!isSupportedActiveCompound(product.activeCompound)) return null;
+
   const tiers = readBrandTiers(product);
   if (tiers.length === 0) return null;
 

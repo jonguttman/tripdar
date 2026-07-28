@@ -7,10 +7,10 @@
 
 ### Added
 - `CANONICAL_DOSE_BASIS` constant exported alongside `CANONICAL_DOSE_LEVELS`, plus a `doseBasis` module holding both safety gates (`isSupportedActiveCompound`, `isLadderCompatibleMaterialBasis`, `computeSuggestedUnits`).
-- Fail-closed `activeCompound` gate on recommendation candidates: only `psilocybin` and `psilocin` may enter the current engine. `unknown` (the column default), `muscimol`, `functional-only`, and unrecognized values are excluded regardless of any legacy `productUnitMg`.
+- Fail-closed `activeCompound` gate on dose output: only `psilocybin` and `psilocin` may emit brand-ladder guidance or canonical-ladder `suggestedUnits`. `unknown` (the column default), blank/missing, `muscimol`, `functional-only`, and unrecognized values retain product identity but emit no dose guidance.
 
 ### Changed
-- `ScoredRecommendation.product.suggestedUnits` is now **optional** — a contract change for API consumers. Product recommendation eligibility is separate from unit-count emission: name, photo, URL, and format are retained when unit math is suppressed.
+- `ScoredRecommendation.product.suggestedUnits` is now **optional** — a contract change for API consumers. Product recommendation eligibility is independent of `activeCompound`; name, photo, URL, and format are retained when compound or basis gates suppress unit math.
 - `RecommendationResult.productUnits` persists `null` when unit math is suppressed instead of storing a fabricated count.
 - WordPress plugin omits the entire `tripdar-rec__product-units` span when `suggestedUnits` is absent, so no stray `capsules`/`gummies` label renders without a count.
 

@@ -96,6 +96,7 @@ describe("computeSuggestedUnits", () => {
 
   it("produces bounded counts for a 444 mg mushroom-material unit", () => {
     expect(computeSuggestedUnits(l4, {
+      activeCompound: "psilocybin",
       unitMaterialMassMg: 444,
       materialMassBasis: "mushroom_material",
     })).toBe("4-8");
@@ -103,6 +104,7 @@ describe("computeSuggestedUnits", () => {
 
   it("produces bounded counts for a 140 mg fruiting-body unit", () => {
     expect(computeSuggestedUnits(l4, {
+      activeCompound: "psilocin",
       unitMaterialMassMg: 140,
       materialMassBasis: "fruiting_body",
     })).toBe("11-25");
@@ -112,12 +114,38 @@ describe("computeSuggestedUnits", () => {
     for (const level of CANONICAL_DOSE_LEVELS) {
       expect(computeSuggestedUnits(
         { lowMg: level.standardLowMg, highMg: level.standardHighMg },
-        { unitMaterialMassMg: 1, materialMassBasis: "whole_fruit_body_extract" },
+        {
+          activeCompound: "psilocybin",
+          unitMaterialMassMg: 1,
+          materialMassBasis: "whole_fruit_body_extract",
+        },
       )).toBeUndefined();
     }
   });
 
   it("suppresses units when basis is missing", () => {
-    expect(computeSuggestedUnits(l4, { unitMaterialMassMg: 250 })).toBeUndefined();
+    expect(computeSuggestedUnits(l4, {
+      activeCompound: "psilocybin",
+      unitMaterialMassMg: 250,
+    })).toBeUndefined();
+  });
+
+  it.each(["unknown", "", null, undefined])(
+    "suppresses units for %s compound even with a compatible divisor",
+    (activeCompound) => {
+      expect(computeSuggestedUnits(l4, {
+        activeCompound,
+        unitMaterialMassMg: 444,
+        materialMassBasis: "mushroom_material",
+      })).toBeUndefined();
+    },
+  );
+
+  it("requires both a supported compound and compatible basis", () => {
+    expect(computeSuggestedUnits(l4, {
+      activeCompound: "psilocybin",
+      unitMaterialMassMg: 444,
+      materialMassBasis: "mushroom_material",
+    })).toBe("4-8");
   });
 });

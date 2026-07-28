@@ -2,13 +2,13 @@
  * Recommendation candidate loader — the single code path that decides which
  * products may ever be shown to a customer.
  *
- * Gate: active, not archived, supported active compound, AND recommendation-ready
- * per computeReadiness.
+ * Gate: active, not archived, AND recommendation-ready per computeReadiness.
+ * Active compound is deliberately not a candidacy concern; unsupported or
+ * unknown compounds keep their product identity but cannot emit dose guidance.
  * Server-only (imports prisma).
  */
 
 import { prisma } from "@/lib/prisma";
-import { isSupportedActiveCompound } from "@/domain/recommendation-engine/doseBasis";
 import { computeReadiness } from "./readiness";
 import { normalizeVibeScores } from "./vibes";
 import type { ProductCandidate } from "./scoring";
@@ -49,6 +49,7 @@ function toCandidate(item: CatalogItemWithRelations): ProductCandidate | null {
     strengthRationale: item.strengthOffset?.rationale ?? null,
     dose: {
       format: item.format,
+      activeCompound: item.activeCompound,
       productUnitMg: item.productUnitMg,
       brandDoseTiers: item.brandDoseTiers,
       brandMicroUnits: item.brandMicroUnits,
@@ -63,12 +64,6 @@ export async function getRecommendableProducts(partnerId: string): Promise<Produ
 
   const candidates: ProductCandidate[] = [];
   for (const item of items) {
-    // Fail-closed compound gate, applied independently of readiness display so
-    // a non-null legacy productUnitMg can never smuggle an unsupported compound
-    // into psilocybin-family dose math. unknown (the column default), muscimol,
-    // functional-only, and unrecognized values are all denied.
-    if (!isSupportedActiveCompound(item.activeCompound)) continue;
-
     const readiness = computeReadiness({
       format: item.format,
       brand: item.brand,

@@ -18,9 +18,9 @@ An active-compound allowlist alone does **not** fix this: passing the compound g
 
 **Fix:**
 - Added `CANONICAL_DOSE_BASIS` next to `CANONICAL_DOSE_LEVELS` so the ladder's basis is explicit in code.
-- Added `src/domain/recommendation-engine/doseBasis.ts` holding two independent, fail-closed gates: the active-compound gate and the ladder-basis gate.
+- Added `src/domain/recommendation-engine/doseBasis.ts` holding two independent, fail-closed dose-output gates: the active-compound gate and the ladder-basis gate. Neither gate removes the product itself from candidacy.
 - `suggestedUnits` is emitted only when an explicit same-basis divisor exists (`unitMaterialMassMg` + `materialMassBasis`). A non-null material mass alone is never sufficient — extracts, proprietary blends, and net edible weight are explicitly rejected.
-- Made `suggestedUnits` optional and split product eligibility from unit emission so suppression keeps the name/photo/link rather than dropping the product.
+- Made `suggestedUnits` optional and split product eligibility from unit emission so unsupported/unknown compounds and incompatible bases keep the name/photo/link while all dose output fails closed.
 
 **Files Modified:**
 - `src/domain/recommendation-engine/doseBasis.ts` (new)

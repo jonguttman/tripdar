@@ -189,6 +189,8 @@ export interface ScoreOptions {
     cautionFlags?: { show_sensitivity?: boolean; custom?: string };
     productName?: string;
     productUrl?: string;
+    /** Compound family gates dose output, not legacy product-card visibility. */
+    activeCompound?: string;
     /**
      * Verified active-compound mg per unit. Active-dose fact only — NEVER a
      * divisor for the dried-mushroom-equivalent canonical ladder.
@@ -262,6 +264,7 @@ export function scoreStrains(options: ScoreOptions): ScoredRecommendation[] {
       // not consulted here: dividing dried-mushroom mg by active-compound mg is
       // the KEWL-2346 defect and overstates counts by orders of magnitude.
       const suggestedUnits = computeSuggestedUnits(doseRange, {
+        activeCompound: adminConfig.activeCompound,
         unitMaterialMassMg: adminConfig.productUnitMaterialMassMg,
         materialMassBasis: adminConfig.productMaterialMassBasis,
       });

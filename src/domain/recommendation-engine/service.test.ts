@@ -1,7 +1,7 @@
 /**
  * KEWL-2356 service-layer tests: catalog overlay must pass divisor amount AND
- * basis into scoring, must fail closed on unsupported active compounds, and must
- * persist productUnits: null when unit math was suppressed.
+ * basis into scoring, must preserve product identity independently of compound,
+ * and must persist null when unit math was suppressed.
  */
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
@@ -113,16 +113,19 @@ describe("catalog overlay -> scoring", () => {
   });
 });
 
-describe("fail-closed active compound gate", () => {
-  it.each(["unknown", "muscimol", "functional-only", "lions-mane", ""])(
-    "keeps %s out of candidates",
+describe("compound-independent product candidacy", () => {
+  it.each(["unknown", "", null, "muscimol", "functional-only", "lions-mane"])(
+    "passes %s product identity to scoring, where dose output is gated",
     async (activeCompound) => {
       prismaMock.storeProductCatalog.findMany.mockResolvedValue([
         catalogRow({ activeCompound }),
       ]);
       await run();
 
-      expect(configPassedFor("golden-teacher")).toBeUndefined();
+      expect(configPassedFor("golden-teacher")).toMatchObject({
+        productName: "Golden Teacher Capsules",
+        activeCompound,
+      });
     },
   );
 
@@ -132,7 +135,7 @@ describe("fail-closed active compound gate", () => {
     ]);
     await run();
 
-    expect(configPassedFor("golden-teacher")).toBeDefined();
+    expect(configPassedFor("golden-teacher")).toMatchObject({ activeCompound });
   });
 });
 

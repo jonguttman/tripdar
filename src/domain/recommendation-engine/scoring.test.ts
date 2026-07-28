@@ -67,6 +67,7 @@ const PRODUCT_IDENTITY = {
   productUrl: "https://example.test/gt",
   productPhotoUrl: "https://example.test/gt.jpg",
   productFormat: "capsule",
+  activeCompound: "psilocybin",
 };
 
 describe("scoreStrains dose ladder basis guard", () => {
@@ -167,6 +168,21 @@ describe("scoreStrains dose ladder basis guard", () => {
   });
 
   describe("product recommendation survives unit suppression", () => {
+    it.each(["unknown", "", undefined, "muscimol", "functional-only", "lions-mane"])(
+      "retains product identity but suppresses units for %s compound",
+      (activeCompound) => {
+        const result = score({
+          ...PRODUCT_IDENTITY,
+          activeCompound,
+          productUnitMaterialMassMg: 444,
+          productMaterialMassBasis: "mushroom_material",
+        });
+
+        expect(result.product?.name).toBe("Golden Teacher Capsules");
+        expect(result.product?.suggestedUnits).toBeUndefined();
+      },
+    );
+
     it("retains name, url, photo, and format when units are suppressed", () => {
       const result = score({
         ...PRODUCT_IDENTITY,

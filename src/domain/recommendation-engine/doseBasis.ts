@@ -76,6 +76,8 @@ export function isLadderCompatibleMaterialBasis(basis: string | null | undefined
 }
 
 export interface LadderDivisorInput {
+  /** Must be psilocybin-family before any unit count can be emitted. */
+  activeCompound?: string | null;
   /** Material mass in mg per consumer unit. */
   unitMaterialMassMg?: number | null;
   /** The basis that mass is stated on. */
@@ -104,6 +106,8 @@ export function computeSuggestedUnits(
   doseRange: { lowMg: number; highMg: number },
   divisor: LadderDivisorInput,
 ): string | undefined {
+  if (!isSupportedActiveCompound(divisor.activeCompound)) return undefined;
+
   const divisorMg = resolveLadderDivisorMg(divisor);
   if (divisorMg === null) return undefined;
 
