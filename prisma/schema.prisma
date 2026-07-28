@@ -392,11 +392,17 @@ model StrainRecommendationConfig {
   productUnitMg           Int?
   productFormat           String? // capsule, chocolate, gummy, dried
   availability            String   @default("in_stock") // in_stock, out_of_stock, seasonal
-  doseSensitivityOverride String? // null = use algorithm default
-  intentOverrides         String? // JSON string: { "calm_centered": "boost", ... }
-  cautionFlags            String? // JSON string: { "show_sensitivity": true, "custom": "..." }
-  updatedAt               DateTime @updatedAt
-  createdAt               DateTime @default(now())
+  doseSensitivityOverride      String? // null = use algorithm default
+  intentOverrides              String? // JSON string: { "calm_centered": "boost", ... }
+  cautionFlags                 String? // JSON string: { "show_sensitivity": true, "custom": "..." }
+  productPackageMaterialMassMg Int?
+  productUnitMaterialMassMg    Int?
+  productMaterialMassBasis     String?
+  productMaterialMassSource    String?
+  productActiveCompound        String  @default("unknown")
+  productActiveCompoundSource  String?
+  updatedAt                    DateTime @updatedAt
+  createdAt                    DateTime @default(now())
 
   @@index([availability])
 }
@@ -501,12 +507,18 @@ model StoreProductCatalog {
   brandMacroUnits Int? // brand-recommended units for a macro dose
   brandDoseTiers Json? // structured brand-facing dose tiers with fractions/ranges
   brandDoseInstructions String? // cadence, timing, food/stomach, and other brand guidance
-  photoUrl       String? // legacy single photo (kept for back-compat)
-  active         Boolean  @default(true)
-  archivedAt     DateTime?
-  notes          String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  photoUrl              String? // legacy single photo (kept for back-compat)
+  packageMaterialMassMg Int?
+  unitMaterialMassMg    Int?
+  materialMassBasis     String?
+  materialMassSource    String?
+  activeCompound        String   @default("unknown")
+  activeCompoundSource  String?
+  active                Boolean  @default(true)
+  archivedAt            DateTime?
+  notes                 String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   partner        Partner                @relation(fields: [partnerId], references: [id])
   brandRef       Brand?                 @relation(fields: [brandId], references: [id])
@@ -915,12 +927,18 @@ model UnverifiedProduct {
   retailerLocation String?
   productName      String
   format           String?
-  dosageInfo       String?
-  photoUrls        Json?
-  status           String   @default("pending") // pending, verified, rejected
-  notes            String?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  dosageInfo            String?
+  photoUrls             Json?
+  status                String   @default("pending") // pending, verified, rejected
+  notes                 String?
+  packageMaterialMassMg Int?
+  unitMaterialMassMg    Int?
+  materialMassBasis     String?
+  materialMassSource    String?
+  activeCompound        String   @default("unknown")
+  activeCompoundSource  String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 
   retailerLead RetailerLead?
 
