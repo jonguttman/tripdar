@@ -1,5 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { POST } from "./route";
+import { beforeAll, describe, expect, it, vi, beforeEach } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
   mycoEmployeeReviewAssignment: {
@@ -15,9 +14,21 @@ const prismaMock = vi.hoisted(() => ({
   $transaction: vi.fn(),
 }));
 
+const checkPublicWriteRateLimitMock = vi.hoisted(() => vi.fn());
+
 vi.mock("@/lib/prisma", () => ({
   prisma: prismaMock,
 }));
+
+vi.mock("@/domain/myco/publicWriteRateLimit", () => ({
+  checkPublicWriteRateLimit: checkPublicWriteRateLimitMock,
+}));
+
+let POST: typeof import("./route").POST;
+
+beforeAll(async () => {
+  ({ POST } = await import("./route"));
+});
 
 function assignment(overrides: Record<string, unknown> = {}) {
   return {
@@ -60,6 +71,41 @@ describe("product review token API", () => {
     prismaMock.mycoEmployeeProductReview.create.mockResolvedValue({ id: "response-1" });
     prismaMock.mycoEmployeeReviewAssignment.update.mockResolvedValue({});
     prismaMock.mycoEmployee.update.mockResolvedValue({});
+    checkPublicWriteRateLimitMock.mockResolvedValue({ allowed: true, retryAfterSeconds: 0 });
+  });
+
+  it("rate-limits public submissions before loading the assignment", async () => {
+    checkPublicWriteRateLimitMock.mockResolvedValue({
+      allowed: false,
+      retryAfterSeconds: 42,
+      reason: "token",
+    });
+
+    const response = await post({
+      knowsProduct: false,
+      notes: "too many",
+    });
+
+    expect(response.status).toBe(429);
+    expect(response.headers.get("Retry-After")).toBe("42");
+    expect(prismaMock.mycoEmployeeReviewAssignment.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the public write rate-limit store is unavailable", async () => {
+    checkPublicWriteRateLimitMock.mockResolvedValue({
+      allowed: false,
+      retryAfterSeconds: 60,
+      reason: "store_error",
+    });
+
+    const response = await post({
+      knowsProduct: false,
+      notes: "store outage",
+    });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get("Retry-After")).toBe("60");
+    expect(prismaMock.mycoEmployeeReviewAssignment.findUnique).not.toHaveBeenCalled();
   });
 
   it("rejects known-product submissions missing required effect axes", async () => {
