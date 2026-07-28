@@ -25,6 +25,7 @@ import {
   REVIEWER_SESSION_COOKIE,
   reviewerSessionSecret,
 } from "@/domain/myco/staffReviewAuth";
+import { staffReviewerWhere } from "@/domain/myco/staffReviewRoster";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   }
 
   const employee = await prisma.mycoEmployee.findFirst({
-    where: { id: employeeId, partnerId: link.partnerId, active: true, optedOut: false },
+    where: staffReviewerWhere(link.partnerId, employeeId),
     select: { id: true, name: true, pinHash: true, pinFailedAttempts: true, pinLockedUntil: true },
   });
   if (!employee) return fail("Pick your name from the list.", 404);
@@ -78,10 +79,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       // Compare-and-set is the identity-claim boundary for the shared link. If two
       // devices race to enroll the same roster entry, only the first hash may land.
       where: {
-        id: employee.id,
-        partnerId: link.partnerId,
-        active: true,
-        optedOut: false,
+        ...staffReviewerWhere(link.partnerId, employee.id),
         pinHash: null,
       },
       data: {

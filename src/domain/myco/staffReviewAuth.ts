@@ -12,6 +12,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { evaluateCatalogAccessToken, hashCatalogAccessToken } from "./catalogTokens";
 import { verifyReviewerSession } from "./reviewerPin";
+import { staffReviewerWhere } from "./staffReviewRoster";
 
 export const REVIEWER_SESSION_COOKIE = "tmt_reviewer";
 
@@ -72,7 +73,7 @@ export async function requireReviewer(
   }
 
   const employee = await prisma.mycoEmployee.findFirst({
-    where: { id: session.employeeId, partnerId: link.partnerId, active: true },
+    where: staffReviewerWhere(link.partnerId, session.employeeId),
     select: { id: true, name: true },
   });
   if (!employee) {

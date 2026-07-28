@@ -15,6 +15,7 @@ import {
   verifyReviewerSession,
 } from "@/domain/myco/reviewerPin";
 import { REVIEWER_SESSION_COOKIE } from "@/domain/myco/staffReviewAuth";
+import { STAFF_REVIEWER_EMAILS } from "@/domain/myco/staffReviewRoster";
 
 const prismaMock = vi.hoisted(() => ({
   catalogAccessToken: { findUnique: vi.fn() },
@@ -82,7 +83,13 @@ describe("shared staff-link enrollment (KEWL-2393)", () => {
     expect(response.status).toBe(200);
     expect(prismaMock.mycoEmployee.findFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({ id: CLAY, partnerId: PARTNER_ID }),
+        where: {
+          id: CLAY,
+          partnerId: PARTNER_ID,
+          active: true,
+          optedOut: false,
+          email: { in: [...STAFF_REVIEWER_EMAILS] },
+        },
       })
     );
     expect(prismaMock.mycoEmployee.updateMany).toHaveBeenCalledWith(
@@ -90,6 +97,9 @@ describe("shared staff-link enrollment (KEWL-2393)", () => {
         where: expect.objectContaining({
           id: CLAY,
           partnerId: PARTNER_ID,
+          active: true,
+          optedOut: false,
+          email: { in: [...STAFF_REVIEWER_EMAILS] },
           pinHash: null,
         }),
       })
@@ -188,12 +198,20 @@ describe("shared staff-link enrollment (KEWL-2393)", () => {
     expect(prismaMock.mycoEmployee.update.mock.calls[0][0].data.pinLockedUntil).toBeInstanceOf(Date);
   });
 
-  it("rejects an employee outside the active partner roster", async () => {
+  it("rejects a seventh active partner employee outside the fixed six-person roster", async () => {
     prismaMock.mycoEmployee.findFirst.mockResolvedValue(null);
 
-    const response = await post({ employeeId: "not-on-roster", pin: "8317" });
+    const response = await post({ employeeId: "employee-seventh-active", pin: "8317" });
 
     expect(response.status).toBe(404);
     expect(prismaMock.mycoEmployee.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.mycoEmployee.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "employee-seventh-active",
+          email: { in: [...STAFF_REVIEWER_EMAILS] },
+        }),
+      })
+    );
   });
 });

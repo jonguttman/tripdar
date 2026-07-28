@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { resolveStaffLink, REVIEWER_SESSION_COOKIE, reviewerSessionSecret } from "@/domain/myco/staffReviewAuth";
 import { verifyReviewerSession } from "@/domain/myco/reviewerPin";
+import { staffReviewerWhere } from "@/domain/myco/staffReviewRoster";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   const [partner, reviewers] = await Promise.all([
     prisma.partner.findUnique({ where: { id: link.partnerId }, select: { name: true } }),
     prisma.mycoEmployee.findMany({
-      where: { partnerId: link.partnerId, active: true, optedOut: false },
+      where: staffReviewerWhere(link.partnerId),
       orderBy: { name: "asc" },
       select: { id: true, name: true, pinHash: true, pinLockedUntil: true },
     }),
