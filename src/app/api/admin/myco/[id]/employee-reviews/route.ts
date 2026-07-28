@@ -12,6 +12,7 @@ import {
   normalizeEmployeeEmail,
   summarizeAssignments,
 } from "@/domain/myco/employeeReviews";
+import { buildRevokedTokenPatch, hashCatalogAccessToken } from "@/domain/myco/catalogTokens";
 
 async function requireAuth() {
   const session = await getServerSession(authOptions);
@@ -127,7 +128,7 @@ export async function POST(
 
     const product = await prisma.storeProductCatalog.findUnique({
       where: { id },
-      select: { productName: true, partner: { select: { name: true } } },
+      select: { productName: true, brandId: true, partner: { select: { name: true } } },
     });
     if (!product) {
       return NextResponse.json(
@@ -168,7 +169,7 @@ export async function POST(
       const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
       const existingAssignment = await prisma.mycoEmployeeReviewAssignment.findUnique({
         where: { catalogItemId_employeeId: { catalogItemId: id, employeeId: employee.id } },
-        include: { response: true },
+        include: { response: true, accessToken: true },
       });
       if (
         existingAssignment?.response ||
@@ -186,29 +187,57 @@ export async function POST(
         continue;
       }
 
-      const assignment = existingAssignment
-        ? await prisma.mycoEmployeeReviewAssignment.update({
-            where: { id: existingAssignment.id },
-            data: {
-              tokenHash: hashReviewToken(token),
-              status: "assigned",
-              expiresAt,
-              assignedBy: auth.user!.email!,
-              lastSentAt: sendNow ? new Date() : undefined,
-              reminderCount: sendNow ? { increment: 1 } : undefined,
-            },
-          })
-        : await prisma.mycoEmployeeReviewAssignment.create({
-            data: {
-              catalogItemId: id,
-              employeeId: employee.id,
-              tokenHash: hashReviewToken(token),
-              expiresAt,
-              assignedBy: auth.user!.email!,
-              lastSentAt: sendNow ? new Date() : null,
-              reminderCount: sendNow ? 1 : 0,
-            },
+      const assignment = await prisma.$transaction(async (tx) => {
+        if (existingAssignment?.accessToken) {
+          await tx.catalogAccessToken.update({
+            where: { id: existingAssignment.accessToken.id },
+            data: buildRevokedTokenPatch(auth.user!.email!, "regenerated"),
           });
+        }
+
+        const accessToken = await tx.catalogAccessToken.create({
+          data: {
+            tokenHash: hashCatalogAccessToken(token),
+            purpose: "staff_review",
+            status: "active",
+            partnerId: access.partnerId,
+            brandId: product.brandId,
+            catalogItemId: id,
+            issuedToType: "staff",
+            issuedToId: employee.id,
+            issuedToEmail: employee.email,
+            issuedBy: auth.user!.email!,
+            expiresAt,
+            regeneratedFromId: existingAssignment?.accessToken?.id ?? null,
+          },
+        });
+
+        return existingAssignment
+          ? tx.mycoEmployeeReviewAssignment.update({
+              where: { id: existingAssignment.id },
+              data: {
+                accessTokenId: accessToken.id,
+                tokenHash: hashReviewToken(token),
+                status: "assigned",
+                expiresAt,
+                assignedBy: auth.user!.email!,
+                lastSentAt: sendNow ? new Date() : undefined,
+                reminderCount: sendNow ? { increment: 1 } : undefined,
+              },
+            })
+          : tx.mycoEmployeeReviewAssignment.create({
+              data: {
+                catalogItemId: id,
+                employeeId: employee.id,
+                accessTokenId: accessToken.id,
+                tokenHash: hashReviewToken(token),
+                expiresAt,
+                assignedBy: auth.user!.email!,
+                lastSentAt: sendNow ? new Date() : null,
+                reminderCount: sendNow ? 1 : 0,
+              },
+            });
+      });
 
       const link = reviewUrl(request, token);
       let sent = false;

@@ -7,6 +7,7 @@ import {
   isTerminalReviewStatus,
   pointsForReview,
 } from "@/domain/myco/employeeReviews";
+import { evaluateCatalogAccessToken, hashCatalogAccessToken } from "@/domain/myco/catalogTokens";
 
 const REQUIRED_EFFECT_FIELDS = [
   "clarityCognition",
@@ -40,9 +41,16 @@ function parseFloatPositive(value: unknown): number | null {
 }
 
 async function loadAssignment(token: string) {
-  return prisma.mycoEmployeeReviewAssignment.findUnique({
-    where: { tokenHash: hashReviewToken(token) },
+  const tokenHash = hashCatalogAccessToken(token);
+  return prisma.mycoEmployeeReviewAssignment.findFirst({
+    where: {
+      OR: [
+        { tokenHash: hashReviewToken(token) },
+        { accessToken: { tokenHash } },
+      ],
+    },
     include: {
+      accessToken: true,
       employee: { select: { id: true, name: true, email: true, optedOut: true } },
       response: true,
       catalogItem: {
@@ -54,6 +62,14 @@ async function loadAssignment(token: string) {
       },
     },
   });
+}
+
+function invalidTokenResponse(reason: string) {
+  const status = reason === "expired" || reason === "revoked" ? 410 : 404;
+  return NextResponse.json(
+    { success: false, error: { message: "Review link not found" } },
+    { status }
+  );
 }
 
 export async function GET(
@@ -69,13 +85,28 @@ export async function GET(
         { status: 404 }
       );
     }
+    if (assignment.accessToken) {
+      const tokenState = evaluateCatalogAccessToken(assignment.accessToken, "staff_review");
+      if (!tokenState.ok) return invalidTokenResponse(tokenState.reason);
+    }
 
     const status = effectiveAssignmentStatus(assignment.status, assignment.expiresAt);
     if (status === "assigned") {
-      await prisma.mycoEmployeeReviewAssignment.update({
-        where: { id: assignment.id },
-        data: { status: "opened", openedAt: assignment.openedAt ?? new Date() },
-      });
+      const openedAt = assignment.openedAt ?? new Date();
+      await prisma.$transaction([
+        prisma.mycoEmployeeReviewAssignment.update({
+          where: { id: assignment.id },
+          data: { status: "opened", openedAt },
+        }),
+        ...(assignment.accessToken && !assignment.accessToken.openedAt
+          ? [
+              prisma.catalogAccessToken.update({
+                where: { id: assignment.accessToken.id },
+                data: { openedAt },
+              }),
+            ]
+          : []),
+      ]);
     }
 
     return NextResponse.json({
@@ -131,6 +162,10 @@ export async function POST(
         { success: false, error: { message: "Review link not found" } },
         { status: 404 }
       );
+    }
+    if (assignment.accessToken) {
+      const tokenState = evaluateCatalogAccessToken(assignment.accessToken, "staff_review");
+      if (!tokenState.ok) return invalidTokenResponse(tokenState.reason);
     }
 
     const status = effectiveAssignmentStatus(assignment.status, assignment.expiresAt);

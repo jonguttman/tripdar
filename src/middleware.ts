@@ -10,12 +10,17 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import {
+  checkPublicWriteRateLimit,
+  publicWriteIdentifier,
+} from "@/domain/myco/publicWriteRateLimit";
 
 // =============================================================================
 // Configuration
 // =============================================================================
 
 const PARTNER_API_PREFIX = "/api/v1";
+const BRAND_PUBLIC_WRITE_PREFIX = "/api/myco/brand-portal";
 
 // In-memory rate limit store (edge-compatible)
 // In production, use Vercel KV or similar edge-compatible store
@@ -25,6 +30,8 @@ const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
 // This is a simplified version for the edge layer
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const DEFAULT_RATE_LIMIT = 60; // requests per minute for unknown keys
+const BRAND_PUBLIC_IP_LIMIT = 20;
+const BRAND_PUBLIC_TOKEN_LIMIT = 12;
 
 // =============================================================================
 // Utility Functions
@@ -51,6 +58,17 @@ function extractApiKey(request: NextRequest): string | null {
 
 function generateRequestId(): string {
   return `req_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function extractClientIp(request: NextRequest): string | null {
+  const forwarded = request.headers.get("x-forwarded-for");
+  if (forwarded) return forwarded.split(",")[0]?.trim() || null;
+  return request.headers.get("x-real-ip");
+}
+
+function extractBrandPortalToken(pathname: string): string | null {
+  const rest = pathname.slice(BRAND_PUBLIC_WRITE_PREFIX.length).split("/").filter(Boolean);
+  return rest[0] ?? null;
 }
 
 // =============================================================================
@@ -99,14 +117,83 @@ function checkEdgeRateLimit(identifier: string, limit: number): RateLimitResult 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only process partner API routes
-  if (!pathname.startsWith(PARTNER_API_PREFIX)) {
+  const isBrandPublicWritePath = pathname.startsWith(BRAND_PUBLIC_WRITE_PREFIX);
+
+  // Only process partner API routes and unauthenticated brand write routes.
+  if (!pathname.startsWith(PARTNER_API_PREFIX) && !isBrandPublicWritePath) {
     return NextResponse.next();
   }
 
   // Generate request ID for tracing
   const requestId = generateRequestId();
   const startTime = Date.now();
+
+  if (isBrandPublicWritePath) {
+    if (request.method === "OPTIONS") {
+      return new NextResponse(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": request.headers.get("origin") || "*",
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type",
+          "Access-Control-Max-Age": "86400",
+          "X-Request-ID": requestId,
+        },
+      });
+    }
+
+    if (request.method !== "POST") {
+      return NextResponse.json(
+        { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "Only POST is allowed." } },
+        { status: 405, headers: { "X-Request-ID": requestId, Allow: "POST, OPTIONS" } }
+      );
+    }
+
+    const ip = extractClientIp(request);
+    const token = extractBrandPortalToken(pathname);
+    const tokenHash = token ? hashKey(token) : null;
+    const ipLimit = checkPublicWriteRateLimit(
+      rateLimitStore,
+      publicWriteIdentifier({ ip, tokenHash, scope: "ip" }),
+      BRAND_PUBLIC_IP_LIMIT,
+      RATE_LIMIT_WINDOW_MS
+    );
+    const tokenLimit = checkPublicWriteRateLimit(
+      rateLimitStore,
+      publicWriteIdentifier({ ip, tokenHash, scope: "token" }),
+      BRAND_PUBLIC_TOKEN_LIMIT,
+      RATE_LIMIT_WINDOW_MS
+    );
+
+    if (!ipLimit.allowed || !tokenLimit.allowed) {
+      const failed = ipLimit.allowed ? tokenLimit : ipLimit;
+      const retryAfter = Math.ceil((failed.resetAt - Date.now()) / 1000);
+      return NextResponse.json(
+        {
+          success: false,
+          error: { code: "RATE_LIMIT_EXCEEDED", message: "Too many submissions. Please try again later." },
+        },
+        {
+          status: 429,
+          headers: {
+            "X-Request-ID": requestId,
+            "X-RateLimit-Limit": failed.limit.toString(),
+            "X-RateLimit-Remaining": "0",
+            "X-RateLimit-Reset": failed.resetAt.toString(),
+            "Retry-After": retryAfter.toString(),
+          },
+        }
+      );
+    }
+
+    const response = NextResponse.next();
+    response.headers.set("X-Request-ID", requestId);
+    response.headers.set("X-Request-Start", startTime.toString());
+    response.headers.set("X-RateLimit-Limit", Math.min(ipLimit.limit, tokenLimit.limit).toString());
+    response.headers.set("X-RateLimit-Remaining", Math.min(ipLimit.remaining, tokenLimit.remaining).toString());
+    response.headers.set("X-RateLimit-Reset", Math.min(ipLimit.resetAt, tokenLimit.resetAt).toString());
+    return response;
+  }
 
   // Extract API key
   const apiKey = extractApiKey(request);
@@ -252,5 +339,6 @@ export const config = {
   matcher: [
     // Match all /api/v1/* routes
     "/api/v1/:path*",
+    "/api/myco/brand-portal/:path*",
   ],
 };

@@ -433,6 +433,9 @@ model Partner {
   catalogItems StoreProductCatalog[]
   adminUsers   User[]
   employees    MycoEmployee[]
+  catalogAccessTokens CatalogAccessToken[]
+  fieldVerificationRules CatalogFieldVerificationRule[]
+  brandSubmissions BrandSubmission[]
 
   @@index([apiKeyHash])
   @@index([active])
@@ -514,6 +517,10 @@ model StoreProductCatalog {
   testerVotes    TesterVote[]
   employeeReviewAssignments MycoEmployeeReviewAssignment[]
   mycoResults    MycoRecommendationResult[]
+  accessTokens   CatalogAccessToken[]
+  catalogFieldChanges CatalogFieldChange[]
+  fieldVerificationStates CatalogFieldVerificationState[]
+  brandSubmissions BrandSubmission[]
 
   @@index([partnerId, active])
   @@index([strainSlug])
@@ -522,13 +529,24 @@ model StoreProductCatalog {
 }
 
 model Brand {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String   @unique
+  slug             String   @unique
+  logoUrl          String?
+  artworkUrl       String?
+  primaryColor     String?
+  secondaryColor   String?
+  accentColor      String?
+  shortDescription String?
+  websiteUrl       String?
+  supportEmail     String?
+  socialHandles    Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   products StoreProductCatalog[]
+  accessTokens CatalogAccessToken[]
+  submissions BrandSubmission[]
 }
 
 model TesterVote {
@@ -577,6 +595,12 @@ model ProductPhoto {
   isPrimary     Boolean  @default(false)
   approvedBy    String?
   approvedAt    DateTime?
+  status        String   @default("approved") // pending, approved, rejected
+  submissionSource String @default("admin") // staff, brand, admin, import
+  rejectedBy    String?
+  rejectedAt    DateTime?
+  rejectionReason String?
+  brandSubmissionId String?
   provider      String?
   model         String?
   costCents     Int      @default(0)
@@ -585,9 +609,143 @@ model ProductPhoto {
   createdAt     DateTime @default(now())
 
   catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  brandSubmission BrandSubmission? @relation(fields: [brandSubmissionId], references: [id], onDelete: SetNull)
 
   @@index([catalogItemId])
   @@index([catalogItemId, isPrimary])
+  @@index([catalogItemId, status])
+  @@index([brandSubmissionId])
+}
+
+model CatalogAccessToken {
+  id                         String   @id @default(cuid())
+  tokenHash                  String   @unique
+  purpose                    String // staff_review, brand_portal
+  status                     String   @default("active") // active, revoked, expired
+  partnerId                  String
+  brandId                    String?
+  catalogItemId              String?
+  issuedToType               String // staff, brand
+  issuedToId                 String?
+  issuedToEmail              String?
+  issuedBy                   String?
+  issuedAt                   DateTime @default(now())
+  expiresAt                  DateTime?
+  openedAt                   DateTime?
+  revokedAt                  DateTime?
+  revokedBy                  String?
+  revocationReason           String?
+  regeneratedFromId          String?
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  catalogItem StoreProductCatalog? @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  employeeReviewAssignment MycoEmployeeReviewAssignment?
+  regeneratedFrom CatalogAccessToken? @relation("CatalogTokenRegeneration", fields: [regeneratedFromId], references: [id], onDelete: SetNull)
+  regenerations CatalogAccessToken[] @relation("CatalogTokenRegeneration")
+  brandSubmissions BrandSubmission[]
+
+  @@index([partnerId, purpose, status])
+  @@index([brandId, status])
+  @@index([catalogItemId, purpose])
+  @@index([expiresAt])
+}
+
+model CatalogFieldChange {
+  id             String   @id @default(cuid())
+  catalogItemId  String
+  fieldName      String
+  previousValue  Json?
+  submittedValue Json?
+  actorType      String // staff, brand, admin, import
+  actorIdentity  String
+  source         String // packaging, brand-provided, personal-knowledge, unsure
+  disposition    String @default("pending") // pending, accepted, rejected
+  dispositionBy  String?
+  dispositionAt  DateTime?
+  dispositionReason String?
+  brandSubmissionId String?
+  createdAt      DateTime @default(now())
+
+  catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  brandSubmission BrandSubmission? @relation(fields: [brandSubmissionId], references: [id], onDelete: SetNull)
+  fieldStates CatalogFieldVerificationState[] @relation("LastAcceptedCatalogFieldChange")
+
+  @@index([catalogItemId, fieldName, createdAt])
+  @@index([catalogItemId, disposition])
+  @@index([actorType, createdAt])
+  @@index([brandSubmissionId])
+}
+
+model CatalogFieldVerificationState {
+  id                    String   @id @default(cuid())
+  catalogItemId         String
+  fieldName             String
+  state                 String   @default("unreviewed") // unreviewed, confirmed, disputed, unknown, needs_re_review
+  requiredConfirmations Int      @default(1)
+  confirmationsCount    Int      @default(0)
+  confirmedValue        Json?
+  lastAcceptedChangeId  String?
+  reviewedAt            DateTime?
+  updatedAt             DateTime @updatedAt
+
+  catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  lastAcceptedChange CatalogFieldChange? @relation("LastAcceptedCatalogFieldChange", fields: [lastAcceptedChangeId], references: [id], onDelete: SetNull)
+
+  @@unique([catalogItemId, fieldName])
+  @@index([catalogItemId, state])
+  @@index([fieldName, state])
+}
+
+model CatalogFieldVerificationRule {
+  id                    String   @id @default(cuid())
+  partnerId             String?
+  fieldName             String
+  requiredConfirmations Int      @default(1)
+  active                Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  partner Partner? @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, fieldName])
+  @@index([fieldName, active])
+}
+
+model BrandSubmission {
+  id                     String   @id @default(cuid())
+  partnerId              String
+  brandId                String
+  catalogItemId          String?
+  accessTokenId          String
+  status                 String   @default("pending") // pending, accepted, rejected
+  submitterName          String
+  submitterRole          String
+  contactPermission      Boolean  @default(false)
+  preferredContactMethod String? // email, signal, telegram
+  contactHandle          String?
+  consentToContactAt     DateTime?
+  imageUsageGrant        Boolean  @default(false)
+  imageUsageGrantedAt    DateTime?
+  imageUsageGrantedBy    String?
+  payload                Json     @default("{}")
+  createdAt              DateTime @default(now())
+  reviewedAt             DateTime?
+  reviewedBy             String?
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  brand Brand @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  catalogItem StoreProductCatalog? @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  accessToken CatalogAccessToken @relation(fields: [accessTokenId], references: [id], onDelete: Restrict)
+  photos ProductPhoto[]
+  fieldChanges CatalogFieldChange[]
+
+  @@index([partnerId, createdAt])
+  @@index([brandId, status])
+  @@index([catalogItemId, status])
+  @@index([accessTokenId])
 }
 
 model MycoEmployee {
@@ -615,6 +773,7 @@ model MycoEmployeeReviewAssignment {
   catalogItemId String
   employeeId    String
   tokenHash     String   @unique
+  accessTokenId String?  @unique
   status        String   @default("assigned") // assigned, opened, submitted, not_familiar, overdue, expired
   assignedBy    String?
   assignedAt    DateTime @default(now())
@@ -628,6 +787,7 @@ model MycoEmployeeReviewAssignment {
 
   catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
   employee MycoEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  accessToken CatalogAccessToken? @relation(fields: [accessTokenId], references: [id], onDelete: SetNull)
   response MycoEmployeeProductReview?
 
   @@unique([catalogItemId, employeeId])
