@@ -7,6 +7,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 import {
   hashPin,
   MAX_PIN_ATTEMPTS,
@@ -53,14 +54,16 @@ function employeeRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
-async function post(body: Record<string, unknown>) {
+async function post(body: Record<string, unknown>, cookie?: string) {
   const { POST } = await import("./route");
-  const request = new Request("https://tripdar.test/api/myco/staff-review/shared/session", {
+  const headers = new Headers({ "content-type": "application/json" });
+  if (cookie) headers.set("cookie", `${REVIEWER_SESSION_COOKIE}=${cookie}`);
+  const request = new NextRequest("https://tripdar.test/api/myco/staff-review/shared/session", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers,
     body: JSON.stringify(body),
   });
-  return POST(request as never, { params: Promise.resolve({ token: "shared" }) });
+  return POST(request, { params: Promise.resolve({ token: "shared" }) });
 }
 
 describe("shared staff-link enrollment (KEWL-2393)", () => {
@@ -128,6 +131,20 @@ describe("shared staff-link enrollment (KEWL-2393)", () => {
     expect(verifyReviewerSession(forged, { tokenId: TOKEN_ID, secret: SECRET })).toEqual({
       ok: false,
     });
+  });
+
+  it("cannot swap reviewer identity while the current link session is bound", async () => {
+    const firstResponse = await post({ employeeId: CLAY, pin: "8317" });
+    const cookie = firstResponse.cookies.get(REVIEWER_SESSION_COOKIE)!.value;
+
+    const swapResponse = await post(
+      { employeeId: ADRIENNE, pin: "5729" },
+      cookie
+    );
+
+    expect(swapResponse.status).toBe(409);
+    expect((await swapResponse.json()).error.code).toBe("identity_bound");
+    expect(prismaMock.mycoEmployee.findFirst).toHaveBeenCalledTimes(1);
   });
 
   it("cannot overwrite a PIN that is already set", async () => {

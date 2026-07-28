@@ -18,6 +18,7 @@ import {
   signReviewerSession,
   successfulAttemptPatch,
   verifyPin,
+  verifyReviewerSession,
 } from "@/domain/myco/reviewerPin";
 import {
   resolveStaffLink,
@@ -41,6 +42,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const pin = body.pin;
 
   if (!isValidPinFormat(pin)) return fail("Your PIN is 4 digits.", 400);
+
+  const existingSession = verifyReviewerSession(
+    request.cookies.get(REVIEWER_SESSION_COOKIE)?.value,
+    { tokenId: link.tokenId, secret: reviewerSessionSecret() }
+  );
+  if (existingSession.ok && existingSession.employeeId !== employeeId) {
+    return fail("Sign out before choosing a different reviewer.", 409, {
+      code: "identity_bound",
+    });
+  }
 
   const employee = await prisma.mycoEmployee.findFirst({
     where: { id: employeeId, partnerId: link.partnerId, active: true, optedOut: false },

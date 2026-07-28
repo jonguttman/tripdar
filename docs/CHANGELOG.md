@@ -11,7 +11,7 @@
 - **Staff link mint/revoke** (KEWL-2335): `/api/admin/myco/staff-links` issues revocable, expirable `CatalogAccessToken`s (hash-only storage; the raw link is shown once).
 
 ### Changed
-- **Shared staff-link enrollment** (KEWL-2393): each partner now has one active roster link with no reviewer bound at token level. A reviewer picks their name and chooses a PIN on first click; a compare-and-set write makes the first PIN win under concurrent enrollment, and the HMAC session remains bound to both the shared link and selected reviewer. Link administration is partner-scoped, and minting a replacement atomically revokes every older shared or reviewer-bound staff link for that partner.
+- **Shared staff-link enrollment** (KEWL-2393): each partner now has one active roster link with no reviewer bound at token level. A reviewer picks their name and chooses a PIN on first click; a compare-and-set write makes the first PIN win under concurrent enrollment, and the HMAC session remains bound to both the shared link and selected reviewer. A bound browser must explicitly sign out before choosing another identity. Link administration is partner-scoped, and minting a replacement atomically revokes every older shared or reviewer-bound staff link for that partner.
 - Corrected the fixed reviewer roster from “Claw” to **Clay**, including the idempotent seed path.
 - The staff verification gate now filters both customer recommendation loaders at read time, so a later dispute or invalidation cannot leave an already-active product customer-visible. Staff-entered numeric and constrained fields are normalized and rejected before they reach the append-only ledger.
 
