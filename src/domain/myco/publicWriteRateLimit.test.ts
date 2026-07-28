@@ -1,7 +1,9 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import {
   BRAND_PUBLIC_IP_LIMIT,
   checkPublicWriteRateLimit,
+  publicWriteIdentifier,
   type PublicWriteRateLimitStore,
 } from "./publicWriteRateLimit";
 
@@ -20,6 +22,28 @@ class SharedCounterStore implements PublicWriteRateLimitStore {
     return existing;
   }
 }
+
+describe("publicWriteIdentifier", () => {
+  // Regression guard for KEWL-2367/KEWL-2370: this hash must come from Web Crypto,
+  // not node:crypto, or the Edge middleware bundle throws at module init and every
+  // brand-portal write fails closed with a 429.
+  it("produces the same SHA-256 digest node:crypto did, so live buckets keep their keys", async () => {
+    const expected = createHash("sha256").update("203.0.113.10").digest("hex");
+    await expect(publicWriteIdentifier("ip", "203.0.113.10")).resolves.toBe(
+      `myco:public-write:ip:${expected}`
+    );
+  });
+
+  it("namespaces by scope so ip and token buckets never collide", async () => {
+    const [ip, token] = await Promise.all([
+      publicWriteIdentifier("ip", "same-value"),
+      publicWriteIdentifier("token", "same-value"),
+    ]);
+    expect(ip.startsWith("myco:public-write:ip:")).toBe(true);
+    expect(token.startsWith("myco:public-write:token:")).toBe(true);
+    expect(ip).not.toBe(token);
+  });
+});
 
 describe("checkPublicWriteRateLimit", () => {
   it("fails closed when the shared store throws", async () => {

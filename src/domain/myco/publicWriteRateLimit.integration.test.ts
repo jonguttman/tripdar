@@ -1,19 +1,21 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { prisma } from "@/lib/prisma";
+import { neon } from "@neondatabase/serverless";
 import {
   BRAND_PUBLIC_IP_LIMIT,
   checkPublicWriteRateLimit,
-  createPrismaPublicWriteRateLimitStore,
+  createNeonPublicWriteRateLimitStore,
 } from "./publicWriteRateLimit";
 
-const hasDatabase = Boolean(process.env.DATABASE_URL);
+const databaseUrl = process.env.DATABASE_URL;
 const tableName = `PublicWriteRateLimitBucketKewl2349${process.pid}`;
 
-const runIfDatabase = hasDatabase ? describe : describe.skip;
+const runIfDatabase = databaseUrl ? describe : describe.skip;
 
-runIfDatabase("Prisma public write rate-limit store", () => {
+runIfDatabase("Neon public write rate-limit store", () => {
+  const sql = neon(databaseUrl ?? "");
+
   beforeAll(async () => {
-    await prisma.$executeRawUnsafe(`
+    await sql.query(`
       CREATE TABLE "${tableName}" (
         "key" TEXT NOT NULL,
         "count" INTEGER NOT NULL DEFAULT 0,
@@ -25,13 +27,12 @@ runIfDatabase("Prisma public write rate-limit store", () => {
   });
 
   afterAll(async () => {
-    await prisma.$executeRawUnsafe(`DROP TABLE IF EXISTS "${tableName}"`);
-    await prisma.$disconnect();
+    await sql.query(`DROP TABLE IF EXISTS "${tableName}"`);
   });
 
   it("shares one SQL counter across independent limiter callers", async () => {
-    const callerAStore = createPrismaPublicWriteRateLimitStore(tableName);
-    const callerBStore = createPrismaPublicWriteRateLimitStore(tableName);
+    const callerAStore = createNeonPublicWriteRateLimitStore(tableName);
+    const callerBStore = createNeonPublicWriteRateLimitStore(tableName);
     const now = new Date("2026-07-28T17:30:00Z");
 
     const callerA = (token: string) =>
