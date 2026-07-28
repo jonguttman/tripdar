@@ -566,7 +566,11 @@ export async function POST(request: NextRequest) {
         brandDoseTiers: brandDoseTiers.length > 0 ? brandDoseTiers : Prisma.JsonNull,
         brandDoseInstructions: cleanText(body.brandDoseInstructions) ?? null,
         photoUrl: cleanText(body.photoUrl) ?? null,
-        active: typeof body.active === "boolean" ? body.active : true,
+        // KEWL-2335: a brand-new product has been reviewed by nobody, so it cannot
+        // clear the listing gate. Creating it active was the other half of how
+        // under-verified products went live (KEWL-2327). Activation now happens only
+        // through PATCH, which evaluates the gate.
+        active: false,
         strengthOffset: {
           create: {
             offset,
