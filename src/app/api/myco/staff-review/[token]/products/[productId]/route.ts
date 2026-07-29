@@ -27,8 +27,35 @@ import {
 } from "@/domain/myco/catalogFieldSpec";
 import { reviewerStillOwesField } from "@/domain/myco/staffFieldVerification";
 import { buildCatalogFieldChange, type CatalogFieldSource } from "@/domain/myco/catalogProvenance";
+import { computeDoseGuidance, type StrengthOffsetValue } from "@/domain/myco/dose";
+import { hasMeaningfulVibeProfile, normalizeVibeScores, topVibes } from "@/domain/myco/vibes";
+import { computeReadiness } from "@/domain/myco/readiness";
+import {
+  isCandidacyExcludedCompound,
+  isSupportedActiveCompound,
+} from "@/domain/recommendation-engine/doseBasis";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * KEWL-2458 — the customer-display preview is rendered from values computed HERE,
+ * never from raw dose inputs sent to the browser.
+ *
+ * The dose panel is the reason. `computeDoseGuidance()` is the guarded formatter: it
+ * returns null when the active compound is unsupported or the brand ladder is absent,
+ * and KEWL-2346 / KEWL-2428 exist because an unguarded unit count is a real safety
+ * hazard. Computing it server-side and shipping only the result means the preview
+ * *cannot* derive a unit count — the client never receives `brandDoseTiers`,
+ * `brandMicro/Mini/MacroUnits`, or the mass basis. Do not "helpfully" add them to the
+ * payload so the card looks more complete; that re-creates the hazard on a surface
+ * with no guard, and staff would read it as authoritative.
+ *
+ * The dose panel a customer sees varies with their own experience level and depth.
+ * A staff preview has neither, so it is pinned to one labelled representative
+ * setting and the client says so rather than implying the panel is fixed.
+ */
+const PREVIEW_SAMPLE_EXPERIENCE = "experienced" as const;
+const PREVIEW_SAMPLE_INTENSITY = "moderate" as const;
 
 const VALID_SOURCES: CatalogFieldSource[] = [
   "packaging",
@@ -92,6 +119,114 @@ function normalizeValue(raw: unknown, inputType: string): unknown {
   }
   if (typeof raw === "string") return raw.trim();
   return raw;
+}
+
+type PreviewItem = Prisma.StoreProductCatalogGetPayload<{ include: typeof PRODUCT_INCLUDE }>;
+
+/**
+ * Build the customer-display preview for one catalog row, using the same functions
+ * the real recommendation path uses so the preview cannot drift into fiction.
+ *
+ * `fieldName` tags exist so the client can turn any rendered element into a jump
+ * target for the audit field that controls it (KEWL-2458 requirement 2).
+ */
+function buildPreview(item: PreviewItem) {
+  const vibeScores = normalizeVibeScores(item.vibeProfile?.scores ?? null);
+  const strengthOffset = (item.strengthOffset?.offset as StrengthOffsetValue | undefined) ?? "standard";
+
+  // The identical call the customer path makes (myco/scoring.ts). Returns null when
+  // the guard rejects the compound or the brand ladder is missing — that null is the
+  // safety behaviour, so it is passed through untouched rather than filled in.
+  const doseGuidance = computeDoseGuidance(
+    {
+      format: item.format,
+      activeCompound: item.activeCompound,
+      productUnitMg: item.productUnitMg,
+      brandDoseTiers: item.brandDoseTiers,
+      brandMicroUnits: item.brandMicroUnits,
+      brandMiniUnits: item.brandMiniUnits,
+      brandMacroUnits: item.brandMacroUnits,
+      strengthOffset,
+      strengthRationale: item.strengthOffset?.rationale ?? null,
+    },
+    PREVIEW_SAMPLE_EXPERIENCE,
+    PREVIEW_SAMPLE_INTENSITY
+  );
+
+  // Why the panel is absent, so staff see a cause rather than a blank space.
+  const hasBrandLadder =
+    (Array.isArray(item.brandDoseTiers) && item.brandDoseTiers.length > 0) ||
+    Boolean(item.brandMicroUnits || item.brandMiniUnits || item.brandMacroUnits);
+  let doseSuppressedReason: string | null = null;
+  let doseSuppressedField: string | null = null;
+  if (!doseGuidance) {
+    if (!isSupportedActiveCompound(item.activeCompound)) {
+      doseSuppressedReason =
+        "No dose panel: the active compound is not one this recommender can dose for.";
+      doseSuppressedField = "activeCompound";
+    } else if (!hasBrandLadder) {
+      doseSuppressedReason =
+        "No dose panel: this brand has no dose ladder set, so there is no starting point to show.";
+      doseSuppressedField = null;
+    } else {
+      doseSuppressedReason = "No dose panel for this product.";
+    }
+  }
+
+  // The recommender's own gate, which is NOT the staff listing gate — see the
+  // `recommendable` note in the client. A product can pass one and fail the other.
+  const readiness = computeReadiness({
+    format: item.format,
+    brand: item.brand,
+    brandId: item.brandId,
+    productUnitMg: item.productUnitMg,
+    unitsPerPack: item.unitsPerPack,
+    totalDoseMg: item.totalDoseMg,
+    onsetMinutes: item.onsetMinutes,
+    durationMinutes: item.durationMinutes,
+    brandMicroUnits: item.brandMicroUnits,
+    brandMiniUnits: item.brandMiniUnits,
+    brandMacroUnits: item.brandMacroUnits,
+    brandDoseTiers: item.brandDoseTiers,
+    photoUrl: item.photoUrl,
+    photoCount: item._count.photos,
+    vibeScores: item.vibeProfile?.scores ?? null,
+    strengthOffset: item.strengthOffset
+      ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
+      : null,
+  });
+
+  return {
+    photoUrl: item.photos[0]?.url ?? item.photoUrl,
+    brandName: item.brandRef?.name ?? item.brand,
+    productName: item.productName,
+    format: item.format,
+    strainSlug: item.strainSlug,
+    flavors: item.flavors,
+    onsetMinutes: item.onsetMinutes,
+    durationMinutes: item.durationMinutes,
+    keyVibes: vibeScores ? topVibes(vibeScores) : [],
+    // Deliberately `hasMeaningfulVibeProfile`, not `Boolean(vibeScores)`:
+    // `normalizeVibeScores` returns an all-zero vector for any object, so a profile row
+    // holding junk keys would otherwise read as present here while the recommender
+    // counts it missing. The preview must agree with the gate, not with the row.
+    hasVibeProfile: hasMeaningfulVibeProfile(item.vibeProfile?.scores ?? null),
+    doseGuidance,
+    doseSuppressedReason,
+    doseSuppressedField,
+    doseSample: {
+      experienceLevel: PREVIEW_SAMPLE_EXPERIENCE,
+      intensity: PREVIEW_SAMPLE_INTENSITY,
+    },
+    // A compound the recommender refuses outright — the product is never a candidate
+    // regardless of how complete the audit is.
+    candidacyExcluded: isCandidacyExcludedCompound(item.activeCompound),
+    recommendable: {
+      ready: readiness.ready,
+      missing: readiness.missing,
+      warnings: readiness.warnings,
+    },
+  };
 }
 
 export async function GET(
@@ -192,6 +327,7 @@ export async function GET(
       },
       fields,
       notes,
+      preview: buildPreview(item),
       gate: {
         listable: gate.listable,
         viaOverride: gate.viaOverride,

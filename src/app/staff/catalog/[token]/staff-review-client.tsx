@@ -9,7 +9,7 @@
  * waits for a "submit the whole product" step and nothing is ever lost mid-product.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 /* ------------------------------------------------------------------ types --- */
 
@@ -91,6 +91,45 @@ interface Blocker {
   label: string;
 }
 
+/**
+ * KEWL-2458 — the customer-display preview, computed server-side.
+ *
+ * Every value here is already rendered-ready. In particular `doseGuidance` is the
+ * output of the guarded `computeDoseGuidance()`; the raw dose inputs
+ * (`brandDoseTiers`, the mass basis, the unit ladder) are deliberately NOT part of
+ * this payload, so no unit count can be derived on the client. Render what is here
+ * and nothing more.
+ */
+interface PreviewDoseGuidance {
+  tierCategory: string;
+  tierLabel: string;
+  unitsText: string;
+  mgLow: number | null;
+  mgHigh: number | null;
+  guidanceText: string;
+  offsetNote?: string;
+  steppedNote?: string;
+}
+
+interface PreviewData {
+  photoUrl: string | null;
+  brandName: string | null;
+  productName: string | null;
+  format: string | null;
+  strainSlug: string | null;
+  flavors: string[];
+  onsetMinutes: number | null;
+  durationMinutes: number | null;
+  keyVibes: { key: string; label: string; value: number }[];
+  hasVibeProfile: boolean;
+  doseGuidance: PreviewDoseGuidance | null;
+  doseSuppressedReason: string | null;
+  doseSuppressedField: string | null;
+  doseSample: { experienceLevel: string; intensity: string };
+  candidacyExcluded: boolean;
+  recommendable: { ready: boolean; missing: string[]; warnings: string[] };
+}
+
 interface DetailData {
   reviewer: { id: string; name: string };
   product: {
@@ -102,6 +141,7 @@ interface DetailData {
     researchOnly: boolean;
     photos: { id: string; url: string; tag: string; isPrimary: boolean }[];
   };
+  preview: PreviewData;
   fields: DetailField[];
   notes: { note: unknown; createdAt: string; byYou: boolean }[];
   gate: {
@@ -180,6 +220,42 @@ const FIELD_TIER_STYLES: Record<FieldTier, string> = {
 /* ---------------------------------------------------------------- helpers --- */
 
 /** Human-readable form of a stored field value, or `null` when there is nothing there. */
+/**
+ * KEWL-2458 — `computeReadiness().missing[]` returns readiness keys, not field names.
+ * This is the same mapping `CatalogFieldSpec.readinessKey` encodes, inverted, so a
+ * recommender blocker can jump to the field that clears it.
+ *
+ * `vibe profile` and `strength offset confirmation` map to Tier D fields, which the
+ * detail endpoint strips from `fields[]` — they resolve to a field name that is simply
+ * not present, and the register renders them as non-tappable. That is correct: there
+ * is no staff control for them on this surface.
+ */
+const READINESS_KEY_TO_FIELD: Record<string, string> = {
+  photo: "__photo_is_correct",
+  brand: "brand",
+  format: "format",
+  "mg per unit": "productUnitMg",
+  "units per pack": "unitsPerPack",
+  onset: "onsetMinutes",
+  duration: "durationMinutes",
+  "vibe profile": "vibeProfile",
+  "brand dose guidance": "brandDoseGuidance",
+  "strength offset confirmation": "strengthOffset",
+};
+
+/** DOM id for a field card, so the preview can scroll to it. */
+function fieldAnchorId(fieldName: string): string {
+  return `field-${fieldName}`;
+}
+
+function formatDurationMinutes(minutes: number | null): string | null {
+  if (!minutes || minutes <= 0) return null;
+  if (minutes < 60) return `${minutes} min`;
+  const hours = minutes / 60;
+  const rounded = Math.round(hours * 10) / 10;
+  return `${rounded % 1 === 0 ? rounded.toFixed(0) : rounded} hr`;
+}
+
 function formatValue(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   if (value === CONFIRMED_ABSENT_VALUE) return "Confirmed: not on the package";
@@ -846,6 +922,21 @@ function DetailScreen({
   onSubmitAnswer: (productId: string, answer: AnswerPayload) => Promise<string | null>;
   onSubmitNote: (productId: string, note: string) => Promise<string | null>;
 }) {
+  // KEWL-2458 — tapping the preview scrolls to the field that controls it and flashes
+  // it, so the jump is visible on a phone where the target may land off-screen.
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+
+  const jumpToField = useCallback((fieldName: string) => {
+    const target = document.getElementById(fieldAnchorId(fieldName));
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlighted(fieldName);
+  }, []);
+
+  // The ring persists until the next jump rather than timing out. After a smooth scroll
+  // on a phone a brief flash is easy to miss, and a standing marker answers "which field
+  // did I come here for?" while the reviewer is actually answering it.
+
   const backLink = (
     <button
       type="button"
@@ -897,11 +988,19 @@ function DetailScreen({
 
       <ProductPhoto url={photo?.url ?? null} alt={detail.product.productName} />
 
+      <CustomerPreview
+        preview={detail.preview}
+        gate={detail.gate}
+        fields={detail.fields}
+        onJumpToField={jumpToField}
+      />
+
       {photoCheck ? (
         <PhotoCheckCard
           field={photoCheck}
           productId={detail.product.id}
           onSubmitAnswer={onSubmitAnswer}
+          highlighted={highlighted === photoCheck.fieldName}
         />
       ) : null}
 
@@ -912,6 +1011,7 @@ function DetailScreen({
             field={field}
             productId={detail.product.id}
             onSubmitAnswer={onSubmitAnswer}
+            highlighted={highlighted === field.fieldName}
           />
         ))}
       </section>
@@ -922,22 +1022,9 @@ function DetailScreen({
         onSubmitNote={onSubmitNote}
       />
 
-      <section className="mt-6 rounded-lg border border-neutral-200 p-4">
-        <h2 className="text-sm font-semibold text-neutral-900">What's blocking this listing</h2>
-        <p className="mt-1 text-sm text-neutral-600">
-          {detail.gate.verifiedFieldCount} of {detail.gate.requiredFieldCount} required fields
-          verified.
-        </p>
-        {detail.gate.blockers.length === 0 ? (
-          <p className="mt-2 text-sm text-emerald-700">Nothing blocking it.</p>
-        ) : (
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-700">
-            {detail.gate.blockers.map((blocker, index) => (
-              <li key={`${blocker.kind}-${blocker.fieldName ?? index}`}>{blocker.label}</li>
-            ))}
-          </ul>
-        )}
-      </section>
+      {/* KEWL-2458 — the former "What's blocking this listing" section lived here. It is
+          now the consequence register inside the customer preview above, which shows the
+          same blockers plus the customer-facing consequence and jumps to each field. */}
 
       <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 p-3">
@@ -964,6 +1051,508 @@ function DetailScreen({
         </div>
       </div>
     </main>
+  );
+}
+
+/** A rendered value the customer sees. Tapping it opens the field behind it. */
+function PreviewValue({
+  fieldName,
+  className,
+  label,
+  canJump,
+  onJumpToField,
+  children,
+}: {
+  fieldName: string | null;
+  className: string;
+  label: string;
+  canJump: boolean;
+  onJumpToField: (fieldName: string) => void;
+  children: ReactNode;
+}) {
+  if (!canJump || !fieldName) return <span className={className}>{children}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => onJumpToField(fieldName)}
+      aria-label={`${label} — go to this field`}
+      className={`${className} cursor-pointer text-left underline decoration-dotted decoration-neutral-400 underline-offset-4 hover:decoration-solid`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** A blank the customer would notice. Shown as a hole, not an omission. */
+function PreviewHole({
+  fieldName,
+  label,
+  text,
+  block,
+  canJump,
+  onJumpToField,
+}: {
+  fieldName: string | null;
+  label: string;
+  text: string;
+  block?: boolean;
+  canJump: boolean;
+  onJumpToField: (fieldName: string) => void;
+}) {
+  const base = `${
+    block ? "block w-full rounded-lg" : "inline-block rounded-full"
+  } border border-dashed border-amber-400 bg-amber-50 px-2 py-1 text-left text-[0.7rem] font-medium text-amber-800`;
+  if (!canJump || !fieldName) return <span className={base}>{text}</span>;
+  return (
+    <button
+      type="button"
+      onClick={() => onJumpToField(fieldName)}
+      aria-label={`${label} is missing — go to this field`}
+      className={`${base} min-h-[32px] cursor-pointer hover:bg-amber-100`}
+    >
+      {text} ›
+    </button>
+  );
+}
+
+/**
+ * KEWL-2458 — a live sample of the customer-facing card that doubles as navigation.
+ *
+ * Mirrors the real result card at `src/app/m/[slug]/MycoFlow.tsx:388-462` — same
+ * element order, same violet palette — so staff proofread the product rather than a
+ * database row. Anything rendered here is tappable and jumps to the audit field that
+ * controls it; anything missing shows as a hole rather than silently vanishing, so the
+ * customer-facing cost of a blank is visible.
+ *
+ * If the customer card changes, change this with it. A preview that has drifted is
+ * worse than no preview, because staff will trust it.
+ */
+function CustomerPreview({
+  preview,
+  gate,
+  fields,
+  onJumpToField,
+}: {
+  preview: PreviewData;
+  gate: DetailData["gate"];
+  fields: DetailField[];
+  onJumpToField: (fieldName: string) => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const available = new Set(fields.map((field) => field.fieldName));
+
+  const jumpable = (fieldName: string | null): boolean =>
+    Boolean(fieldName) && available.has(fieldName as string);
+
+  /** Bound helpers so the card markup below stays readable. */
+  const Live = (props: {
+    fieldName: string | null;
+    className: string;
+    label: string;
+    children: ReactNode;
+  }) => (
+    <PreviewValue
+      {...props}
+      canJump={jumpable(props.fieldName)}
+      onJumpToField={onJumpToField}
+    />
+  );
+  const Hole = (props: {
+    fieldName: string | null;
+    label: string;
+    text: string;
+    block?: boolean;
+  }) => (
+    <PreviewHole
+      {...props}
+      canJump={jumpable(props.fieldName)}
+      onJumpToField={onJumpToField}
+    />
+  );
+
+  const onset = formatDurationMinutes(preview.onsetMinutes);
+  const duration = formatDurationMinutes(preview.durationMinutes);
+
+  return (
+    <section className="mt-4 overflow-hidden rounded-xl border border-violet-200 bg-violet-50/50">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex min-h-[48px] w-full items-center justify-between gap-2 px-4 py-3 text-left"
+      >
+        <span>
+          <span className="block text-sm font-semibold text-violet-900">What the customer sees</span>
+          <span className="block text-xs text-violet-700">
+            Built from this product&apos;s current information. Tap anything to fix it.
+          </span>
+        </span>
+        <span aria-hidden className="shrink-0 text-sm text-violet-700">
+          {open ? "Hide" : "Show"}
+        </span>
+      </button>
+
+      {open ? (
+        <div className="px-3 pb-4 sm:px-4">
+          {/* The card. Mirrors MycoFlow's result card. */}
+          <div className="rounded-xl border border-neutral-200 bg-white p-3 shadow-sm">
+            <div className="flex items-start gap-3">
+              {preview.photoUrl ? (
+                jumpable("__photo_is_correct") ? (
+                  <button
+                    type="button"
+                    onClick={() => onJumpToField("__photo_is_correct")}
+                    aria-label="Product photo — go to the photo check"
+                    className="shrink-0"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={preview.photoUrl}
+                      alt={preview.productName ?? "Product"}
+                      className="h-[72px] w-[72px] rounded-xl object-cover"
+                    />
+                  </button>
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={preview.photoUrl}
+                    alt={preview.productName ?? "Product"}
+                    className="h-[72px] w-[72px] shrink-0 rounded-xl object-cover"
+                  />
+                )
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => jumpable("__photo_is_correct") && onJumpToField("__photo_is_correct")}
+                  aria-label="No photo — go to the photo check"
+                  className="flex h-[72px] w-[72px] shrink-0 flex-col items-center justify-center rounded-xl border border-dashed border-amber-400 bg-amber-50 text-center text-[0.6rem] font-medium leading-tight text-amber-800"
+                >
+                  No photo
+                </button>
+              )}
+
+              <div className="min-w-0 flex-1">
+                {preview.brandName ? (
+                  <Live
+                    fieldName="brand"
+                    label="Brand"
+                    className="block text-[0.72rem] font-semibold uppercase tracking-[0.05em] text-violet-600"
+                  >
+                    {preview.brandName}
+                  </Live>
+                ) : (
+                  <Hole fieldName="brand" label="Brand" text="No brand" />
+                )}
+
+                {preview.productName ? (
+                  <Live
+                    fieldName="productName"
+                    label="Product name"
+                    className="mt-0.5 block text-[1.05rem] font-bold leading-snug text-neutral-950"
+                  >
+                    {preview.productName}
+                  </Live>
+                ) : (
+                  <div className="mt-1">
+                    <Hole fieldName="productName" label="Product name" text="No product name" />
+                  </div>
+                )}
+
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {preview.format ? (
+                    <Live
+                      fieldName="format"
+                      label="Format"
+                      className="rounded-full bg-violet-100 px-2 py-0.5 text-[0.7rem] font-semibold text-violet-700"
+                    >
+                      {preview.format}
+                    </Live>
+                  ) : (
+                    <Hole fieldName="format" label="Format" text="No format" />
+                  )}
+
+                  {/* Strain: the real card only shows this pill when the customer's own
+                      goals match the strain, which a staff preview cannot know. Shown
+                      here as conditional rather than implying it always appears. */}
+                  {preview.strainSlug ? (
+                    <Live
+                      fieldName="strainSlug"
+                      label="Strain"
+                      className="rounded-full bg-emerald-50 px-2 py-0.5 text-[0.7rem] font-semibold text-emerald-700"
+                    >
+                      ⭐ {preview.strainSlug}
+                    </Live>
+                  ) : null}
+
+                  {preview.hasVibeProfile && preview.keyVibes.length > 0 ? (
+                    preview.keyVibes.map((vibe) => (
+                      <span
+                        key={vibe.key}
+                        className="rounded-full bg-violet-50 px-2 py-0.5 text-[0.7rem] text-violet-700"
+                      >
+                        {vibe.label}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="rounded-full border border-dashed border-neutral-300 bg-neutral-50 px-2 py-0.5 text-[0.7rem] text-neutral-500">
+                      No vibe tags
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {preview.flavors.length > 0 ? (
+              <p className="mt-2.5 text-[0.78rem] text-neutral-600">
+                Comes in: {preview.flavors.join(" · ")}
+              </p>
+            ) : null}
+
+            {/* The "why this matched" paragraph is written per customer at request
+                time, so there is nothing fixed to preview here. */}
+            <p className="mt-3 rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-2.5 text-[0.78rem] leading-relaxed text-neutral-500">
+              A short &ldquo;why this matched you&rdquo; note is written fresh for each customer, so it
+              cannot be previewed.
+            </p>
+
+            {/* Dose panel — rendered from the guarded computation done on the server.
+                Never compute a unit count here. */}
+            {preview.doseGuidance ? (
+              <div className="mt-3 rounded-xl bg-violet-50 p-3">
+                <p className="text-[0.75rem] font-bold uppercase tracking-[0.05em] text-violet-700">
+                  A typical starting point
+                </p>
+                <p className="mt-1 text-[0.95rem] font-bold text-neutral-950">
+                  {preview.doseGuidance.unitsText}
+                  {preview.doseGuidance.mgLow !== null ? (
+                    <span className="font-normal text-neutral-600">
+                      {" "}
+                      ({preview.doseGuidance.mgLow}
+                      {preview.doseGuidance.mgHigh &&
+                      preview.doseGuidance.mgHigh !== preview.doseGuidance.mgLow
+                        ? `–${preview.doseGuidance.mgHigh}`
+                        : ""}
+                      mg)
+                    </span>
+                  ) : null}
+                  <span className="font-normal text-neutral-600">
+                    {" "}
+                    · {preview.doseGuidance.tierLabel}
+                  </span>
+                </p>
+                {preview.doseGuidance.offsetNote ? (
+                  <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-2 text-[0.78rem] leading-relaxed text-amber-900">
+                    {preview.doseGuidance.offsetNote}
+                  </p>
+                ) : null}
+                {preview.doseGuidance.steppedNote ? (
+                  <p className="mt-2 text-[0.78rem] leading-relaxed text-neutral-600">
+                    {preview.doseGuidance.steppedNote}
+                  </p>
+                ) : null}
+                <p className="mt-2 border-t border-violet-200 pt-2 text-[0.7rem] leading-relaxed text-violet-700">
+                  Sample only — shown here for a returning explorer at moderate depth. Every
+                  customer sees a starting point worked out for them.
+                </p>
+              </div>
+            ) : preview.doseSuppressedReason ? (
+              <div className="mt-3">
+                <Hole
+                  block
+                  fieldName={preview.doseSuppressedField}
+                  label="Dose panel"
+                  text={preview.doseSuppressedReason}
+                />
+              </div>
+            ) : null}
+
+            {onset || duration ? (
+              <div className="mt-2.5 flex gap-4 text-[0.78rem] text-neutral-600">
+                {onset ? (
+                  <Live fieldName="onsetMinutes" label="Onset" className="">
+                    Onset ~{onset}
+                  </Live>
+                ) : null}
+                {duration ? (
+                  <Live fieldName="durationMinutes" label="Duration" className="">
+                    Lasts ~{duration}
+                  </Live>
+                ) : null}
+              </div>
+            ) : null}
+
+            {!onset || !duration ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {!onset ? <Hole fieldName="onsetMinutes" label="Onset" text="No onset time" /> : null}
+                {!duration ? (
+                  <Hole fieldName="durationMinutes" label="Duration" text="No duration" />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Deliberately outside the collapse: hiding the sample must not hide what is
+          blocking the listing. This block replaces the old standalone
+          "What's blocking this listing" section, which listed the same blockers
+          without the customer-facing framing or the tap-to-field jump. */}
+      <div className="px-3 pb-4 sm:px-4">
+        <ConsequenceRegister
+          preview={preview}
+          gate={gate}
+          available={available}
+          onJumpToField={onJumpToField}
+        />
+      </div>
+    </section>
+  );
+}
+
+/**
+ * KEWL-2458 requirement 3 — the customer-facing consequence of the fields that never
+ * appear on the card.
+ *
+ * Most of the audit is invisible on the card: those fields decide whether the product
+ * is shown to anyone at all and drive the dose maths. Without this block a budtender
+ * fills them in, sees the preview not change, and reasonably concludes the work did
+ * nothing.
+ *
+ * Two gates are reported separately because they genuinely differ. The listing gate is
+ * the staff audit. The recommender additionally requires a vibe profile and a confirmed
+ * strength offset — both Tier D, both excluded from the listing gate — so a product can
+ * read "Ready to list" here and still never reach a customer.
+ */
+function ConsequenceRegister({
+  preview,
+  gate,
+  available,
+  onJumpToField,
+}: {
+  preview: PreviewData;
+  gate: DetailData["gate"];
+  available: Set<string>;
+  onJumpToField: (fieldName: string) => void;
+}) {
+  function Row({ fieldName, text }: { fieldName: string | null; text: string }) {
+    const canJump = Boolean(fieldName) && available.has(fieldName as string);
+    if (!canJump) {
+      return (
+        <li className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm text-neutral-700">
+          {text}
+        </li>
+      );
+    }
+    return (
+      <li>
+        <button
+          type="button"
+          onClick={() => onJumpToField(fieldName as string)}
+          className="flex min-h-[44px] w-full items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2 text-left text-sm text-neutral-800 hover:border-neutral-400"
+        >
+          <span>{text}</span>
+          <span aria-hidden className="shrink-0 text-neutral-400">
+            ›
+          </span>
+        </button>
+      </li>
+    );
+  }
+
+  const recommenderMissing = preview.recommendable.missing;
+  const listable = gate.listable;
+
+  return (
+    <div className="mt-3 rounded-xl border border-neutral-200 bg-white p-3">
+      <h3 className="text-sm font-semibold text-neutral-900">
+        What the customer does not see
+      </h3>
+      <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+        These never show on the card. They decide whether the card is shown at all, and
+        what the dose panel is allowed to say.
+      </p>
+
+      {preview.candidacyExcluded ? (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          This product is never recommended to anyone — its active compound is outside what
+          this recommender handles. Nothing in this audit changes that.
+        </p>
+      ) : (
+        <>
+          {/* Gate 1 — the staff listing gate. */}
+          <div className="mt-3">
+            <p
+              className={`text-sm font-medium ${
+                listable ? "text-emerald-700" : "text-neutral-900"
+              }`}
+            >
+              {listable
+                ? "✓ Passes the listing check."
+                : `Not listed yet — ${gate.blockers.length} thing${
+                    gate.blockers.length === 1 ? "" : "s"
+                  } to clear.`}
+            </p>
+            <p className="mt-0.5 text-xs text-neutral-600">
+              {gate.verifiedFieldCount} of {gate.requiredFieldCount} required fields verified.
+            </p>
+            {gate.blockers.length > 0 ? (
+              <ul className="mt-2 space-y-1.5">
+                {gate.blockers.map((blocker, index) => (
+                  <Row
+                    key={`${blocker.kind}-${blocker.fieldName ?? index}`}
+                    fieldName={blocker.fieldName}
+                    text={blocker.label}
+                  />
+                ))}
+              </ul>
+            ) : null}
+          </div>
+
+          {/* Gate 2 — the recommender's own readiness check. */}
+          {recommenderMissing.length > 0 ? (
+            <div className="mt-4 border-t border-neutral-200 pt-3">
+              <p className="text-sm font-medium text-neutral-900">
+                {listable
+                  ? "Still not reaching customers, even though the listing check passes."
+                  : "Also missing before it can be recommended:"}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-neutral-600">
+                The recommender needs these on top of the listing check. Until they are set,
+                this product is not shown to anyone.
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {recommenderMissing.map((key) => {
+                  const fieldName = READINESS_KEY_TO_FIELD[key] ?? null;
+                  const staffOwned = Boolean(fieldName) && available.has(fieldName as string);
+                  return (
+                    <Row
+                      key={key}
+                      fieldName={fieldName}
+                      text={staffOwned ? `Needs ${key}.` : `Needs ${key} — set by the office, not here.`}
+                    />
+                  );
+                })}
+              </ul>
+            </div>
+          ) : null}
+
+          {preview.recommendable.warnings.length > 0 ? (
+            <div className="mt-4 border-t border-neutral-200 pt-3">
+              <p className="text-sm font-medium text-amber-900">Worth a second look</p>
+              <ul className="mt-2 space-y-1.5">
+                {preview.recommendable.warnings.map((warning) => (
+                  <li
+                    key={warning}
+                    className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm leading-relaxed text-amber-900"
+                  >
+                    {warning}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </>
+      )}
+    </div>
   );
 }
 
@@ -994,10 +1583,13 @@ function PhotoCheckCard({
   field,
   productId,
   onSubmitAnswer,
+  highlighted,
 }: {
   field: DetailField;
   productId: string;
   onSubmitAnswer: (productId: string, answer: AnswerPayload) => Promise<string | null>;
+  /** KEWL-2458 — flashes when the customer preview jumps to this field. */
+  highlighted?: boolean;
 }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
@@ -1025,7 +1617,12 @@ function PhotoCheckCard({
   const current = formatValue(field.currentValue);
 
   return (
-    <section className="mt-4 rounded-lg border-2 border-neutral-950 p-4">
+    <section
+      id={fieldAnchorId(field.fieldName)}
+      className={`mt-4 scroll-mt-4 rounded-lg border-2 border-neutral-950 p-4 transition-shadow ${
+        highlighted ? "ring-2 ring-violet-500 ring-offset-2" : ""
+      }`}
+    >
       <h2 className="text-base font-semibold text-neutral-950">{field.label}</h2>
       {field.helpText ? <p className="mt-1 text-sm text-neutral-600">{field.helpText}</p> : null}
 
@@ -1063,10 +1660,13 @@ function FieldCard({
   field,
   productId,
   onSubmitAnswer,
+  highlighted,
 }: {
   field: DetailField;
   productId: string;
   onSubmitAnswer: (productId: string, answer: AnswerPayload) => Promise<string | null>;
+  /** KEWL-2458 — flashes when the customer preview jumps to this field. */
+  highlighted?: boolean;
 }) {
   const [source, setSource] = useState<SourceValue>("packaging");
   const [editing, setEditing] = useState<"correct" | "fill" | null>(null);
@@ -1105,9 +1705,10 @@ function FieldCard({
 
   return (
     <div
-      className={`rounded-lg border p-4 ${
+      id={fieldAnchorId(field.fieldName)}
+      className={`scroll-mt-4 rounded-lg border p-4 transition-shadow ${
         field.state === "disputed" ? "border-red-400 bg-red-50/40" : "border-neutral-200"
-      }`}
+      } ${highlighted ? "ring-2 ring-violet-500 ring-offset-2" : ""}`}
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-medium text-neutral-950">{field.label}</h3>

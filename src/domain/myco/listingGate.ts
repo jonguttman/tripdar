@@ -102,7 +102,16 @@ export function evaluateListingGate(input: ListingGateInput): ListingGateResult 
   const readiness = computeReadiness(input.readiness);
   for (const missing of readiness.missing) {
     if (excluded.has(missing)) continue;
-    blockers.push({ kind: "readiness", fieldName: null, label: `Missing ${missing}` });
+    // KEWL-2458 — carry the field this readiness key belongs to, where one exists, so a
+    // blocker can link to the control that clears it. `readinessKey` already encodes the
+    // mapping; it simply was not being read here. Stays null for keys with no reviewable
+    // field, so callers must still handle null.
+    const owningRule = input.rules.find((rule) => rule.readinessKey === missing);
+    blockers.push({
+      kind: "readiness",
+      fieldName: owningRule?.fieldName ?? null,
+      label: `Missing ${missing}`,
+    });
   }
 
   // Field verification.
