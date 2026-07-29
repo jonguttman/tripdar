@@ -16,7 +16,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { clientIp } from "@/domain/myco/rate-limit";
-import { checkPublicWriteRateLimit } from "@/domain/myco/publicWriteRateLimit";
 import { sendEmail } from "@/lib/email";
 import { buildCatalogFieldChange } from "@/domain/myco/catalogProvenance";
 import { loadBrandPortalContext, markTokenOpened } from "@/domain/myco/brandPortalData";
@@ -99,24 +98,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   try {
     const { token } = await params;
 
-    const rateLimit = await checkPublicWriteRateLimit({ ip: clientIp(request), token });
-    if (!rateLimit.allowed) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message:
-              rateLimit.reason === "store_error"
-                ? "Submissions are temporarily unavailable. Please try again shortly."
-                : "Too many submissions just now. Please wait a moment and try again.",
-          },
-        },
-        {
-          status: rateLimit.reason === "store_error" ? 503 : 429,
-          headers: { "Retry-After": rateLimit.retryAfterSeconds.toString() },
-        },
-      );
-    }
+    // Public-write rate limiting is enforced solely in `src/middleware.ts` for the
+    // `/api/myco/brand-portal` prefix. Calling the limiter here too would increment
+    // the IP and token buckets a second time per request (KEWL-2383).
 
     const lookup = await loadBrandPortalContext(token);
     if (!lookup.ok) return denied(lookup.reason);
