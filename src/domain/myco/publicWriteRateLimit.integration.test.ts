@@ -11,10 +11,15 @@ const tableName = `PublicWriteRateLimitBucketKewl2349${process.pid}`;
 
 const runIfDatabase = databaseUrl ? describe : describe.skip;
 
-runIfDatabase("Neon public write rate-limit store", () => {
-  const sql = neon(databaseUrl ?? "");
+// Vitest evaluates a suite factory at collection time even when the suite is
+// skipped, so `neon()` must NOT be called in the factory body — doing so threw
+// "No database connection string was provided to `neon()`" on every machine
+// without DATABASE_URL, before `runIfDatabase` could skip anything (KEWL-2462).
+let sql: ReturnType<typeof neon> | null = null;
 
+runIfDatabase("Neon public write rate-limit store", () => {
   beforeAll(async () => {
+    sql = neon(databaseUrl!);
     await sql.query(`
       CREATE TABLE "${tableName}" (
         "key" TEXT NOT NULL,
@@ -27,7 +32,9 @@ runIfDatabase("Neon public write rate-limit store", () => {
   });
 
   afterAll(async () => {
-    await sql.query(`DROP TABLE IF EXISTS "${tableName}"`);
+    // `sql` is null if beforeAll threw before assigning it; don't mask that
+    // failure with a TypeError from the teardown hook.
+    await sql?.query(`DROP TABLE IF EXISTS "${tableName}"`);
   });
 
   it("shares one SQL counter across independent limiter callers", async () => {
