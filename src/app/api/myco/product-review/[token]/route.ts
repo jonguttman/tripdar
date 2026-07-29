@@ -10,6 +10,7 @@ import {
   pointsForReview,
 } from "@/domain/myco/employeeReviews";
 import { evaluateCatalogAccessToken, hashCatalogAccessToken } from "@/domain/myco/catalogTokens";
+import { photoStatusLabel } from "@/domain/myco/photoVisibility";
 
 const REQUIRED_EFFECT_FIELDS = [
   "clarityCognition",
@@ -132,12 +133,17 @@ export async function GET(
           flavors: assignment.catalogItem.flavors,
           ingredients: assignment.catalogItem.ingredients,
           notes: assignment.catalogItem.notes,
+          // Reviewers may see pending brand submissions, but labelled — never as
+          // published assets (KEWL-2460).
           photos: assignment.catalogItem.photos.map((photo) => ({
             id: photo.id,
             url: photo.url,
             tag: photo.tag,
             kind: photo.kind,
             isPrimary: photo.isPrimary,
+            status: photo.status,
+            statusLabel: photoStatusLabel(photo.status),
+            submissionSource: photo.submissionSource,
           })),
         },
         response: assignment.response,

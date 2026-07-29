@@ -54,7 +54,8 @@ export function buildRevokedTokenPatch(revokedBy: string, reason: string, now = 
 }
 
 export function buildRegeneratedTokenInput(input: {
-  oldTokenId: string;
+  /** Null on a brand's first link; set on every rotation after that (KEWL-2460). */
+  oldTokenId: string | null;
   token: string;
   purpose: CatalogTokenPurpose;
   partnerId: string;
@@ -78,6 +79,6 @@ export function buildRegeneratedTokenInput(input: {
     issuedToEmail: input.issuedToEmail ?? null,
     issuedBy: input.issuedBy ?? null,
     expiresAt: input.expiresAt ?? null,
-    regeneratedFromId: input.oldTokenId,
+    regeneratedFromId: input.oldTokenId ?? null,
   };
 }

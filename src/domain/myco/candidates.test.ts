@@ -8,7 +8,11 @@ vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
 import { getRecommendableProducts } from "./candidates";
 
-function readyCatalogRow(id: string, activeCompound: string | null) {
+function readyCatalogRow(
+  id: string,
+  activeCompound: string | null,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id,
     productName: `Product ${id}`,
@@ -34,6 +38,7 @@ function readyCatalogRow(id: string, activeCompound: string | null) {
     brandMacroUnits: 5,
     vibeProfile: { scores: { clarity_cognition: 0.8 } },
     strengthOffset: { offset: "standard", confirmed: true, rationale: null },
+    ...overrides,
   };
 }
 
@@ -81,4 +86,46 @@ describe("getRecommendableProducts compound candidacy", () => {
       await expect(getRecommendableProducts("partner-1")).resolves.toEqual([]);
     },
   );
+});
+
+/**
+ * KEWL-2460 — this is the only code path that decides which photos a customer
+ * may see, so the approved-only filter belongs in the query itself. A pending
+ * brand-portal photo must neither be shown nor satisfy the readiness photo gate.
+ */
+describe("getRecommendableProducts photo visibility", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("asks the database for approved photos only", async () => {
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue([]);
+
+    await getRecommendableProducts("partner-1");
+
+    const args = prismaMock.storeProductCatalog.findMany.mock.calls[0][0];
+    expect(args.include.photos.where).toEqual({ status: "approved" });
+  });
+
+  it("drops a product whose only photo is pending and has no legacy photoUrl", async () => {
+    // The approved-only filter above means a pending row never reaches us, so the
+    // row arrives with an empty `photos` array — readiness must then fail.
+    const row = readyCatalogRow("pending-only", "psilocybin", { photoUrl: null, photos: [] });
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue([row]);
+
+    await expect(getRecommendableProducts("partner-1")).resolves.toEqual([]);
+  });
+
+  it("serves the approved photo when one exists", async () => {
+    const row = readyCatalogRow("approved", "psilocybin", {
+      photoUrl: null,
+      photos: [{ url: "https://cdn.test/approved.jpg" }],
+    });
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue([row]);
+
+    const candidates = await getRecommendableProducts("partner-1");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].photoUrl).toBe("https://cdn.test/approved.jpg");
+  });
 });

@@ -172,6 +172,35 @@ const READONLY_PILL_CLASSES =
 const PHOTO_GRID_CLASSES =
   "mt-2 grid grid-cols-[repeat(auto-fill,minmax(110px,1fr))] gap-2";
 
+/**
+ * The row thumbnail stands in for the published asset, so it may only use an
+ * approved photo. Rows whose only photo is a pending brand submission fall
+ * through to the legacy `photoUrl` or the "Add photo" prompt (KEWL-2460).
+ */
+function approvedThumbnailUrl(photos?: ProductPhoto[]): string | null {
+  return photos?.find((photo) => !photo.status || photo.status === "approved")?.url ?? null;
+}
+
+/**
+ * Brand-portal photos land as `pending` and are not published until the review
+ * queue approves them (KEWL-2460). Admin deliberately shows them, so it must say
+ * so — an unlabelled thumbnail here reads as a live asset.
+ */
+function PhotoStatusBadge({ status, submissionSource }: { status?: string; submissionSource?: string }) {
+  if (!status || status === "approved") return null;
+  const pending = status === "pending";
+  return (
+    <div
+      className={`rounded-md px-1 py-0.5 text-center text-[10px] font-semibold ${
+        pending ? "bg-amber-100 text-amber-800" : "bg-red-100 text-red-800"
+      }`}
+    >
+      {pending ? "Pending review" : "Rejected"}
+      {submissionSource === "brand" ? " · brand" : ""}
+    </div>
+  );
+}
+
 const VIBE_DIMENSIONS: { key: VibeKey; label: string }[] = [
   { key: "clarity_cognition", label: "Mind: Scattered ↔ Focused" },
   { key: "mood_social", label: "Mood: Inward ↔ Social" },
@@ -326,6 +355,9 @@ interface ProductPhoto {
   sortOrder: number;
   provider?: string | null;
   model?: string | null;
+  /** pending | approved | rejected — brand submissions arrive pending (KEWL-2460). */
+  status?: string;
+  submissionSource?: string;
 }
 
 interface Product {
@@ -1859,9 +1891,9 @@ export default function MycoAdminPage() {
                       />
                     </label>
                     <div className="flex min-w-0 flex-1 items-start gap-3">
-                      {product.photos?.[0]?.url ? (
+                      {approvedThumbnailUrl(product.photos) ? (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={product.photos[0].url} alt="" className="size-14 shrink-0 rounded-lg bg-bone-200 object-cover" />
+                        <img src={approvedThumbnailUrl(product.photos)!} alt="" className="size-14 shrink-0 rounded-lg bg-bone-200 object-cover" />
                       ) : product.photoUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={product.photoUrl} alt="" className="size-14 shrink-0 rounded-lg bg-bone-200 object-cover" />
@@ -2378,6 +2410,7 @@ export default function MycoAdminPage() {
                               >
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-[repeating-conic-gradient(#e7e2d6_0_25%,#f5f2ea_0_50%)] bg-[length:16px_16px] object-contain" />
+                                <PhotoStatusBadge status={photo.status} submissionSource={photo.submissionSource} />
                                 <div className="text-center text-[10px] font-medium text-bark-500">
                                   {PHOTO_KIND_LABELS[photo.kind]}
                                 </div>
@@ -2492,6 +2525,7 @@ export default function MycoAdminPage() {
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img src={photo.url} alt="" className="h-20 w-full rounded-md bg-[repeating-conic-gradient(#e7e2d6_0_25%,#f5f2ea_0_50%)] bg-[length:16px_16px] object-contain" />
+                          <PhotoStatusBadge status={photo.status} submissionSource={photo.submissionSource} />
                           <div className="text-center text-[10px] font-medium text-bark-500">
                             {PHOTO_KIND_LABELS[photo.kind]}
                           </div>

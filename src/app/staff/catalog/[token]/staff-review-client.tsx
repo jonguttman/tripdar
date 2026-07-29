@@ -100,7 +100,15 @@ interface DetailData {
     format: string;
     sku: string | null;
     researchOnly: boolean;
-    photos: { id: string; url: string; tag: string; isPrimary: boolean }[];
+    photos: {
+      id: string;
+      url: string;
+      tag: string;
+      isPrimary: boolean;
+      status?: string;
+      statusLabel?: string | null;
+      submissionSource?: string;
+    }[];
   };
   fields: DetailField[];
   notes: { note: unknown; createdAt: string; byYou: boolean }[];
@@ -874,7 +882,17 @@ function DetailScreen({
     );
   }
 
-  const photo = detail.product.photos.find((entry) => entry.isPrimary) ?? detail.product.photos[0];
+  // Prefer an approved photo; only fall back to a pending brand submission when
+  // nothing is approved, and label it when we do (KEWL-2460).
+  const approvedPhotos = detail.product.photos.filter(
+    (entry) => !entry.status || entry.status === "approved"
+  );
+  const photo =
+    approvedPhotos.find((entry) => entry.isPrimary) ??
+    approvedPhotos[0] ??
+    detail.product.photos.find((entry) => entry.isPrimary) ??
+    detail.product.photos[0];
+  const photoPendingLabel = photo && photo.status && photo.status !== "approved" ? photo.statusLabel ?? "Pending review" : null;
   const photoCheck = detail.fields.find((field) => field.inputType === "photo_check");
   const rest = detail.fields.filter((field) => field.inputType !== "photo_check");
 
@@ -896,6 +914,12 @@ function DetailScreen({
       </header>
 
       <ProductPhoto url={photo?.url ?? null} alt={detail.product.productName} />
+      {photoPendingLabel ? (
+        <p className="mt-1 inline-block rounded border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-medium text-amber-800">
+          {photoPendingLabel}
+          {photo?.submissionSource === "brand" ? " — brand submission, not yet published" : ""}
+        </p>
+      ) : null}
 
       {photoCheck ? (
         <PhotoCheckCard

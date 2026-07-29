@@ -17,6 +17,7 @@ import {
   urgencyTierFor,
   URGENCY_TIER_LABELS,
 } from "@/domain/myco/staffReviewService";
+import { APPROVED_PHOTO_WHERE } from "@/domain/myco/photoVisibility";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +31,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     where: { partnerId: reviewer.partnerId, archivedAt: null },
     include: {
       brandRef: { select: { name: true } },
-      photos: { orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }], take: 1 },
+      // Approved only: this drives both the row thumbnail and the gate photo
+      // count, and neither may be satisfied by a pending brand photo (KEWL-2460).
+      photos: {
+        where: APPROVED_PHOTO_WHERE,
+        orderBy: [{ isPrimary: "desc" }, { sortOrder: "asc" }],
+        select: { id: true, url: true },
+      },
       vibeProfile: true,
       strengthOffset: true,
-      _count: { select: { photos: true } },
       catalogFieldChanges: {
         select: {
           fieldName: true,
@@ -57,7 +63,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const gate = evaluateGateForItem({
       item,
       extras: {
-        photoCount: item._count.photos,
+        photoCount: item.photos.length,
         vibeScores: item.vibeProfile?.scores ?? null,
         strengthOffset: item.strengthOffset
           ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
