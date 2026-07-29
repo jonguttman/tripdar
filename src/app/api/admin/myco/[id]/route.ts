@@ -4,6 +4,7 @@ import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 import { computeReadiness } from "@/domain/myco/readiness";
+import { loadGateForProduct } from "@/domain/myco/staffReviewService";
 import { normalizeFlavors } from "@/domain/myco/flavors";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
@@ -284,6 +285,39 @@ export async function PATCH(
     if (productUnitMg !== undefined) data.productUnitMg = productUnitMg;
     if (unitsPerPack !== undefined) data.unitsPerPack = unitsPerPack;
     if ("active" in body && typeof body.active === "boolean") data.active = body.active;
+    if ("researchOnly" in body && typeof body.researchOnly === "boolean") {
+      data.researchOnly = body.researchOnly;
+      data.researchOnlyReason = cleanText(body.researchOnlyReason) ?? null;
+      // A research-only product can never be in the customer path.
+      if (body.researchOnly) data.active = false;
+    }
+
+    // --- KEWL-2335 listing gate: a real binding constraint on activation. ---
+    // Before this there was no gate at all, which is how two under-verified products
+    // went live (KEWL-2327). Evaluated against the CURRENT stored state plus this
+    // patch, so a request cannot both supply the missing data and flip active in one go.
+    if (data.active === true) {
+      const gate = await loadGateForProduct(id);
+      if (!gate) {
+        return NextResponse.json(
+          { success: false, error: { message: "Product not found" } },
+          { status: 404 }
+        );
+      }
+      if (!gate.listable) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: "This product cannot be listed yet.",
+              code: "listing_gate_blocked",
+              blockers: gate.blockers,
+            },
+          },
+          { status: 422 }
+        );
+      }
+    }
     if ("archived" in body && typeof body.archived === "boolean") {
       if (body.archived) {
         data.archivedAt = new Date();

@@ -453,6 +453,7 @@ model Partner {
   catalogAccessTokens CatalogAccessToken[]
   fieldVerificationRules CatalogFieldVerificationRule[]
   brandSubmissions BrandSubmission[]
+  enrollmentEvents ReviewerEnrollmentEvent[]
 
   @@index([apiKeyHash])
   @@index([active])
@@ -526,6 +527,16 @@ model StoreProductCatalog {
   activeCompound        String   @default("unknown")
   activeCompoundSource  String?
   active                Boolean  @default(true)
+  // --- KEWL-2335 listing gate ---
+  // Research-only products (G23 Lady Hyphae isolated solution) must never enter the
+  // customer path. Excluded outright rather than parked forever failing the gate.
+  researchOnly          Boolean  @default(false)
+  researchOnlyReason    String?
+  // Jon-only force-list override. Never a silent boolean — the typed reason is
+  // mandatory and is also written to the append-only CatalogFieldChange log.
+  listingOverrideAt     DateTime?
+  listingOverrideBy     String?
+  listingOverrideReason String?
   archivedAt            DateTime?
   notes                 String?
   createdAt             DateTime @default(now())
@@ -659,6 +670,13 @@ model CatalogAccessToken {
   revokedBy                  String?
   revocationReason           String?
   regeneratedFromId          String?
+  // --- KEWL-2379 staff-review enrollment window. ---
+  // A shared `staff_review` link lets any roster member claim an unset PIN, so the claim
+  // period is bounded rather than permanent. Both columns are only meaningful on a
+  // `staff_review` token; `enrollmentOpen` defaults false so no other token type or any
+  // pre-existing row is retroactively enrollable.
+  enrollmentOpen             Boolean  @default(false)
+  enrollmentClosesAt         DateTime?
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
 
@@ -669,11 +687,48 @@ model CatalogAccessToken {
   regeneratedFrom CatalogAccessToken? @relation("CatalogTokenRegeneration", fields: [regeneratedFromId], references: [id], onDelete: SetNull)
   regenerations CatalogAccessToken[] @relation("CatalogTokenRegeneration")
   brandSubmissions BrandSubmission[]
+  enrollmentEvents ReviewerEnrollmentEvent[]
 
   @@index([partnerId, purpose, status])
   @@index([brandId, status])
   @@index([catalogItemId, purpose])
   @@index([expiresAt])
+}
+
+/// KEWL-2379 — append-only ledger for every staff-review PIN enrollment event.
+///
+/// Jon accepted a shared link on the understanding that every claim is recorded and
+/// reversible. That only holds if the record cannot be quietly rewritten, so this table is
+/// INSERT-only by contract: no `updatedAt`, no update or delete path anywhere in the app,
+/// and reviewer name/email are denormalised so the trail survives a rename or a roster
+/// removal (`onDelete: SetNull`, never Cascade — deleting a reviewer must not erase the
+/// evidence that they enrolled).
+model ReviewerEnrollmentEvent {
+  id            String   @id @default(cuid())
+  partnerId     String
+  tokenId       String?
+  employeeId    String?
+  /// Denormalised on purpose — a ledger row must still read correctly after a rename.
+  employeeName  String
+  employeeEmail String?
+  /// enrolled, enrollment_rejected, pin_reset, enrollment_opened, enrollment_closed
+  eventType     String
+  /// enrollment (reviewer claiming their own PIN), admin, system (auto-close)
+  actorType     String
+  actorIdentity String
+  reason        String?
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime @default(now())
+
+  partner  Partner             @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  token    CatalogAccessToken? @relation(fields: [tokenId], references: [id], onDelete: SetNull)
+  employee MycoEmployee?       @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, createdAt])
+  @@index([employeeId, createdAt])
+  @@index([tokenId, createdAt])
+  @@index([eventType, createdAt])
 }
 
 model CatalogFieldChange {
@@ -728,6 +783,22 @@ model CatalogFieldVerificationRule {
   fieldName             String
   requiredConfirmations Int      @default(1)
   active                Boolean  @default(true)
+  // --- KEWL-2335: the approved required-field set lives here as CONFIG DATA. ---
+  // KEWL-2033 renames the dose fields; when it lands we update rows, not code.
+  tier                  String   @default("A") // A, B, C, D
+  requiresDistinctReviewers Boolean @default(false) // Tier B: 2 different people
+  gateRequired          Boolean  @default(true) // Tier D rows are false — excluded from the listing gate
+  readinessKey          String? // maps to a computeReadiness() `missing[]` key, so Tier D exclusion is data
+  catalogColumn         String? // StoreProductCatalog column this field writes to; null = log-only field.
+  // ^ this is what makes the KEWL-2033 dose rename a row update instead of a code change.
+  label                 String? // reviewer-facing field label
+  helpText              String? // reviewer-facing hint
+  inputType             String   @default("text") // text, number, list, strain, photo_check
+  allowsConfirmedAbsent Boolean  @default(true) // "genuinely has no strain claim" satisfies the gate
+  // Which confirmed answers actually satisfy the gate. Empty = any confirmed value does.
+  // The photo check uses ["yes"], so a product confirmed to have the WRONG photo stays blocked.
+  gateSatisfyingValues  String[] @default([])
+  sortOrder             Int      @default(0)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
@@ -735,6 +806,7 @@ model CatalogFieldVerificationRule {
 
   @@unique([partnerId, fieldName])
   @@index([fieldName, active])
+  @@index([tier, active])
 }
 
 model BrandSubmission {
@@ -781,11 +853,20 @@ model MycoEmployee {
   points    Int      @default(0)
   streak    Int      @default(0)
   lastRespondedAt DateTime?
+  // --- KEWL-2335 staff catalog review: first-use 4-digit PIN. ---
+  // Deterrence-grade only (10,000 combinations), not security-grade. Slow-hashed
+  // (scrypt) with a per-reviewer lockout so the small keyspace cannot be walked.
+  pinHash           String?
+  pinSetAt          DateTime?
+  pinFailedAttempts Int      @default(0)
+  pinLockedUntil    DateTime?
+  pinLastUsedAt     DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   assignments MycoEmployeeReviewAssignment[]
+  enrollmentEvents ReviewerEnrollmentEvent[]
 
   @@unique([partnerId, email])
   @@index([partnerId, active])
