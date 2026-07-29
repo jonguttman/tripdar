@@ -85,6 +85,17 @@ export const CANONICAL_DOSE_LEVELS: CanonicalDoseLevel[] = [
   },
 ];
 
+/**
+ * The basis of CANONICAL_DOSE_LEVELS: dried-mushroom-equivalent material mass in
+ * milligrams — NOT active psilocybin/psilocin milligrams. L1 is 50-250 mg and L6
+ * is 5000-7500 mg; the dosing guide renders L2-L6 as quarter-gram boundaries.
+ *
+ * Any divisor used to turn this ladder into a unit count must be like-for-like
+ * with this basis. See docs/architecture/2026-07-28-kewl-2346-dose-ladder-basis.md.
+ */
+export const CANONICAL_DOSE_BASIS = "dried_mushroom_equivalent_mg" as const;
+export type CanonicalDoseBasis = typeof CANONICAL_DOSE_BASIS;
+
 export const DOSE_SENSITIVITY_MODIFIERS: Record<DoseSensitivity, number> = {
   gentle: 1.0,
   medium: 0.85,
@@ -125,7 +136,12 @@ export interface ScoredRecommendation {
   product?: {
     name: string;
     url: string;
-    suggestedUnits: string;
+    /**
+     * Present only when the product carries a divisor on the same basis as
+     * CANONICAL_DOSE_BASIS. Absent means "we know the product but cannot state a
+     * safe unit count" — render name/photo/link and omit the unit label entirely.
+     */
+    suggestedUnits?: string;
     format: string;
     photoUrl?: string;
     strengthOffset?: "standard" | "stronger" | "lighter";

@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.14.0] - 2026-07-28
+
+### Fixed
+- **Consumer-side dose safety gates** (KEWL-2356 / KEWL-2346): `product.suggestedUnits` is no longer derived by dividing the canonical dose ladder by `productUnitMg`. The ladder is dried-mushroom-equivalent mass, `productUnitMg` is verified active-compound mass, and dividing one by the other produced unit counts in the overdose direction (a 1 mg psilocin unit could yield a four-digit Level 4 suggestion). Unit math now requires an explicit same-basis divisor (`unitMaterialMassMg` + `materialMassBasis` for catalog rows, `productUnitMaterialMassMg` + `productMaterialMassBasis` for legacy config). Only `fruiting_body` and `mushroom_material` are treated as ladder-compatible; extracts, proprietary blends, net edible weight, unknown, and missing bases all fail closed.
+
+### Added
+- **Staff catalog review surface + real listing gate** (KEWL-2335): a no-login, mobile-first review tool at `/staff/catalog/[token]` for The Mushroom Top's fixed reviewer roster. Reviewers pick their name and set a 4-digit PIN on first use (scrypt-hashed, per-reviewer lockout — deterrence, not security). Products are ordered by urgency with **disputed first**, then never-reviewed, then not-reviewed-by-you. Each field takes Confirm / Correct / Fill in / Confirmed-absent / I-don't-know plus a source, saves incrementally, and shows a coverage counter and a "what's left for me" filter. An explicit "is this the correct photo?" question leads every product, since the bulk import is where a photo/product swap hides.
+- **Listing gate as a binding constraint on activation** (KEWL-2335): activation now fails closed. Listable = readiness satisfied **and** every gate-required field verified **and** `activeCompound` known **and** not research-only. Tier B requires two *distinct* reviewers on the same value; a disputed field blocks listing; a correction never last-write-wins. Previously `active` was a free boolean that nothing checked, which is how two under-verified products went live (KEWL-2327). New products are now created inactive.
+- **Required-field set as config data** (KEWL-2335): the approved Tier A–D set lives in `CatalogFieldVerificationRule` rows (tier, confirmations, distinct-reviewer flag, gate participation, readiness key, catalog column). KEWL-2033's dose-field rename becomes a row update, not a code change. Tier D (vibe profile, strength offset) is excluded from the gate via `gateRequired = false` rather than in code.
+- **Research-only product exclusion** (KEWL-2335): G23 (Lady Hyphae isolated solution) is flagged `researchOnly` and can never enter the customer path — not even via override.
+- **Jon-only force-list override** (KEWL-2335): `POST /api/admin/myco/[id]/listing-override` requires a super-admin and a typed reason, and writes an admin assertion into the append-only `CatalogFieldChange` log. Never a silent boolean.
+- **Staff link mint/revoke** (KEWL-2335): `/api/admin/myco/staff-links` issues revocable, expirable `CatalogAccessToken`s (hash-only storage; the raw link is shown once).
+- `CANONICAL_DOSE_BASIS` constant exported alongside `CANONICAL_DOSE_LEVELS`, plus a `doseBasis` module holding both safety gates (`isSupportedActiveCompound`, `isLadderCompatibleMaterialBasis`, `computeSuggestedUnits`).
+- Fail-closed `activeCompound` gate on dose output: only `psilocybin` and `psilocin` may emit brand-ladder guidance or canonical-ladder `suggestedUnits`. `unknown` (the column default), blank/missing, `muscimol`, `functional-only`, and unrecognized values retain product identity but emit no dose guidance.
+
+### Changed
+- `ScoredRecommendation.product.suggestedUnits` is now **optional** — a contract change for API consumers. Product recommendation eligibility is independent of `activeCompound`; name, photo, URL, and format are retained when compound or basis gates suppress unit math.
+- `RecommendationResult.productUnits` persists `null` when unit math is suppressed instead of storing a fabricated count.
+- WordPress plugin omits the entire `tripdar-rec__product-units` span when `suggestedUnits` is absent, so no stray `capsules`/`gummies` label renders without a count.
+
+### Removed
+- `StoreProductCatalog.listingOverrideActive` — a bare boolean override added directly to Neon by an abandoned migration (`20260728180000_tmt_staff_audit_gate`) that never reached the repo. Verified empty (all 27 rows `false`) before dropping; replaced by the reason-bearing override columns.
+
 ## [1.13.1] - 2026-07-25
 
 ### Fixed

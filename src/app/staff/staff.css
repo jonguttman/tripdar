@@ -1,0 +1,11 @@
+/**
+ * KEWL-2335 — stylesheet for the staff catalog review surface.
+ *
+ * Tailwind is loaded per-section in this app (see src/app/admin/admin.css); the root
+ * layout ships no stylesheet, so a route that does not import one renders unstyled.
+ * Scoped to /staff so nothing global changes.
+ */
+
+@import "tailwindcss";
+
+@source "./";
