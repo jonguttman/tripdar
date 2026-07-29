@@ -1,5 +1,7 @@
 import { beforeAll, describe, expect, it, vi, beforeEach } from "vitest";
 
+import { createPrismaMock } from "@/test/prismaMock";
+
 const prismaMock = vi.hoisted(() => ({
   mycoEmployeeReviewAssignment: {
     findFirst: vi.fn(),
@@ -16,9 +18,13 @@ const prismaMock = vi.hoisted(() => ({
 
 const checkPublicWriteRateLimitMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/prisma", () => ({
-  prisma: prismaMock,
-}));
+// Strict view (KEWL-2467): the route sees a Proxy that throws by name on any un-stubbed
+// prisma access, so a signature change the mock has not kept up with fails as
+// "not stubbed" instead of falling into the route's catch-all as a 500.
+vi.mock("@/lib/prisma", async () => {
+  const { createPrismaMock } = await import("@/test/prismaMock");
+  return { prisma: createPrismaMock(prismaMock) };
+});
 
 vi.mock("@/domain/myco/publicWriteRateLimit", () => ({
   checkPublicWriteRateLimit: checkPublicWriteRateLimitMock,
@@ -65,12 +71,20 @@ describe("product review token API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     prismaMock.mycoEmployeeReviewAssignment.findFirst.mockResolvedValue(assignment());
+    // The interactive-transaction client is hand-built too, so it gets the same strict
+    // treatment — an un-stubbed `tx.<model>.<method>` would otherwise fail exactly the
+    // way the top-level client used to.
     prismaMock.$transaction.mockImplementation(async (callback) =>
-      callback({
-        mycoEmployeeProductReview: prismaMock.mycoEmployeeProductReview,
-        mycoEmployeeReviewAssignment: prismaMock.mycoEmployeeReviewAssignment,
-        mycoEmployee: prismaMock.mycoEmployee,
-      })
+      callback(
+        createPrismaMock(
+          {
+            mycoEmployeeProductReview: prismaMock.mycoEmployeeProductReview,
+            mycoEmployeeReviewAssignment: prismaMock.mycoEmployeeReviewAssignment,
+            mycoEmployee: prismaMock.mycoEmployee,
+          },
+          "tx"
+        )
+      )
     );
     prismaMock.mycoEmployeeProductReview.create.mockResolvedValue({ id: "response-1" });
     prismaMock.mycoEmployeeReviewAssignment.update.mockResolvedValue({});
@@ -144,6 +158,27 @@ describe("product review token API", () => {
 
     expect(response.status).toBe(400);
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  // KEWL-2467: pin the QUERY, not just the status. The strict mock catches a rename
+  // (`findFirst` -> something else); this catches the subtler regression where the method
+  // stays but the lookup stops matching one of the two token paths. Both token shapes have
+  // to stay in the OR — catalog access tokens (KEWL-2353) and legacy review tokens — and a
+  // change that drops either would silently 404 half the live links.
+  it("looks the assignment up by both the legacy review token and the catalog access token", async () => {
+    await post({ knowsProduct: false, notes: "I have not tried this one." });
+
+    expect(prismaMock.mycoEmployeeReviewAssignment.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          OR: [
+            { tokenHash: expect.any(String) },
+            { accessToken: { tokenHash: expect.any(String) } },
+          ],
+        },
+        include: expect.objectContaining({ accessToken: true, response: true }),
+      })
+    );
   });
 
   it("stores not-familiar submissions without requiring effect axes", async () => {
