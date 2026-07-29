@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    name: Test (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+        env:
+          # prisma generate reads the datasource url from env but does not
+          # connect; a placeholder keeps it from failing on a bare runner.
+          DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
+
+      - name: Run test suite
+        run: npm test
