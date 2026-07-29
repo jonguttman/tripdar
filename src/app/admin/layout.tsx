@@ -19,6 +19,9 @@ import {
 const navItems: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin", label: "Dashboard", icon: "grid" },
   { href: "/admin/myco", label: "Myco Store", icon: "spark" },
+  // KEWL-2457 — staff catalog edits queue for review instead of going live on arrival.
+  // A review queue with no way to reach it is the same as no review queue.
+  { href: "/admin/myco/catalog-review", label: "Staff Edits", icon: "check" },
   { href: "/admin/strains", label: "Strains", icon: "leaf" },
   { href: "/admin/collections", label: "Collections", icon: "folder" },
   { href: "/admin/reviews", label: "Reviews", icon: "star" },
@@ -28,17 +31,24 @@ const navItems: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin/partners", label: "Partners", icon: "users" },
 ];
 
-/* High-traffic sections pinned to the mobile bottom tab bar. */
-const tabBarItems = [
-  navItems[0], // Dashboard
-  navItems[1], // Myco Store
-  navItems[4], // Reviews
-  navItems[6], // Trip Reports
-];
+/*
+ * High-traffic sections pinned to the mobile bottom tab bar.
+ * Selected by href, not by index: these were positional, so inserting anything into
+ * navItems above silently re-pointed the tab bar at the wrong sections.
+ */
+const tabBarItems = ["/admin", "/admin/myco", "/admin/reviews", "/admin/reports"].map(
+  (href) => navItems.find((item) => item.href === href)!
+);
 
 function isActiveRoute(pathname: string, href: string): boolean {
-  return (
-    pathname === href || (href !== "/admin" && pathname.startsWith(href))
+  if (pathname === href) return true;
+  if (href === "/admin" || !pathname.startsWith(`${href}/`)) return false;
+  // Longest prefix wins. `/admin/myco/catalog-review` is under `/admin/myco`, so a bare
+  // prefix test lights up two nav items at once and neither reads as "where I am".
+  return !navItems.some(
+    (item) =>
+      item.href.length > href.length &&
+      (pathname === item.href || pathname.startsWith(`${item.href}/`))
   );
 }
 

@@ -19,6 +19,16 @@ type InputType = "text" | "number" | "list" | "strain" | "photo_check";
 type FieldStateName = "unreviewed" | "confirmed" | "disputed" | "unknown" | "needs_re_review";
 type SourceValue = "packaging" | "brand-provided" | "personal-knowledge" | "unsure";
 type ReviewAction = "confirm" | "correct" | "fill" | "confirmed_absent" | "dont_know";
+
+/**
+ * KEWL-2457 — actions that queue for the store's review instead of going live.
+ *
+ * This mirrors `CHANGE_ACTIONS` in the submit route, and the route is authoritative:
+ * it decides the disposition and the field's pending banner is rendered from what the
+ * server actually stored. This copy only picks the wording of the transient
+ * "Saved" / "Sent for review" flash, so a drift would be cosmetic and one refresh long.
+ */
+const QUEUED_ACTIONS = new Set<ReviewAction>(["fill", "correct", "confirmed_absent"]);
 type UrgencyTier = 1 | 2 | 3 | 4;
 
 interface Reviewer {
@@ -55,6 +65,8 @@ interface ListProduct {
   urgencyLabel: string;
   disputedFields: string[];
   fieldsOwedByYou: number;
+  /** KEWL-2457 — answers on this product sitting in the admin queue. */
+  pendingReviewCount: number;
   verifiedFieldCount: number;
   reviewableFieldCount: number;
   listable: boolean;
@@ -82,6 +94,10 @@ interface DetailField {
   competingValues: unknown[];
   yourAnswer: unknown;
   yourAnswerAt: string | null;
+  /** KEWL-2457 — edits awaiting an admin decision. Shown, never counted. */
+  pendingCount: number;
+  yourPendingValue: unknown;
+  yourPendingAt: string | null;
   owedByYou: boolean;
 }
 
@@ -1670,19 +1686,30 @@ function FieldCard({
 }) {
   const [source, setSource] = useState<SourceValue>("packaging");
   const [editing, setEditing] = useState<"correct" | "fill" | null>(null);
+  /** KEWL-2457 — opens the answer buttons back up on a field you've already queued. */
+  const [revising, setRevising] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
-  const [saved, setSaved] = useState(false);
+  /** Which action just succeeded — drives "Saved" vs "Sent for review". */
+  const [saved, setSaved] = useState<ReviewAction | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const current = formatValue(field.currentValue);
   const filled = hasValue(field.currentValue);
   const yourAnswer = formatValue(field.yourAnswer);
+  // KEWL-2457 — your answer is real, it just isn't live yet. Say that explicitly:
+  // without it the field re-reads as "Not filled in yet" straight after you filled it,
+  // which looks like the app dropped what you typed.
+  // Presence is `yourPendingAt`, not the formatted value: `formatValue` maps some real
+  // answers to null, so keying off it would undercount and drop your own card.
+  const youHavePending = field.yourPendingAt !== null;
+  const yourPending = formatValue(field.yourPendingValue);
+  const othersPendingCount = Math.max(0, field.pendingCount - (youHavePending ? 1 : 0));
 
   async function send(action: ReviewAction, value?: unknown) {
     setBusy(true);
     setError(null);
-    setSaved(false);
+    setSaved(null);
     const message = await onSubmitAnswer(productId, {
       fieldName: field.fieldName,
       action,
@@ -1695,9 +1722,10 @@ function FieldCard({
       return;
     }
     setEditing(null);
+    setRevising(false);
     setDraft("");
-    setSaved(true);
-    window.setTimeout(() => setSaved(false), 2500);
+    setSaved(action);
+    window.setTimeout(() => setSaved(null), 2500);
   }
 
   const actionClass =
@@ -1760,7 +1788,29 @@ function FieldCard({
         </div>
       ) : null}
 
-      {yourAnswer ? (
+      {/* KEWL-2457 — a change you made is waiting on the store's own review. It has to
+          read as "received and queued", never as "nothing happened". */}
+      {youHavePending ? (
+        <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <p className="text-sm font-medium text-amber-900">
+            {yourPending
+              ? `You sent "${yourPending}" — waiting on review.`
+              : "Your answer is waiting on review."}
+          </p>
+          <p className="mt-1 text-xs text-amber-800">
+            It won't show to customers until the store approves it. You don't need to
+            answer this one again.
+          </p>
+        </div>
+      ) : othersPendingCount > 0 ? (
+        <p className="mt-2 text-xs text-amber-800">
+          {othersPendingCount === 1
+            ? "A teammate's answer for this is waiting on review."
+            : `${othersPendingCount} answers for this are waiting on review.`}
+        </p>
+      ) : null}
+
+      {yourAnswer && !youHavePending ? (
         <p className="mt-2 text-xs text-neutral-500">
           You said: {yourAnswer}. You can change it.
         </p>
@@ -1836,6 +1886,16 @@ function FieldCard({
             </button>
           </div>
         </div>
+      ) : youHavePending && !revising ? (
+        /* Answered and queued — don't re-ask. Revising stays possible, just not the
+           thing the card pushes you toward. */
+        <button
+          type="button"
+          onClick={() => setRevising(true)}
+          className={`mt-3 w-full ${actionClass}`}
+        >
+          Change my answer
+        </button>
       ) : (
         <div className="mt-3 grid grid-cols-2 gap-2">
           {filled ? (
@@ -1896,7 +1956,13 @@ function FieldCard({
         </div>
       )}
 
-      {saved ? <p className="mt-2 text-xs font-medium text-emerald-700">Saved</p> : null}
+      {saved ? (
+        QUEUED_ACTIONS.has(saved) ? (
+          <p className="mt-2 text-xs font-medium text-amber-800">Sent for review</p>
+        ) : (
+          <p className="mt-2 text-xs font-medium text-emerald-700">Saved</p>
+        )
+      ) : null}
       {error ? <p className="mt-2 text-xs text-red-700">{error}</p> : null}
     </div>
   );

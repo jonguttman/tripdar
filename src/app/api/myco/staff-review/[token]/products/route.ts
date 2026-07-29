@@ -13,6 +13,7 @@ import {
   ensureFieldRules,
   evaluateGateForItem,
   fieldsOwedBy,
+  pendingStaffChangesByField,
   urgencyRank,
   urgencyTierFor,
   URGENCY_TIER_LABELS,
@@ -36,7 +37,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       _count: { select: { photos: true } },
       catalogFieldChanges: {
         select: {
+          id: true,
           fieldName: true,
+          previousValue: true,
           submittedValue: true,
           actorType: true,
           actorIdentity: true,
@@ -66,8 +69,26 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       rules,
       fieldStates,
     });
-    const tier = urgencyTierFor({ fieldStates, rules, reviewerId: reviewer.employeeId });
-    const owed = fieldsOwedBy({ rules, fieldStates, reviewerId: reviewer.employeeId });
+    // KEWL-2457 — queued edits don't count toward the gate, but they must stop this
+    // reviewer being re-asked. Without threading them through here the list's
+    // "N left for you" would disagree with the detail page, which reads as a bug.
+    const pendingByField = pendingStaffChangesByField(item.catalogFieldChanges);
+    const pendingCount = Object.values(pendingByField).reduce(
+      (total, list) => total + list.length,
+      0
+    );
+    const tier = urgencyTierFor({
+      fieldStates,
+      rules,
+      reviewerId: reviewer.employeeId,
+      pendingByField,
+    });
+    const owed = fieldsOwedBy({
+      rules,
+      fieldStates,
+      reviewerId: reviewer.employeeId,
+      pendingByField,
+    });
 
     const verifiedCount = reviewableRules.filter(
       (rule) => fieldStates[rule.fieldName]?.state === "confirmed"
@@ -87,6 +108,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         .filter((rule) => fieldStates[rule.fieldName]?.state === "disputed")
         .map((rule) => rule.label ?? rule.fieldName),
       fieldsOwedByYou: owed.length,
+      pendingReviewCount: pendingCount,
       verifiedFieldCount: verifiedCount,
       reviewableFieldCount: reviewableRules.length,
       listable: gate.listable,

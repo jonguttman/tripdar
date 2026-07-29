@@ -17,6 +17,8 @@ import {
   computeFieldStates,
   ensureFieldRules,
   evaluateGateForItem,
+  pendingStaffChangesByField,
+  reviewerHasPendingAnswer,
   type FieldRuleRow,
 } from "@/domain/myco/staffReviewService";
 import {
@@ -66,6 +68,32 @@ const VALID_SOURCES: CatalogFieldSource[] = [
 const VALID_ACTIONS = ["confirm", "correct", "fill", "confirmed_absent", "dont_know"] as const;
 type ReviewAction = (typeof VALID_ACTIONS)[number];
 
+/**
+ * KEWL-2457 — which staff answers are *changes* to the record, and therefore have to
+ * wait for Jon rather than going live on arrival.
+ *
+ * Jon, 2026-07-29: "Have them fill it out and when they make a change I want to review it."
+ * The split is on whether the answer mutates the product record, not on how much typing
+ * it took:
+ *
+ *  - `fill` writes a value into an empty field — a change.
+ *  - `correct` replaces a value already on the record — a change.
+ *  - `confirmed_absent` clears the column to null — a change. It is the one that reads
+ *    like a non-answer and isn't; "not on the package" deletes data.
+ *  - `confirm` agrees with what is already there and adds a confirmation. It cannot
+ *    introduce a value nobody has seen, so it keeps flowing as it always did — that is
+ *    the peer-review mechanism, not an edit.
+ *  - `dont_know` is not an answer at all and never counts toward anything.
+ *
+ * Reviewer notes are log-only (no `catalogColumn`), so they cannot reach a customer and
+ * do not need a queue; holding them would only delay a teammate reading them.
+ */
+const CHANGE_ACTIONS = new Set<ReviewAction>(["fill", "correct", "confirmed_absent"]);
+
+function dispositionForAction(action: ReviewAction): "pending" | "accepted" {
+  return CHANGE_ACTIONS.has(action) ? "pending" : "accepted";
+}
+
 const PRODUCT_INCLUDE = {
   brandRef: { select: { name: true } },
   photos: { orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }] },
@@ -77,6 +105,7 @@ const PRODUCT_INCLUDE = {
     select: {
       id: true,
       fieldName: true,
+      previousValue: true,
       submittedValue: true,
       actorType: true,
       actorIdentity: true,
@@ -250,6 +279,7 @@ export async function GET(
   }
 
   const fieldStates = computeFieldStates(rules, item.catalogFieldChanges);
+  const pendingByField = pendingStaffChangesByField(item.catalogFieldChanges);
   const gate = evaluateGateForItem({
     item,
     extras: {
@@ -276,6 +306,13 @@ export async function GET(
             change.actorType === "staff" &&
             change.actorIdentity === reviewer.employeeId
         );
+      // KEWL-2457 — queued edits, shown but never counted. `yourPendingValue` is what
+      // stops a reviewer's answer from appearing to vanish; the count tells them a
+      // teammate has also answered without leaking who.
+      const pending = pendingByField[rule.fieldName] ?? [];
+      const yourPending = pending.find(
+        (change) => change.actorIdentity === reviewer.employeeId
+      );
       return {
         fieldName: rule.fieldName,
         label: rule.label ?? rule.fieldName,
@@ -295,7 +332,13 @@ export async function GET(
         competingValues: state.everConflicted ? state.competingValues : [],
         yourAnswer: mine ? mine.submittedValue : null,
         yourAnswerAt: mine ? mine.createdAt : null,
-        owedByYou: reviewerStillOwesField(state, reviewer.employeeId),
+        pendingCount: pending.length,
+        yourPendingValue: yourPending ? yourPending.submittedValue : null,
+        yourPendingAt: yourPending ? yourPending.createdAt : null,
+        owedByYou:
+          reviewerHasPendingAnswer(pending, reviewer.employeeId)
+            ? false
+            : reviewerStillOwesField(state, reviewer.employeeId),
       };
     });
 
@@ -458,9 +501,9 @@ export async function POST(
         actorType: "staff",
         actorIdentity: reviewer.employeeId,
         source,
-        // Staff answers are the audit itself — accepted on arrival. Brand submissions
-        // stay `pending` for admin triage; that path is KEWL-2331.
-        disposition: "accepted",
+        // KEWL-2457: staff answers are no longer accepted on arrival. A change to the
+        // record queues for Jon (see CHANGE_ACTIONS); a confirmation flows as before.
+        disposition: dispositionForAction(action),
       })
     );
   }
@@ -562,10 +605,18 @@ export async function POST(
     fieldStates,
   });
 
+  // KEWL-2457 — the client has to be able to say "sent for review" rather than "saved",
+  // so the response reports which of the just-written rows are queued. Read off the rows
+  // actually built, not re-derived from the action, so the two can never disagree.
+  const queuedFields = changeRows
+    .filter((row) => row.disposition === "pending")
+    .map((row) => row.fieldName);
+
   return NextResponse.json({
     success: true,
     data: {
       saved: changeRows.length,
+      queuedForReview: queuedFields,
       fieldStates: Object.fromEntries(
         [...touched].map((fieldName) => [
           fieldName,
