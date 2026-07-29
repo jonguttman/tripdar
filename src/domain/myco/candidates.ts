@@ -32,8 +32,8 @@ import { computeReadiness } from "./readiness";
 import { normalizeVibeScores } from "./vibes";
 import {
   computeFieldStates,
-  ensureFieldRules,
   evaluateGateForItem,
+  loadFieldRules,
   type CatalogChangeRow,
   type FieldRuleRow,
 } from "./staffReviewService";
@@ -263,8 +263,11 @@ export async function evaluateRecommendableProducts(
 
   if (eligible.length === 0) return [];
 
-  // Two queries total for the whole candidate set, regardless of its size.
-  const rules = await ensureFieldRules(null);
+  // Two queries total for the whole candidate set, regardless of its size — and
+  // both are reads. `loadFieldRules` rather than `ensureFieldRules` because the
+  // latter is seed-capable (`createMany`), and a customer read must never write
+  // (AG contract review, KEWL-2448).
+  const rules = await loadFieldRules(null);
   const fieldStatesByItem = await loadFieldStatesByItem(
     eligible.map((item) => item.id),
     rules

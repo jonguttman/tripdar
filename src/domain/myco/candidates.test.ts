@@ -83,9 +83,12 @@ function gateResult(overrides: Partial<ListingGateResult> = {}): ListingGateResu
 
 beforeEach(() => {
   vi.clearAllMocks();
-  // `ensureFieldRules()` reads the approved Tier A–D set. Returning the real specs
+  // `loadFieldRules()` reads the approved Tier A–D set. Returning the real specs
   // keeps the gate's required-field set identical to production's gate-required rows.
-  prismaMock.catalogFieldVerificationRule.findMany.mockResolvedValue(CATALOG_FIELD_SPECS);
+  // `active: true` mirrors the persisted rows: prod has all 17 seeded and active.
+  prismaMock.catalogFieldVerificationRule.findMany.mockResolvedValue(
+    CATALOG_FIELD_SPECS.map((spec) => ({ ...spec, active: true })),
+  );
   prismaMock.catalogFieldVerificationRule.createMany.mockResolvedValue({ count: 0 });
   // Production truth: zero staff verification for every live product.
   prismaMock.catalogFieldChange.findMany.mockResolvedValue([]);
@@ -315,6 +318,72 @@ describe("KEWL-2447 — batching, not N+1", () => {
 
     expect(byId.get("live-1")!.gate.verifiedFieldCount).toBe(0);
     expect(byId.get("live-2")!.gate.verifiedFieldCount).toBeGreaterThan(0);
+  });
+});
+
+describe("KEWL-2448 (AG review) — the customer read path performs no writes", () => {
+  it("never calls the seeding createMany while serving a customer read", async () => {
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue(
+      Array.from({ length: 6 }, (_, index) => productionShapedRow(`live-${index + 1}`)),
+    );
+
+    await getRecommendableProducts("partner-1");
+
+    expect(prismaMock.catalogFieldVerificationRule.createMany).not.toHaveBeenCalled();
+  });
+
+  it("still performs no write when the rule table is completely unseeded", async () => {
+    // The only condition under which `ensureFieldRules()` would have written on a
+    // customer read. `loadFieldRules()` must stay read-only even here.
+    prismaMock.catalogFieldVerificationRule.findMany.mockResolvedValue([]);
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue([productionShapedRow("live-1")]);
+
+    await getRecommendableProducts("partner-1");
+
+    expect(prismaMock.catalogFieldVerificationRule.createMany).not.toHaveBeenCalled();
+  });
+
+  it("keeps the gate fail-CLOSED on an unseeded rule table", async () => {
+    // A bare read-only `findMany` would return zero rules here, leaving the gate with
+    // no required fields — every product would sail through. The approved-spec
+    // fallback is what stops that from being a silent fail-open.
+    prismaMock.catalogFieldVerificationRule.findMany.mockResolvedValue([]);
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue([productionShapedRow("live-1")]);
+
+    const [evaluated] = await evaluateRecommendableProducts("partner-1");
+
+    expect(evaluated.gate.requiredFieldCount).toBeGreaterThan(0);
+    expect(evaluated.gate.listable).toBe(false);
+  });
+
+  it("honours an operator-deactivated rule instead of resurrecting it from the specs", async () => {
+    const [firstGated, ...rest] = CATALOG_FIELD_SPECS.filter((spec) => spec.gateRequired);
+    prismaMock.catalogFieldVerificationRule.findMany.mockResolvedValue(
+      CATALOG_FIELD_SPECS.map((spec) => ({
+        ...spec,
+        active: spec.fieldName !== firstGated.fieldName,
+      })),
+    );
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue([productionShapedRow("live-1")]);
+
+    const [evaluated] = await evaluateRecommendableProducts("partner-1");
+
+    expect(evaluated.gate.blockers.map((blocker) => blocker.fieldName)).not.toContain(
+      firstGated.fieldName,
+    );
+    expect(evaluated.gate.blockers.map((blocker) => blocker.fieldName)).toContain(
+      rest[0].fieldName,
+    );
+  });
+
+  it("issues exactly one rule query per read, not one per candidate", async () => {
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue(
+      Array.from({ length: 6 }, (_, index) => productionShapedRow(`live-${index + 1}`)),
+    );
+
+    await getRecommendableProducts("partner-1");
+
+    expect(prismaMock.catalogFieldVerificationRule.findMany).toHaveBeenCalledTimes(1);
   });
 });
 

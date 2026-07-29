@@ -60,9 +60,76 @@ function specToRow(spec: CatalogFieldSpec): FieldRuleRow {
   };
 }
 
+type PersistedFieldRule = {
+  fieldName: string;
+  tier: string;
+  requiredConfirmations: number;
+  requiresDistinctReviewers: boolean;
+  gateRequired: boolean;
+  readinessKey: string | null;
+  catalogColumn: string | null;
+  label: string | null;
+  helpText: string | null;
+  inputType: string;
+  allowsConfirmedAbsent: boolean;
+  gateSatisfyingValues: string[];
+  sortOrder: number;
+  active: boolean;
+};
+
+function persistedToRow(row: PersistedFieldRule): FieldRuleRow {
+  return {
+    fieldName: row.fieldName,
+    tier: row.tier,
+    requiredConfirmations: row.requiredConfirmations,
+    requiresDistinctReviewers: row.requiresDistinctReviewers,
+    gateRequired: row.gateRequired,
+    readinessKey: row.readinessKey,
+    catalogColumn: row.catalogColumn,
+    label: row.label,
+    helpText: row.helpText,
+    inputType: row.inputType,
+    allowsConfirmedAbsent: row.allowsConfirmedAbsent,
+    gateSatisfyingValues: row.gateSatisfyingValues,
+    sortOrder: row.sortOrder,
+  };
+}
+
+/**
+ * Read-only field-rule load. **Performs no writes** — use this on any read path,
+ * and in particular on the customer hot path (KEWL-2447 / AG review KEWL-2448).
+ *
+ * Returns exactly what `ensureFieldRules()` would return, without the seeding
+ * `createMany`: the partner's active persisted rules, plus any approved spec that
+ * has no row at all yet. A spec that *does* have a row but was deactivated by an
+ * operator stays excluded — deactivation is an operator decision, and resurrecting
+ * it here would silently overrule them.
+ *
+ * The union matters for correctness, not just parity: on an unseeded (or
+ * partially-seeded) database a bare `findMany` would return a short rule set, and
+ * a missing `gateRequired` rule is a field the gate silently stops requiring. That
+ * is a fail-*open* gate. Falling back to the approved spec set keeps it fail-closed.
+ */
+export async function loadFieldRules(partnerId: string | null = null): Promise<FieldRuleRow[]> {
+  const persisted = (await prisma.catalogFieldVerificationRule.findMany({
+    where: { partnerId },
+  })) as PersistedFieldRule[];
+
+  const persistedNames = new Set(persisted.map((row) => row.fieldName));
+  const rows = persisted.filter((row) => row.active).map(persistedToRow);
+  const unseeded = CATALOG_FIELD_SPECS.filter(
+    (spec) => !persistedNames.has(spec.fieldName)
+  ).map(specToRow);
+
+  return [...rows, ...unseeded].sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
 /**
  * Seeds the approved Tier A–D set once, then always reads from the DB.
  * Seeding is idempotent and never overwrites an operator's edits.
+ *
+ * **Write-capable — staff/admin paths only.** Read paths must call
+ * `loadFieldRules()` instead.
  */
 export async function ensureFieldRules(partnerId: string | null = null): Promise<FieldRuleRow[]> {
   const existing = await prisma.catalogFieldVerificationRule.findMany({
@@ -78,25 +145,7 @@ export async function ensureFieldRules(partnerId: string | null = null): Promise
     });
   }
 
-  const rows = await prisma.catalogFieldVerificationRule.findMany({
-    where: { partnerId, active: true },
-    orderBy: { sortOrder: "asc" },
-  });
-  return rows.map((row) => ({
-    fieldName: row.fieldName,
-    tier: row.tier,
-    requiredConfirmations: row.requiredConfirmations,
-    requiresDistinctReviewers: row.requiresDistinctReviewers,
-    gateRequired: row.gateRequired,
-    readinessKey: row.readinessKey,
-    catalogColumn: row.catalogColumn,
-    label: row.label,
-    helpText: row.helpText,
-    inputType: row.inputType,
-    allowsConfirmedAbsent: row.allowsConfirmedAbsent,
-    gateSatisfyingValues: row.gateSatisfyingValues,
-    sortOrder: row.sortOrder,
-  }));
+  return loadFieldRules(partnerId);
 }
 
 export function ruleToGateRule(rule: FieldRuleRow): GateFieldRule {
