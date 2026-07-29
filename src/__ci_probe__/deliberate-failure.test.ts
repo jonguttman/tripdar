@@ -5,6 +5,6 @@ import { describe, expect, it } from "vitest";
 // The branch and its PR are deleted immediately after the observation.
 describe("KEWL-2465 required-check probe", () => {
   it("fails on purpose", () => {
-    expect(1).toBe(2);
+    expect(1).toBe(3);
   });
 });
