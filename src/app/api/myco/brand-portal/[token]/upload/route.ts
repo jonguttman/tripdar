@@ -11,11 +11,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { loadBrandPortalContext } from "@/domain/myco/brandPortalData";
 import {
+  BRAND_ASSET_KIND_LABELS,
   BRAND_ASSET_KINDS,
   BRAND_ASSET_MAX_FILES_PER_REQUEST,
   BrandAssetError,
   PRODUCT_PHOTO_TAGS,
   buildBrandAssetPath,
+  isSingletonBrandAssetKind,
   prepareBrandAsset,
   signBrandAssetHandle,
   type BrandAssetKind,
@@ -61,6 +63,25 @@ export async function POST(
     }
     const kind = kindRaw as BrandAssetKind;
 
+    // We are about to store someone else's artwork on our infrastructure and, once
+    // reviewed, publish it. The written grant is the basis for doing that, so no
+    // bytes are accepted without it (KEWL-2390 gap 3). The submission endpoint
+    // re-checks it, but refusing here means we never hold ungranted images at all.
+    const imageUsageGrant = String(form.get("imageUsageGrant") ?? "") === "true";
+    if (!imageUsageGrant) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message:
+              "Grant permission to display these images before uploading — tick the image permission box.",
+            field: "imageUsageGrant",
+          },
+        },
+        { status: 403 },
+      );
+    }
+
     let tag: ProductPhotoTag | null = null;
     let catalogItemId: string | null = null;
 
@@ -96,6 +117,19 @@ export async function POST(
         {
           success: false,
           error: { message: `Too many files at once. Maximum ${BRAND_ASSET_MAX_FILES_PER_REQUEST}` },
+        },
+        { status: 400 },
+      );
+    }
+    // One logo, one key visual. Accepting a second and keeping only the first is
+    // how the extras became orphaned blobs (KEWL-2390 gap 2).
+    if (isSingletonBrandAssetKind(kind) && files.length > 1) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: `Send one ${BRAND_ASSET_KIND_LABELS[kind]} at a time — uploading a new one replaces it.`,
+          },
         },
         { status: 400 },
       );

@@ -30,6 +30,25 @@ export const BRAND_ASSET_MIN_DIMENSION = 200;
 export const BRAND_ASSET_KINDS = ["product_photo", "brand_logo", "brand_artwork"] as const;
 export type BrandAssetKind = (typeof BRAND_ASSET_KINDS)[number];
 
+/**
+ * Kinds a brand has exactly one of. A brand has one logo and one key visual, and
+ * persistence only ever kept the first of each — so the input must not accept more
+ * than one and quietly orphan the rest (KEWL-2390 gap 2). Product photos are
+ * genuinely many-per-product and stay unbounded here.
+ */
+export const SINGLETON_BRAND_ASSET_KINDS = ["brand_logo", "brand_artwork"] as const;
+
+export function isSingletonBrandAssetKind(kind: string): boolean {
+  return (SINGLETON_BRAND_ASSET_KINDS as readonly string[]).includes(kind);
+}
+
+/** Human label for a kind, for error copy the submitter actually reads. */
+export const BRAND_ASSET_KIND_LABELS: Record<BrandAssetKind, string> = {
+  product_photo: "product photo",
+  brand_logo: "brand logo",
+  brand_artwork: "brand artwork",
+};
+
 /** Mirrors `ProductPhoto.tag`. */
 export const PRODUCT_PHOTO_TAGS = [
   "stock",

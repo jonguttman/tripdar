@@ -2,16 +2,31 @@
  * Auto-acknowledgment for brand portal submissions (KEWL-2331).
  *
  * This is a receipt, not marketing: it echoes back exactly what the brand sent and
- * links them straight back to their own portal to edit or add more. It goes only to
- * a submitter who gave us an email address, and it is never a precondition for the
- * submission itself — a bounced receipt must not lose someone's work.
+ * links them straight back to their own portal to edit or add more. It goes to any
+ * email address we hold for the submitter — the receipt address is captured
+ * independently of follow-up consent and of the preferred follow-up channel
+ * (KEWL-2390 gap 4) — and it is never a precondition for the submission itself: a
+ * bounced receipt must not lose someone's work.
+ *
+ * "Exactly what you sent" is meant literally. Every uploaded filename and every
+ * field of a missing-product report appears here, so the submitter can check our
+ * record against theirs rather than trusting a count.
  */
 
 export interface AckProductLine {
   productName: string;
   changes: Array<{ label: string; from: string; to: string }>;
   discontinued: boolean;
-  photoCount: number;
+  /** One entry per uploaded file, named — not a tally. */
+  photoFilenames: string[];
+  note?: string;
+}
+
+export interface AckMissingProductLine {
+  productName: string;
+  format?: string;
+  productUnitMg?: number;
+  unitsPerPack?: number;
   note?: string;
 }
 
@@ -22,12 +37,35 @@ export interface AckPayload {
   submittedAt: Date;
   products: AckProductLine[];
   brandFieldChanges: Array<{ label: string; value: string }>;
-  missingProducts: Array<{ productName: string }>;
-  logoUploaded: boolean;
-  artworkUploaded: boolean;
+  missingProducts: AckMissingProductLine[];
+  /** Brand-level uploads, named. */
+  brandAssets: Array<{ label: string; filename: string }>;
   imageUsageGrant: boolean;
   contactMethod: string | null;
   contactHandle: string | null;
+}
+
+/**
+ * Did this submission actually carry images? Uploads now require the display
+ * grant, so a receipt should only discuss image permission when there were images
+ * — otherwise it tells a text-only submitter we won't publish photos they never
+ * sent.
+ */
+export function hasImages(payload: AckPayload): boolean {
+  return (
+    payload.brandAssets.length > 0 ||
+    payload.products.some((product) => product.photoFilenames.length > 0)
+  );
+}
+
+/** "45 mg · 30 per pack" — the detail lines under a missing-product report. */
+export function missingProductDetail(product: AckMissingProductLine): string[] {
+  const detail: string[] = [];
+  if (product.format) detail.push(`Format: ${product.format}`);
+  if (product.productUnitMg !== undefined) detail.push(`mg per unit: ${product.productUnitMg}`);
+  if (product.unitsPerPack !== undefined) detail.push(`Units per pack: ${product.unitsPerPack}`);
+  if (product.note) detail.push(`Note: ${product.note}`);
+  return detail;
 }
 
 function escapeHtml(value: string): string {
@@ -67,12 +105,11 @@ export function buildAckText(payload: AckPayload): string {
     lines.push("");
   }
 
-  if (payload.logoUploaded || payload.artworkUploaded) {
-    const assets = [
-      payload.logoUploaded ? "logo" : null,
-      payload.artworkUploaded ? "brand artwork" : null,
-    ].filter(Boolean);
-    lines.push(`BRAND ASSETS: ${assets.join(", ")}`);
+  if (payload.brandAssets.length) {
+    lines.push("BRAND ASSETS");
+    for (const asset of payload.brandAssets) {
+      lines.push(`  ${asset.label}: ${asset.filename}`);
+    }
     lines.push("");
   }
 
@@ -82,22 +119,28 @@ export function buildAckText(payload: AckPayload): string {
     for (const change of product.changes) {
       lines.push(`  ${change.label}: ${change.from} -> ${change.to}`);
     }
-    if (product.photoCount) lines.push(`  ${product.photoCount} photo(s) uploaded`);
+    if (product.photoFilenames.length) {
+      lines.push(
+        `  ${product.photoFilenames.length} photo${product.photoFilenames.length === 1 ? "" : "s"} uploaded:`,
+      );
+      for (const filename of product.photoFilenames) lines.push(`    ${filename}`);
+    }
     if (product.note) lines.push(`  Note: ${product.note}`);
     lines.push("");
   }
 
   if (payload.missingProducts.length) {
     lines.push("PRODUCTS YOU TOLD US WE'RE MISSING");
-    for (const product of payload.missingProducts) lines.push(`  ${product.productName}`);
+    for (const product of payload.missingProducts) {
+      lines.push(`  ${product.productName}`);
+      for (const detail of missingProductDetail(product)) lines.push(`    ${detail}`);
+    }
     lines.push("");
   }
 
-  lines.push(
-    payload.imageUsageGrant
-      ? "You granted us permission to display the images you uploaded."
-      : "You did not grant image display permission, so we won't publish the images you uploaded.",
-  );
+  if (hasImages(payload)) {
+    lines.push("You granted us permission to display the images you uploaded.");
+  }
   if (payload.contactMethod && payload.contactHandle) {
     lines.push(`We may follow up via ${payload.contactMethod}: ${payload.contactHandle}`);
   } else {
@@ -132,14 +175,19 @@ export function buildAckHtml(payload: AckPayload): string {
     );
   }
 
-  if (payload.logoUploaded || payload.artworkUploaded) {
-    const assets = [
-      payload.logoUploaded ? "Logo" : null,
-      payload.artworkUploaded ? "Brand artwork" : null,
-    ].filter(Boolean) as string[];
+  if (payload.brandAssets.length) {
     rows.push(sectionTitle("Brand assets received"));
     rows.push(
-      `<p style="margin:0 0 24px;color:#e8d5c0;font-size:14px;">${escapeHtml(assets.join(" · "))}</p>`,
+      `<table style="width:100%;border-collapse:collapse;margin:0 0 24px;">${payload.brandAssets
+        .map(
+          (asset) =>
+            `<tr><td style="padding:6px 0;color:#8b7355;font-size:13px;width:40%;">${escapeHtml(
+              asset.label,
+            )}</td><td style="padding:6px 0;color:#e8d5c0;font-size:14px;">${escapeHtml(
+              asset.filename,
+            )}</td></tr>`,
+        )
+        .join("")}</table>`,
     );
   }
 
@@ -167,11 +215,14 @@ export function buildAckHtml(payload: AckPayload): string {
           .join("")}</table>`,
       );
     }
-    if (product.photoCount) {
+    if (product.photoFilenames.length) {
       bits.push(
-        `<p style="margin:8px 0 0;color:#8b7355;font-size:13px;">${product.photoCount} photo${
-          product.photoCount === 1 ? "" : "s"
+        `<p style="margin:8px 0 2px;color:#8b7355;font-size:13px;">${product.photoFilenames.length} photo${
+          product.photoFilenames.length === 1 ? "" : "s"
         } uploaded</p>`,
+        `<ul style="margin:0;padding-left:18px;color:#b8a68f;font-size:13px;">${product.photoFilenames
+          .map((filename) => `<li style="padding:2px 0;">${escapeHtml(filename)}</li>`)
+          .join("")}</ul>`,
       );
     }
     if (product.note) {
@@ -188,14 +239,23 @@ export function buildAckHtml(payload: AckPayload): string {
     rows.push(sectionTitle("Products you told us we're missing"));
     rows.push(
       `<ul style="margin:0 0 24px;padding-left:18px;color:#e8d5c0;font-size:14px;">${payload.missingProducts
-        .map((product) => `<li style="padding:3px 0;">${escapeHtml(product.productName)}</li>`)
+        .map((product) => {
+          const detail = missingProductDetail(product);
+          return `<li style="padding:3px 0;">${escapeHtml(product.productName)}${
+            detail.length
+              ? `<div style="color:#8b7355;font-size:13px;padding-top:2px;">${detail
+                  .map((line) => escapeHtml(line))
+                  .join("<br />")}</div>`
+              : ""
+          }</li>`;
+        })
         .join("")}</ul>`,
     );
   }
 
-  const consent = payload.imageUsageGrant
-    ? "You granted us permission to display the images you uploaded."
-    : "You did not grant image display permission, so we won't publish the images you uploaded.";
+  const consent = hasImages(payload)
+    ? `<p style="margin:0 0 6px;font-size:13px;color:#8b7355;">You granted us permission to display the images you uploaded.</p>`
+    : "";
   const followUp =
     payload.contactMethod && payload.contactHandle
       ? `We may follow up via ${escapeHtml(payload.contactMethod)}: ${escapeHtml(payload.contactHandle)}`
@@ -215,7 +275,7 @@ export function buildAckHtml(payload: AckPayload): string {
   <div style="height:1px;background:linear-gradient(90deg,#d4a574,transparent);margin:0 0 28px;"></div>
   ${rows.join("\n")}
   <div style="height:1px;background:#241c16;margin:8px 0 20px;"></div>
-  <p style="margin:0 0 6px;font-size:13px;color:#8b7355;">${consent}</p>
+  ${consent}
   <p style="margin:0 0 24px;font-size:13px;color:#8b7355;">${followUp}</p>
   <a href="${escapeHtml(payload.portalUrl)}"
      style="display:inline-block;background:#d4a574;color:#0d0a08;padding:13px 26px;border-radius:2px;

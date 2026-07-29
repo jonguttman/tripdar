@@ -27,7 +27,11 @@ import {
   valuesDiffer,
   type ProductFieldSubmission,
 } from "@/domain/myco/brandPortal";
-import { verifyBrandAssetHandle } from "@/domain/myco/brandPortalAssets";
+import {
+  BRAND_ASSET_KIND_LABELS,
+  SINGLETON_BRAND_ASSET_KINDS,
+  verifyBrandAssetHandle,
+} from "@/domain/myco/brandPortalAssets";
 import {
   buildAckHtml,
   buildAckSubject,
@@ -150,6 +154,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       );
     }
 
+    // A brand has one logo and one key visual. Rejecting the second is honest;
+    // silently keeping the first and orphaning the rest is what we're fixing.
+    for (const kind of SINGLETON_BRAND_ASSET_KINDS) {
+      if (assets.filter((asset) => asset.kind === kind).length > 1) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: {
+              message: `Only one ${BRAND_ASSET_KIND_LABELS[kind]} per submission — remove the extras and send again.`,
+            },
+          },
+          { status: 400 },
+        );
+      }
+    }
+
     const actorIdentity = buildActorIdentity(submission.contact, brand.name);
 
     // Build the field changes against what we currently hold, so the log records a
@@ -179,7 +199,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         changeLines.push({
           label: labelFor(fieldName),
           from: formatAckValue(previousValue),
-          to: formatAckValue(submittedValue),
+          to: submittedValue === null ? "(cleared)" : formatAckValue(submittedValue),
         });
       }
 
@@ -203,16 +223,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         changeLines.push({ label: "COA / lab test", from: "—", to: entry.coaUrl });
       }
 
-      const photoCount = photoAssets.filter(
-        (asset) => asset.catalogItemId === entry.catalogItemId,
-      ).length;
+      // Named, not counted — the receipt has to let a submitter check our record of
+      // their files against theirs.
+      const photoFilenames = photoAssets
+        .filter((asset) => asset.catalogItemId === entry.catalogItemId)
+        .map((asset) => asset.originalFilename);
 
-      if (changeLines.length || entry.discontinued || photoCount || entry.note) {
+      if (changeLines.length || entry.discontinued || photoFilenames.length || entry.note) {
         ackProducts.push({
           productName: current.productName,
           changes: changeLines,
           discontinued: entry.discontinued,
-          photoCount,
+          photoFilenames,
           note: entry.note,
         });
       }
@@ -226,10 +248,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         productName: current.productName,
         changes: [],
         discontinued: false,
-        photoCount: photoAssets.filter((item) => item.catalogItemId === asset.catalogItemId).length,
+        photoFilenames: photoAssets
+          .filter((item) => item.catalogItemId === asset.catalogItemId)
+          .map((item) => item.originalFilename),
       });
     }
 
+    // Singleton-checked above, so `find` is now the only possible answer rather than
+    // a silent truncation.
     const logoAsset = assets.find((asset) => asset.kind === "brand_logo") ?? null;
     const artworkAsset = assets.find((asset) => asset.kind === "brand_artwork") ?? null;
 
@@ -297,9 +323,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 built.previousValue === null
                   ? Prisma.DbNull
                   : (built.previousValue as Prisma.InputJsonValue),
+              // The submitted side reads the other way: the brand always submitted
+              // *something*, so the JSON value `null` is the positive instruction
+              // "empty this field" rather than an absence (KEWL-2390 gap 1). A
+              // reviewer seeing JSON null is being asked to withdraw the value.
               submittedValue:
                 built.submittedValue === null
-                  ? Prisma.DbNull
+                  ? Prisma.JsonNull
                   : (built.submittedValue as Prisma.InputJsonValue),
               catalogItemId: change.catalogItemId,
               brandSubmissionId: brandSubmission.id,
@@ -341,11 +371,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     });
 
     // The receipt is best-effort: a failed send must never cost the brand its work.
+    // It goes wherever we hold an email address, whatever channel they picked for
+    // follow-up and whether or not they wanted follow-up at all (KEWL-2390 gap 4).
     let acknowledgmentSent = false;
-    const ackEmail =
-      submission.contact.preferredContactMethod === "email"
-        ? submission.contact.contactHandle
-        : null;
+    const ackEmail = submission.contact.receiptEmail;
     if (ackEmail) {
       try {
         const origin = new URL(request.url).origin;
@@ -357,18 +386,30 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
           products: ackProducts,
           brandFieldChanges: Object.entries(submission.brandFields).map(([field, value]) => ({
             label: labelFor(field),
+            // `null` is a deliberate clear, and the receipt says so plainly rather
+            // than echoing the word "null" back at the submitter.
             value:
               field === "socialHandles"
-                ? Object.entries(value as Record<string, string>)
-                    .map(([network, handle]) => `${network}: @${handle}`)
+                ? Object.entries(value as Record<string, string | null>)
+                    .map(([network, handle]) =>
+                      handle === null ? `${network}: removed` : `${network}: @${handle}`,
+                    )
                     .join(", ")
-                : formatAckValue(value),
+                : value === null
+                  ? "(cleared)"
+                  : formatAckValue(value),
           })),
-          missingProducts: submission.missingProducts.map((product) => ({
-            productName: product.productName,
-          })),
-          logoUploaded: Boolean(logoAsset),
-          artworkUploaded: Boolean(artworkAsset),
+          // The whole missing-product report, not just its name — the submitter
+          // typed format, strength and pack size, so the receipt has to show them.
+          missingProducts: submission.missingProducts,
+          brandAssets: [
+            logoAsset
+              ? { label: "Brand logo", filename: logoAsset.originalFilename }
+              : null,
+            artworkAsset
+              ? { label: "Brand artwork", filename: artworkAsset.originalFilename }
+              : null,
+          ].filter((asset): asset is { label: string; filename: string } => asset !== null),
           imageUsageGrant: submission.imageUsageGrant,
           contactMethod: submission.contact.preferredContactMethod,
           contactHandle: submission.contact.contactHandle,

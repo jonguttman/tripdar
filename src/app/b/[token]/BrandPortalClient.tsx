@@ -83,6 +83,13 @@ const PRODUCT_FIELDS: Array<{
 
 const FORMATS = ["capsule", "edible", "dried", "tincture", "other"];
 
+/**
+ * Kinds the brand has exactly one of. Mirrors `SINGLETON_BRAND_ASSET_KINDS` in
+ * `@/domain/myco/brandPortalAssets`, restated here rather than imported so this
+ * client bundle doesn't pull in the server-only image pipeline.
+ */
+const SINGLETON_ASSET_KINDS = ["brand_logo", "brand_artwork"];
+
 const PHOTO_TAGS: Array<{ value: string; label: string; blurb: string }> = [
   { value: "package_front", label: "Packaging — front", blurb: "The label is how we verify dosing" },
   { value: "package_back", label: "Packaging — back", blurb: "Ingredients and mg panel" },
@@ -139,6 +146,9 @@ export default function BrandPortalClient({
     contactPermission: true,
     preferredContactMethod: "email",
     contactHandle: "",
+    // Separate from follow-up consent on purpose: a receipt for work you just did
+    // is not a follow-up (KEWL-2390 gap 4).
+    receiptEmail: "",
   });
   const [imageUsageGrant, setImageUsageGrant] = useState(false);
 
@@ -188,7 +198,10 @@ export default function BrandPortalClient({
     };
     const changed: Record<string, string> = {};
     for (const [field, value] of Object.entries(brandFields)) {
-      if (value.trim() && value !== current[field]) changed[field] = value;
+      // An emptied box is a change too — it is how a brand withdraws a wrong
+      // website or support address. The server reads "" as an explicit clear
+      // (KEWL-2390 gap 1); dropping it here is what made corrections impossible.
+      if (value !== current[field]) changed[field] = value;
     }
     return changed;
   }, [brandFields, brand]);
@@ -217,12 +230,21 @@ export default function BrandPortalClient({
   const upload = useCallback(
     async (files: FileList | null, kind: string, tag: string | null, catalogItemId: string | null) => {
       if (!files || !files.length) return;
+      // The server refuses ungranted bytes outright; saying so before the upload
+      // beats letting someone watch a 40 MB file fail (KEWL-2390 gap 3).
+      if (!imageUsageGrant) {
+        setError(
+          "Tick the image permission box below before uploading — we can't accept images without it.",
+        );
+        return;
+      }
       const slot = `${kind}:${catalogItemId ?? "brand"}:${tag ?? ""}`;
       setUploading(slot);
       setError(null);
       try {
         const form = new FormData();
         form.append("kind", kind);
+        form.append("imageUsageGrant", "true");
         if (tag) form.append("tag", tag);
         if (catalogItemId) form.append("catalogItemId", catalogItemId);
         // Full-resolution originals — deliberately no client-side downscale, because
@@ -237,14 +259,21 @@ export default function BrandPortalClient({
         if (!response.ok || !json.success) {
           throw new Error(json?.error?.message ?? "Upload failed");
         }
-        setAssets((previous) => [...previous, ...json.data.uploads]);
+        setAssets((previous) => [
+          // A brand has one logo and one key visual, so a new one replaces the old
+          // rather than queueing behind it to be discarded server-side (gap 2).
+          ...(SINGLETON_ASSET_KINDS.includes(kind)
+            ? previous.filter((asset) => asset.kind !== kind)
+            : previous),
+          ...json.data.uploads,
+        ]);
       } catch (uploadError) {
         setError(uploadError instanceof Error ? uploadError.message : "Upload failed");
       } finally {
         setUploading(null);
       }
     },
-    [token],
+    [token, imageUsageGrant],
   );
 
   const removeAsset = useCallback((handle: string) => {
@@ -255,6 +284,8 @@ export default function BrandPortalClient({
     setSubmitting(true);
     setError(null);
     try {
+      // `fields` may carry "" for a box the brand deliberately emptied — the server
+      // reads that as an explicit clear, so it must survive serialisation.
       const productPayload = products
         .map((product) => {
           const fields = changedFieldsFor(product.id);
@@ -279,6 +310,8 @@ export default function BrandPortalClient({
           contact: {
             ...contact,
             contactHandle: contact.contactPermission ? contact.contactHandle : "",
+            // Declining follow-up must not cost you the receipt.
+            receiptEmail: contact.receiptEmail,
           },
           imageUsageGrant,
           brandFields: changedBrandFields,
@@ -523,6 +556,8 @@ export default function BrandPortalClient({
                           </div>
                         ) : null}
 
+                        <ImageGrantGate granted={imageUsageGrant} onGrant={setImageUsageGrant} />
+
                         <div className="bp-uploads">
                           {PHOTO_TAGS.map((tag) => (
                             <UploadTile
@@ -530,6 +565,7 @@ export default function BrandPortalClient({
                               label={tag.label}
                               blurb={tag.blurb}
                               busy={uploading === `product_photo:${product.id}:${tag.value}`}
+                              disabled={!imageUsageGrant}
                               onFiles={(files) => upload(files, "product_photo", tag.value, product.id)}
                             />
                           ))}
@@ -673,18 +709,24 @@ export default function BrandPortalClient({
             Official artwork beats anything we can find ourselves. Send us the real thing.
           </p>
 
+          <ImageGrantGate granted={imageUsageGrant} onGrant={setImageUsageGrant} />
+
           <div className="bp-uploads bp-uploads-brand">
             <UploadTile
               label="Brand logo"
-              blurb="SVG or high-res PNG"
+              blurb="SVG or high-res PNG · one file"
               busy={uploading === "brand_logo:brand:"}
+              disabled={!imageUsageGrant}
+              multiple={false}
               onFiles={(files) => upload(files, "brand_logo", null, null)}
               accept="image/svg+xml,image/png,image/jpeg,image/webp"
             />
             <UploadTile
               label="Brand artwork"
-              blurb="Key visual or pattern"
+              blurb="Key visual or pattern · one file"
               busy={uploading === "brand_artwork:brand:"}
+              disabled={!imageUsageGrant}
+              multiple={false}
               onFiles={(files) => upload(files, "brand_artwork", null, null)}
               accept="image/svg+xml,image/png,image/jpeg,image/webp"
             />
@@ -788,11 +830,17 @@ export default function BrandPortalClient({
               type="checkbox"
               checked={imageUsageGrant}
               onChange={(event) => setImageUsageGrant(event.target.checked)}
+              // Unticking with files already attached would strand them: the server
+              // rejects a submission carrying images without the grant, so remove
+              // the images first.
+              disabled={imageUsageGrant && assets.length > 0}
             />
             <span>
               I grant Tripdar permission to display the images I&apos;ve uploaded publicly.
               <em>
-                We show these to customers. We record your name and the time with this permission.
+                {imageUsageGrant && assets.length > 0
+                  ? "Remove the attached images first if you want to withdraw this."
+                  : "We show these to customers. We record your name and the time with this permission."}
               </em>
             </span>
           </label>
@@ -875,6 +923,27 @@ export default function BrandPortalClient({
               </label>
             </div>
           ) : null}
+
+          <div className="bp-grid">
+            <label className="bp-field is-wide">
+              <span className="bp-label">Email my receipt to</span>
+              <input
+                type="email"
+                placeholder="you@brand.com"
+                value={contact.receiptEmail}
+                onChange={(event) =>
+                  setContact((prev) => ({ ...prev, receiptEmail: event.target.value }))
+                }
+              />
+              <span className="bp-hint">
+                Optional. We&apos;ll send a copy of exactly what you sent us — every field, every
+                filename. This is a receipt, not follow-up: you get it even if you said no above.
+                {contact.contactPermission && contact.preferredContactMethod === "email"
+                  ? " Leave it blank and we'll use the email address above."
+                  : ""}
+              </span>
+            </label>
+          </div>
         </section>
 
         {error ? <p className="bp-error">{error}</p> : null}
@@ -906,27 +975,66 @@ export default function BrandPortalClient({
   );
 }
 
+/**
+ * The image-usage grant, rendered wherever uploading is possible rather than only
+ * at the bottom of the form. Publishing brand artwork rests entirely on this
+ * permission, so the server refuses uploads without it — which means the submitter
+ * has to be able to give it at the moment they reach for a file (KEWL-2390 gap 3).
+ * It is one piece of state; ticking it here ticks it everywhere.
+ */
+function ImageGrantGate({
+  granted,
+  onGrant,
+}: {
+  granted: boolean;
+  onGrant: (granted: boolean) => void;
+}) {
+  if (granted) {
+    return (
+      <p className="bp-grant-ok">Image display permission granted — uploads are open.</p>
+    );
+  }
+  return (
+    <label className="bp-check bp-check-grant bp-grant-gate">
+      <input type="checkbox" checked={false} onChange={(event) => onGrant(event.target.checked)} />
+      <span>
+        I grant Tripdar permission to display these images publicly.
+        <em>Required before uploading. We record your name and the time with this permission.</em>
+      </span>
+    </label>
+  );
+}
+
 function UploadTile({
   label,
   blurb,
   busy,
+  disabled = false,
+  multiple = true,
   onFiles,
   accept = "image/jpeg,image/png,image/webp,image/heic,image/heif",
 }: {
   label: string;
   blurb: string;
   busy: boolean;
+  disabled?: boolean;
+  /** False for the one-per-brand slots, so the picker can't offer what we'd discard. */
+  multiple?: boolean;
   onFiles: (files: FileList | null) => void;
   accept?: string;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
-    <button className={`bp-tile ${busy ? "is-busy" : ""}`} onClick={() => inputRef.current?.click()}>
+    <button
+      className={`bp-tile ${busy ? "is-busy" : ""} ${disabled ? "is-disabled" : ""}`}
+      disabled={disabled || busy}
+      onClick={() => inputRef.current?.click()}
+    >
       <input
         ref={inputRef}
         type="file"
         accept={accept}
-        multiple
+        multiple={multiple}
         hidden
         onChange={(event) => {
           onFiles(event.target.files);
@@ -1118,6 +1226,8 @@ const PORTAL_CSS = `
   }
   .bp-tile:hover { border-color: var(--portal-gold); background: rgba(212,165,116,0.06); }
   .bp-tile.is-busy { opacity: 0.55; }
+  .bp-tile.is-disabled { opacity: 0.4; cursor: not-allowed; }
+  .bp-tile.is-disabled:hover { border-color: var(--portal-line); background: rgba(0,0,0,0.22); }
   .bp-tile-plus { font-size: 20px; color: var(--portal-gold); line-height: 1; }
   .bp-tile-label {
     font-family: var(--portal-sans); font-size: 10.5px; letter-spacing: 0.8px;
@@ -1152,6 +1262,11 @@ const PORTAL_CSS = `
   }
   .bp-check-grant { border-color: var(--portal-line); background: rgba(212,165,116,0.05); }
   .bp-check-warn span { color: var(--portal-soft); }
+  .bp-grant-gate { margin: 0 0 14px; border-color: var(--portal-gold); }
+  .bp-grant-ok {
+    margin: 0 0 14px; font-family: var(--portal-sans); font-size: 11px;
+    letter-spacing: 0.6px; color: var(--portal-soft);
+  }
 
   /* Missing products */
   .bp-missing {

@@ -164,6 +164,52 @@ export function cleanHandle(value: unknown): string | undefined {
   return bare || undefined;
 }
 
+/**
+ * A field the brand may set, leave alone, or deliberately empty.
+ *
+ * `undefined` means "not submitted" — the box never came back to us and the value
+ * we hold survives untouched. `null` means "the brand emptied this box on purpose"
+ * and must produce a real pending change, otherwise a wrong value can never be
+ * withdrawn (KEWL-2390 gap 1).
+ */
+export type Clearable<T> = T | null | undefined;
+
+/** Did the payload carry this key at all? An absent key is not a clear. */
+function wasSubmitted(input: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(input, key) && input[key] !== undefined;
+}
+
+/**
+ * Does this raw value read as "the brand emptied the box"? Only an explicit null
+ * or something that normalises away to nothing counts — a value the normaliser
+ * merely couldn't use (a number where prose belongs) is dropped, not treated as a
+ * clear, because we can't tell intent from a type error.
+ */
+function readsAsEmpty(value: unknown): boolean {
+  if (value === null) return true;
+  if (typeof value === "string") return cleanText(value) === undefined;
+  if (Array.isArray(value)) return value.every((item) => readsAsEmpty(item));
+  return false;
+}
+
+/**
+ * Run a normaliser over one key while preserving the clear/untouched distinction.
+ * Emptiness is decided before normalising, so a cleared box never has to survive a
+ * round trip through a validator that would reject it. Validation errors on a
+ * non-empty value still propagate — an unparseable URL is a mistake to report back,
+ * not a clear.
+ */
+function readClearable<T>(
+  input: Record<string, unknown>,
+  key: string,
+  normalize: (value: unknown) => T | undefined,
+): Clearable<T> {
+  if (!wasSubmitted(input, key)) return undefined;
+  const value = input[key];
+  if (readsAsEmpty(value)) return null;
+  return normalize(value);
+}
+
 export interface SubmitterContact {
   submitterName: string;
   submitterRole: string;
@@ -171,6 +217,13 @@ export interface SubmitterContact {
   preferredContactMethod: ContactMethod | null;
   contactHandle: string | null;
   consentToContactAt: Date | null;
+  /**
+   * Where the receipt goes. Deliberately independent of `contactPermission` and of
+   * the preferred follow-up channel: a receipt for work you just did is not a
+   * follow-up, and a submitter who picks Signal — or who declines follow-up
+   * entirely — is still owed proof of what we recorded (KEWL-2390 gap 4).
+   */
+  receiptEmail: string | null;
 }
 
 /**
@@ -187,6 +240,7 @@ export function parseSubmitterContact(raw: unknown, now = new Date()): Submitter
   if (!submitterRole) fail("submitterRole", "Tell us your role at the brand");
 
   const contactPermission = input.contactPermission === true || input.contactPermission === "true";
+  const statedReceiptEmail = cleanEmail(input.receiptEmail, "receiptEmail") ?? null;
 
   if (!contactPermission) {
     return {
@@ -196,6 +250,7 @@ export function parseSubmitterContact(raw: unknown, now = new Date()): Submitter
       preferredContactMethod: null,
       contactHandle: null,
       consentToContactAt: null,
+      receiptEmail: statedReceiptEmail,
     };
   }
 
@@ -226,41 +281,45 @@ export function parseSubmitterContact(raw: unknown, now = new Date()): Submitter
     preferredContactMethod: method as ContactMethod,
     contactHandle: handle,
     consentToContactAt: now,
+    // An email follow-up address is by definition a usable receipt address, so we
+    // don't make someone type it twice.
+    receiptEmail: statedReceiptEmail ?? (method === "email" ? handle : null),
   };
 }
 
+/** `null` on any member means the brand asked us to drop the value we hold. */
 export interface BrandFieldUpdates {
-  shortDescription?: string;
-  websiteUrl?: string;
-  supportEmail?: string;
-  primaryColor?: string;
-  secondaryColor?: string;
-  accentColor?: string;
-  socialHandles?: Record<string, string>;
+  shortDescription?: string | null;
+  websiteUrl?: string | null;
+  supportEmail?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  accentColor?: string | null;
+  socialHandles?: Record<string, string | null>;
 }
 
 export function parseBrandFields(raw: unknown): BrandFieldUpdates {
   const input = (raw ?? {}) as Record<string, unknown>;
   const out: BrandFieldUpdates = {};
 
-  const description = cleanText(input.shortDescription, 600);
-  if (description) out.shortDescription = description;
+  const description = readClearable(input, "shortDescription", (value) => cleanText(value, 600));
+  if (description !== undefined) out.shortDescription = description;
 
-  const website = cleanUrl(input.websiteUrl, "websiteUrl");
-  if (website) out.websiteUrl = website;
+  const website = readClearable(input, "websiteUrl", (value) => cleanUrl(value, "websiteUrl"));
+  if (website !== undefined) out.websiteUrl = website;
 
-  const email = cleanEmail(input.supportEmail, "supportEmail");
-  if (email) out.supportEmail = email;
+  const email = readClearable(input, "supportEmail", (value) => cleanEmail(value, "supportEmail"));
+  if (email !== undefined) out.supportEmail = email;
 
   for (const key of ["primaryColor", "secondaryColor", "accentColor"] as const) {
-    const color = cleanHexColor(input[key], key);
-    if (color) out[key] = color;
+    const color = readClearable(input, key, (value) => cleanHexColor(value, key));
+    if (color !== undefined) out[key] = color;
   }
 
-  const socials: Record<string, string> = {};
+  const socials: Record<string, string | null> = {};
   for (const key of ["instagram", "x", "tiktok", "linkedin"] as const) {
-    const handle = cleanHandle(input[key]);
-    if (handle) socials[key] = handle;
+    const handle = readClearable(input, key, cleanHandle);
+    if (handle !== undefined) socials[key] = handle;
   }
   if (Object.keys(socials).length) out.socialHandles = socials;
 
@@ -285,42 +344,56 @@ export function parseProductSubmission(raw: unknown): ProductFieldSubmission | n
   const catalogItemId = cleanText(input.catalogItemId, 60);
   if (!catalogItemId) fail("catalogItemId", "Missing product reference");
 
+  // Every entry here is `Clearable`: absent means untouched, `null` means the brand
+  // emptied the box and wants the value we hold withdrawn.
   const fields: Partial<Record<BrandEditableProductField, unknown>> = {};
+  const put = (field: BrandEditableProductField, value: Clearable<unknown>) => {
+    if (value !== undefined) fields[field] = value;
+  };
 
-  const name = cleanText(input.productName, MAX_SHORT_TEXT);
-  if (name !== undefined) fields.productName = name;
+  put("productName", readClearable(input, "productName", (v) => cleanText(v, MAX_SHORT_TEXT)));
+  put("sku", readClearable(input, "sku", (v) => cleanText(v, MAX_SHORT_TEXT)));
 
-  const sku = cleanText(input.sku, MAX_SHORT_TEXT);
-  if (sku !== undefined) fields.sku = sku;
+  put(
+    "format",
+    readClearable(input, "format", (value) => {
+      const format = cleanText(value, 40)?.toLowerCase();
+      if (format === undefined) return undefined;
+      if (!(PRODUCT_FORMATS as readonly string[]).includes(format)) {
+        fail("format", `Choose one of: ${PRODUCT_FORMATS.join(", ")}`);
+      }
+      return format;
+    }),
+  );
 
-  const format = cleanText(input.format, 40)?.toLowerCase();
-  if (format !== undefined) {
-    if (!(PRODUCT_FORMATS as readonly string[]).includes(format)) {
-      fail("format", `Choose one of: ${PRODUCT_FORMATS.join(", ")}`);
-    }
-    fields.format = format;
-  }
-
-  const unitMg = cleanInteger(input.productUnitMg, "productUnitMg", { min: 0, max: 100_000 });
-  if (unitMg !== undefined) fields.productUnitMg = unitMg;
-
-  const unitsPerPack = cleanInteger(input.unitsPerPack, "unitsPerPack", { min: 0, max: 10_000 });
-  if (unitsPerPack !== undefined) fields.unitsPerPack = unitsPerPack;
-
-  const onset = cleanInteger(input.onsetMinutes, "onsetMinutes", { min: 0, max: 1440 });
-  if (onset !== undefined) fields.onsetMinutes = onset;
-
-  const duration = cleanInteger(input.durationMinutes, "durationMinutes", { min: 0, max: 2880 });
-  if (duration !== undefined) fields.durationMinutes = duration;
-
-  const ingredients = cleanStringList(input.ingredients, "ingredients");
-  if (ingredients !== undefined) fields.ingredients = ingredients;
-
-  const flavors = cleanStringList(input.flavors, "flavors");
-  if (flavors !== undefined) fields.flavors = flavors;
-
-  const doseInstructions = cleanText(input.brandDoseInstructions, MAX_TEXT);
-  if (doseInstructions !== undefined) fields.brandDoseInstructions = doseInstructions;
+  put(
+    "productUnitMg",
+    readClearable(input, "productUnitMg", (v) =>
+      cleanInteger(v, "productUnitMg", { min: 0, max: 100_000 }),
+    ),
+  );
+  put(
+    "unitsPerPack",
+    readClearable(input, "unitsPerPack", (v) =>
+      cleanInteger(v, "unitsPerPack", { min: 0, max: 10_000 }),
+    ),
+  );
+  put(
+    "onsetMinutes",
+    readClearable(input, "onsetMinutes", (v) => cleanInteger(v, "onsetMinutes", { min: 0, max: 1440 })),
+  );
+  put(
+    "durationMinutes",
+    readClearable(input, "durationMinutes", (v) =>
+      cleanInteger(v, "durationMinutes", { min: 0, max: 2880 }),
+    ),
+  );
+  put("ingredients", readClearable(input, "ingredients", (v) => cleanStringList(v, "ingredients")));
+  put("flavors", readClearable(input, "flavors", (v) => cleanStringList(v, "flavors")));
+  put(
+    "brandDoseInstructions",
+    readClearable(input, "brandDoseInstructions", (v) => cleanText(v, MAX_TEXT)),
+  );
 
   const discontinued = input.discontinued === true || input.discontinued === "true";
   const coaUrl = cleanUrl(input.coaUrl, "coaUrl");
@@ -421,6 +494,17 @@ export function parseBrandPortalSubmission(
     }
   }
 
+  // The written image-usage grant is the whole legal basis for publishing brand
+  // artwork, so it is a precondition of attaching images — not a nudge in the UI
+  // (KEWL-2390 gap 3). The upload route refuses ungranted bytes too; this is the
+  // backstop for a signed handle replayed without the checkbox.
+  if (uploadIds.length && !imageUsageGrant) {
+    fail(
+      "imageUsageGrant",
+      "Tick the image permission box before sending photos — we can't display images without it",
+    );
+  }
+
   const brandFields = parseBrandFields(input.brandFields);
   const missingProducts = parseMissingProducts(input.missingProducts);
 
@@ -465,7 +549,11 @@ export function valuesDiffer(previous: unknown, next: unknown): boolean {
     const b = [...next].map(String).sort();
     return a.some((value, index) => value !== b[index]);
   }
+  // Every way of holding nothing is the same nothing — including an empty list, so
+  // clearing a field that was already empty isn't a change worth reviewing.
   const normalize = (value: unknown) =>
-    value === null || value === undefined || value === "" ? null : value;
+    value === null || value === undefined || value === "" || (Array.isArray(value) && !value.length)
+      ? null
+      : value;
   return JSON.stringify(normalize(previous)) !== JSON.stringify(normalize(next));
 }
