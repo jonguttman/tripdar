@@ -16,7 +16,13 @@ const prismaMock = vi.hoisted(() => ({
 const loadStrainDataMock = vi.hoisted(() => vi.fn());
 const scoreStrainsMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
+// Strict view (KEWL-2467): the code under test sees a Proxy that throws by name on
+// any un-stubbed prisma access, so a signature change the mock has not kept up with
+// fails as "not stubbed" instead of as a downstream undefined/500.
+vi.mock("@/lib/prisma", async () => {
+  const { createPrismaMock } = await import("@/test/prismaMock");
+  return { prisma: createPrismaMock(prismaMock) };
+});
 vi.mock("@/domain/strain/blob-store", () => ({ loadStrainData: loadStrainDataMock }));
 vi.mock("./scoring", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./scoring")>()),
