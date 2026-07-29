@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it, vi, beforeEach } from "vitest";
 
 const prismaMock = vi.hoisted(() => ({
   mycoEmployeeReviewAssignment: {
-    findUnique: vi.fn(),
+    findFirst: vi.fn(),
     update: vi.fn(),
   },
   mycoEmployeeProductReview: {
@@ -40,6 +40,10 @@ function assignment(overrides: Record<string, unknown> = {}) {
     employeeId: "employee-1",
     employee: { id: "employee-1", name: "Avery", email: "avery@example.com", optedOut: false },
     response: null,
+    // The route validates `assignment.accessToken` when present (catalog access
+    // tokens, KEWL-2353). Default to none so these cases exercise the legacy
+    // review-token path; override to cover token expiry/revocation.
+    accessToken: null,
     catalogItem: { id: "catalog-1" },
     ...overrides,
   };
@@ -60,7 +64,7 @@ async function post(body: Record<string, unknown>) {
 describe("product review token API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    prismaMock.mycoEmployeeReviewAssignment.findUnique.mockResolvedValue(assignment());
+    prismaMock.mycoEmployeeReviewAssignment.findFirst.mockResolvedValue(assignment());
     prismaMock.$transaction.mockImplementation(async (callback) =>
       callback({
         mycoEmployeeProductReview: prismaMock.mycoEmployeeProductReview,
@@ -88,7 +92,7 @@ describe("product review token API", () => {
 
     expect(response.status).toBe(429);
     expect(response.headers.get("Retry-After")).toBe("42");
-    expect(prismaMock.mycoEmployeeReviewAssignment.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.mycoEmployeeReviewAssignment.findFirst).not.toHaveBeenCalled();
   });
 
   it("fails closed when the public write rate-limit store is unavailable", async () => {
@@ -105,7 +109,7 @@ describe("product review token API", () => {
 
     expect(response.status).toBe(503);
     expect(response.headers.get("Retry-After")).toBe("60");
-    expect(prismaMock.mycoEmployeeReviewAssignment.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.mycoEmployeeReviewAssignment.findFirst).not.toHaveBeenCalled();
   });
 
   it("rejects known-product submissions missing required effect axes", async () => {
@@ -168,7 +172,7 @@ describe("product review token API", () => {
   });
 
   it("rejects duplicate submissions for completed assignments", async () => {
-    prismaMock.mycoEmployeeReviewAssignment.findUnique.mockResolvedValue(
+    prismaMock.mycoEmployeeReviewAssignment.findFirst.mockResolvedValue(
       assignment({ status: "submitted", response: { id: "response-1" } })
     );
 
