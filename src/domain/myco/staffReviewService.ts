@@ -120,14 +120,31 @@ export interface CatalogChangeRow {
   createdAt: Date;
 }
 
-/** Replays the append-only log into per-field state. Rejected changes are skipped. */
+/**
+ * Replays the append-only log into per-field state. **Only `accepted` changes count.**
+ *
+ * KEWL-2457 — this filter is the whole gate, not the `disposition` literal the submit
+ * route writes. It used to skip only `rejected`, which meant a `pending` change counted
+ * toward its confirmation threshold exactly like an accepted one, reached `confirmed`,
+ * and was written through to the live `StoreProductCatalog` column by the same
+ * transaction. Marking staff edits `pending` upstream without changing this line is a
+ * no-op: the value still reaches a customer with nobody having reviewed it.
+ *
+ * So: pending is genuinely inert here. It does not set `liveValue`, cannot be the value
+ * a teammate "Confirm"s, contributes no confirmation, and can never satisfy the listing
+ * gate. It becomes visible only after an admin accepts it, at which point the ledger row
+ * flips to `accepted` and this function starts counting it — the same path an
+ * accepted-on-arrival answer always took.
+ *
+ * Pending changes are not lost, just not counted: see `pendingStaffChangesByField()`.
+ */
 export function computeFieldStates(
   rules: FieldRuleRow[],
   changes: CatalogChangeRow[]
 ): Record<string, StaffFieldState> {
   const byField = new Map<string, StaffFieldSubmission[]>();
   for (const change of changes) {
-    if (change.disposition === "rejected") continue;
+    if (change.disposition !== "accepted") continue;
     const submission: StaffFieldSubmission = {
       value: change.submittedValue,
       actorType: change.actorType as CatalogActorType,
@@ -149,6 +166,55 @@ export function computeFieldStates(
     });
   }
   return states;
+}
+
+/** One staff answer sitting in the admin queue, still invisible to the gate. */
+export interface PendingStaffChange {
+  id: string;
+  fieldName: string;
+  previousValue: unknown;
+  submittedValue: unknown;
+  actorIdentity: string;
+  source: string;
+  createdAt: Date;
+}
+
+type PendingChangeRow = CatalogChangeRow & { id: string; previousValue?: unknown };
+
+/**
+ * KEWL-2457 — the staff answers awaiting an admin decision, grouped by field.
+ *
+ * Deliberately separate from `computeFieldStates()`: these must be *shown* (so a
+ * reviewer's answer doesn't appear to vanish, and so they aren't asked the same
+ * question again) without being *counted*. Keeping them in a second structure is what
+ * makes that split impossible to get wrong by accident — there is no code path where a
+ * caller reading field state accidentally picks up a pending value.
+ *
+ * Brand/import/admin rows are excluded for the same reason `computeStaffFieldState`
+ * excludes them: this is the staff audit queue, and the brand queue is KEWL-2331's.
+ */
+export function pendingStaffChangesByField(
+  changes: PendingChangeRow[]
+): Record<string, PendingStaffChange[]> {
+  const byField: Record<string, PendingStaffChange[]> = {};
+  for (const change of changes) {
+    if (change.disposition !== "pending") continue;
+    if (change.actorType !== "staff") continue;
+    if (change.fieldName === REVIEWER_NOTE_FIELD) continue;
+    (byField[change.fieldName] ??= []).push({
+      id: change.id,
+      fieldName: change.fieldName,
+      previousValue: change.previousValue ?? null,
+      submittedValue: change.submittedValue,
+      actorIdentity: change.actorIdentity,
+      source: change.source,
+      createdAt: change.createdAt,
+    });
+  }
+  for (const list of Object.values(byField)) {
+    list.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+  return byField;
 }
 
 type CatalogItemForGate = {
@@ -267,6 +333,8 @@ export function urgencyTierFor(input: {
   fieldStates: Record<string, StaffFieldState>;
   rules: FieldRuleRow[];
   reviewerId: string;
+  /** KEWL-2457 — queued answers count as "reviewed" for urgency, though not for the gate. */
+  pendingByField?: Record<string, PendingStaffChange[]>;
 }): ProductUrgencyTier {
   const reviewable = input.rules.filter((rule) => rule.tier !== "D");
   let anyoneReviewed = false;
@@ -274,6 +342,11 @@ export function urgencyTierFor(input: {
   let disputed = false;
 
   for (const rule of reviewable) {
+    const pending = input.pendingByField?.[rule.fieldName];
+    if (pending && pending.length > 0) {
+      anyoneReviewed = true;
+      if (reviewerHasPendingAnswer(pending, input.reviewerId)) thisReviewerReviewed = true;
+    }
     const state = input.fieldStates[rule.fieldName];
     if (!state) continue;
     if (state.answeredReviewers.length > 0) anyoneReviewed = true;
@@ -305,15 +378,35 @@ export const URGENCY_TIER_LABELS: Record<ProductUrgencyTier, string> = {
   4: "You're done here",
 };
 
+/**
+ * True when this reviewer has an answer for this field sitting in the admin queue.
+ *
+ * KEWL-2457 requirement 4 — a reviewer who has already answered must not be asked the
+ * same question again just because their answer is awaiting review. Without this the
+ * pending change is invisible to `computeFieldStates()` (by design), so the field reads
+ * as untouched and the reviewer is nagged to re-enter what they already submitted.
+ */
+export function reviewerHasPendingAnswer(
+  pending: PendingStaffChange[] | undefined,
+  reviewerId: string
+): boolean {
+  return (pending ?? []).some((change) => change.actorIdentity === reviewerId);
+}
+
 /** Fields this reviewer still owes on this product — powers "What's left for me". */
 export function fieldsOwedBy(input: {
   rules: FieldRuleRow[];
   fieldStates: Record<string, StaffFieldState>;
   reviewerId: string;
+  /** KEWL-2457 — a field you have already answered into the queue is not owed. */
+  pendingByField?: Record<string, PendingStaffChange[]>;
 }): string[] {
   return input.rules
     .filter((rule) => rule.tier !== "D")
     .filter((rule) => {
+      if (reviewerHasPendingAnswer(input.pendingByField?.[rule.fieldName], input.reviewerId)) {
+        return false;
+      }
       const state = input.fieldStates[rule.fieldName];
       return state ? reviewerStillOwesField(state, input.reviewerId) : true;
     })
