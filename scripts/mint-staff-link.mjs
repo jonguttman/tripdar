@@ -1,4 +1,14 @@
-/** KEWL-2335 — mint a staff review link. The raw token is printed once; only its hash is stored. */
+/**
+ * KEWL-2335 — mint a staff review link. The raw token is printed once; only its hash is stored.
+ *
+ * Run via vite-node (bare `node` fails — extensionless .ts imports in src/domain/myco/ are
+ * not resolved by Node's ESM loader even with --experimental-strip-types):
+ *
+ *   node --env-file=.env.local node_modules/vite-node/vite-node.mjs scripts/mint-staff-link.mjs -- [baseUrl] [--force] [--hours=72]
+ *
+ * Note the `--` separator before script args. This is the same invocation used by
+ * scripts/seed-qa-staff-review.mjs (KEWL-2475).
+ */
 import { PrismaClient } from "@prisma/client";
 import { createCatalogAccessToken, hashCatalogAccessToken } from "../src/domain/myco/catalogTokens.ts";
 
