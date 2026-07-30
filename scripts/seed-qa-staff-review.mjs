@@ -596,8 +596,8 @@ async function main() {
     JSON.stringify(
       {
         [QA_STAFF_REVIEW_PARTNER_ID_ENV]: partner.id,
-        QA_STAFF_REVIEW_URL: linkUrl ?? "(unchanged — re-run with --remint to reprint)",
-        QA_STAFF_REVIEW_PIN: pin ?? "(unchanged)",
+        url: linkUrl ?? "(unchanged — re-run with --remint to reprint)",
+        pin: pin ?? "(unchanged)",
         reviewer: reviewer.name,
         subdomain: QA_PARTNER_SUBDOMAIN,
         partnerActive: false,
@@ -607,11 +607,20 @@ async function main() {
       2
     )
   );
+  // Only the partner id belongs in Vercel — `staffReviewRoster.ts` reads it at runtime, and
+  // without it the QA reviewer is admitted nowhere and the link 410s `roster_empty`.
+  //
+  // Do NOT store the url or the pin. They were stored as QA_STAFF_REVIEW_URL /
+  // QA_STAFF_REVIEW_PIN and `vercel env pull` read them back as EMPTY STRINGS on both
+  // Production and Preview (KEWL-2478), so the storage was write-only and the capability was
+  // real for exactly one run. Re-minting is the retrieval path instead: cheap, partner-scoped,
+  // and it cannot reach TMT's link. See the staff-review section of CLAUDE.md.
   console.log(
-    `\nSet all three in Vercel (Production) so later agents can find them:\n` +
+    `\nSet the partner id in Vercel (Production) — it is read at runtime:\n` +
       `  vercel env add ${QA_STAFF_REVIEW_PARTNER_ID_ENV} production\n` +
-      `  vercel env add QA_STAFF_REVIEW_URL production\n` +
-      `  vercel env add QA_STAFF_REVIEW_PIN production\n`
+      `\nDo NOT store the url or pin anywhere. To get them again, re-run:\n` +
+      `  node --env-file=.env.local node_modules/vite-node/vite-node.mjs \\\n` +
+      `    scripts/seed-qa-staff-review.mjs -- --remint --pin=NNNN\n`
   );
 }
 
