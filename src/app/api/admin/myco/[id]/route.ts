@@ -4,6 +4,7 @@ import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 import { computeReadiness } from "@/domain/myco/readiness";
+import { approvedPhotoCount } from "@/domain/myco/photoVisibility";
 import { loadGateForProduct } from "@/domain/myco/staffReviewService";
 import { normalizeFlavors } from "@/domain/myco/flavors";
 import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
@@ -563,7 +564,8 @@ export async function PATCH(
       brandMacroUnits: productData.brandMacroUnits,
       brandDoseTiers: productData.brandDoseTiers,
       photoUrl: productData.photoUrl,
-      photoCount: productData.photos.length,
+      // Approved only — pending brand photos never satisfy readiness (KEWL-2460).
+      photoCount: approvedPhotoCount(productData.photos),
       vibeScores: productData.vibeProfile?.scores ?? null,
       strengthOffset: productData.strengthOffset
         ? { offset: productData.strengthOffset.offset, confirmed: productData.strengthOffset.confirmed }

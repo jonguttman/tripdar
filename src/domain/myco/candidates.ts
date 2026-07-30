@@ -12,6 +12,7 @@
 import { prisma } from "@/lib/prisma";
 import { isCandidacyExcludedCompound } from "@/domain/recommendation-engine/doseBasis";
 import { computeReadiness } from "./readiness";
+import { APPROVED_PHOTO_WHERE } from "./photoVisibility";
 import { normalizeVibeScores } from "./vibes";
 import type { ProductCandidate } from "./scoring";
 import type { StrengthOffsetValue } from "./dose";
@@ -24,7 +25,9 @@ function fetchActiveCatalog(partnerId: string) {
     include: {
       vibeProfile: true,
       strengthOffset: true,
-      photos: { orderBy: { sortOrder: "asc" }, take: 1 },
+      // Approved only: a pending brand-portal photo must never reach a customer
+      // and must never satisfy the readiness photo gate below (KEWL-2460).
+      photos: { where: APPROVED_PHOTO_WHERE, orderBy: { sortOrder: "asc" }, take: 1 },
       brandRef: true,
     },
   });

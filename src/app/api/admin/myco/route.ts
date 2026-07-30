@@ -9,6 +9,7 @@ import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
 import { computeReadiness } from "@/domain/myco/readiness";
+import { approvedPhotoCount } from "@/domain/myco/photoVisibility";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
 import { normalizeFlavors } from "@/domain/myco/flavors";
 import { aggregateEmployeeGuidance, summarizeAssignments } from "@/domain/myco/employeeReviews";
@@ -357,7 +358,9 @@ export async function GET(request: NextRequest) {
         brandMacroUnits: product.brandMacroUnits,
         brandDoseTiers: product.brandDoseTiers,
         photoUrl: product.photoUrl,
-        photoCount: product.photos.length,
+        // Approved only — admin still sees pending rows in `photos`, but they
+        // must not satisfy the readiness photo requirement (KEWL-2460).
+        photoCount: approvedPhotoCount(product.photos),
         vibeScores: product.vibeProfile?.scores ?? null,
         strengthOffset: product.strengthOffset
           ? { offset: product.strengthOffset.offset, confirmed: product.strengthOffset.confirmed }

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { APPROVED_PHOTO_WHERE } from "@/domain/myco/photoVisibility";
 import TesterVoteForm from "./TesterVoteForm";
 
 export const dynamic = "force-dynamic";
@@ -64,7 +65,8 @@ export default async function TesterPage({ params }: { params: Promise<{ id: str
   const product = await prisma.storeProductCatalog.findUnique({
     where: { id },
     include: {
-      photos: { orderBy: { sortOrder: "asc" }, take: 1 },
+      // Approved only — pending brand-portal photos are not published (KEWL-2460).
+      photos: { where: APPROVED_PHOTO_WHERE, orderBy: { sortOrder: "asc" }, take: 1 },
       brandRef: true,
       partner: { select: { name: true } },
     },

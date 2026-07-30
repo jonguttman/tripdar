@@ -23,6 +23,7 @@ import {
   type StaffFieldSubmission,
 } from "./staffFieldVerification";
 import { evaluateListingGate, type GateFieldRule, type ListingGateResult } from "./listingGate";
+import { APPROVED_PHOTO_WHERE } from "./photoVisibility";
 import type { ReadinessInput } from "./readiness";
 import type { CatalogActorType, CatalogFieldSource } from "./catalogProvenance";
 
@@ -227,7 +228,9 @@ export async function loadGateForProduct(catalogItemId: string): Promise<Listing
     include: {
       vibeProfile: true,
       strengthOffset: true,
-      _count: { select: { photos: true } },
+      // Approved only — a pending brand photo must not satisfy the activation
+      // photo gate before the review queue promotes it (KEWL-2460).
+      photos: { where: APPROVED_PHOTO_WHERE, select: { id: true } },
       catalogFieldChanges: {
         select: {
           fieldName: true,
@@ -246,7 +249,7 @@ export async function loadGateForProduct(catalogItemId: string): Promise<Listing
   return evaluateGateForItem({
     item,
     extras: {
-      photoCount: item._count.photos,
+      photoCount: item.photos.length,
       vibeScores: item.vibeProfile?.scores ?? null,
       strengthOffset: item.strengthOffset
         ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
