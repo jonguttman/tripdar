@@ -19,8 +19,10 @@
  * `computeReadiness()` would reject every QA row and `getRecommendableProducts()` would
  * return an empty candidate list.
  *
- * Idempotent. Re-running rebuilds the QA fixture ledger from scratch (see FIXTURE LEDGER
- * below) and leaves the link alone unless `--remint` is passed.
+ * Idempotent. A first run writes the QA fixture ledger (see FIXTURE LEDGER below); later
+ * runs leave the ledger of an already-seeded product untouched, because
+ * `CatalogFieldChange` is append-only in the database and cannot be reset. The link is
+ * left alone unless `--remint` is passed.
  *
  * Run it through vite-node, NOT bare node:
  *
@@ -433,10 +435,29 @@ async function main() {
         });
     seededIds.push(item.id);
 
-    // Rebuild the fixture from scratch. The `CatalogFieldChange` ledger is append-only by
-    // contract for real reviews; these rows are fixture data under a partner no real
-    // reviewer can reach, so a re-run resets them rather than stacking duplicate answers.
-    await prisma.catalogFieldChange.deleteMany({ where: { catalogItemId: item.id } });
+    // `CatalogFieldChange` is append-only in the DATABASE, not merely by convention: the
+    // BEFORE DELETE trigger `prevent_catalog_field_change_mutation`
+    // (migration 20260728163000_tmt_catalog_foundation) raises P0001 on any delete, fixture
+    // rows included. So a re-run cannot reset this ledger, and must not try — the first
+    // version of this script did, which is why every re-run after the first seed aborted
+    // here with "CatalogFieldChange is append-only" and made `--remint` unreachable
+    // (KEWL-2478). A row-level trigger does not fire on a zero-row delete, which is exactly
+    // why the initial seed passed and only re-runs failed.
+    //
+    // Leaving an already-seeded item alone is correct, not a concession: the fixture rows
+    // are deterministic, so an item that already has ledger rows is already in the shape
+    // this block would rebuild. Skip it and let the run continue to the link mint.
+    const existingLedgerRows = await prisma.catalogFieldChange.count({
+      where: { catalogItemId: item.id },
+    });
+    if (existingLedgerRows > 0) {
+      console.log(
+        `  ${fixture.sku} — ${fixture.productName}  [${fixture.expect}]` +
+          `  (ledger left as-is: ${existingLedgerRows} append-only row(s))`
+      );
+      continue;
+    }
+
     await prisma.catalogFieldVerificationState.deleteMany({ where: { catalogItemId: item.id } });
     await prisma.productPhoto.deleteMany({ where: { catalogItemId: item.id } });
 
