@@ -9,9 +9,10 @@
  * top-level-await script that would run the transaction on import. So the decision logic
  * lives here, behind an injected `prisma`, and `mint-staff-link.mjs` is a thin wrapper.
  *
- * See `mint-staff-link.lib.test.mjs` for the five cases that pin the blast radius:
- * no partner, ambiguous partner, refuse-on-active-token, partner-scoped revoke `where`,
- * and `--force` not implying the revoke.
+ * See `mint-staff-link.lib.test.mjs` for the cases that pin the blast radius: no partner,
+ * ambiguous partner, refuse-on-active-token, partner-scoped revoke `where`, `--force` not
+ * implying the revoke, and (KEWL-2491) the advisory lock and compare-and-swap that stop a
+ * concurrent admin-route mint from being revoked or duplicated.
  */
 
 import {
@@ -24,6 +25,7 @@ import {
   preMintPinWarnings,
 } from "../src/domain/myco/reviewerEnrollment.ts";
 import { staffReviewerWhere } from "../src/domain/myco/staffReviewRoster.ts";
+import { lockStaffLinkMint } from "../src/domain/myco/staffLinkMintLock.ts";
 
 /**
  * Kept at the KEWL-2379 value on purpose. `issuedBy` / `revokedBy` are the only record of
@@ -141,21 +143,59 @@ export function activeStaffTokenWhere(partnerId) {
   return { purpose: "staff_review", partnerId, status: "active" };
 }
 
+const describeToken = (token) =>
+  `id=${token.id} issuedAt=${token.issuedAt?.toISOString?.() ?? token.issuedAt}`;
+
 /**
- * Refuse-by-default: an existing live link is only destroyed when the operator asked for
- * it by name. `--force` is NOT accepted here — it means "override the PIN assertion", and
- * folding two unrelated overrides into one flag is how the wrong link gets revoked.
+ * Refuse-by-default, and compare-and-swap on top of it.
+ *
+ * Two separate guards live here, and they refuse for different reasons:
+ *
+ *  1. **No `--revoke-existing`** → never destroy a live link. `--force` is NOT accepted
+ *     as a substitute; it means "override the PIN assertion", and folding two unrelated
+ *     overrides into one flag is how the wrong link gets revoked.
+ *
+ *  2. **`--revoke-existing` against a token the operator never saw** → also refuse.
+ *     `--revoke-existing` is consent to destroy *the link the operator inspected*, not
+ *     standing consent to destroy whatever happens to be live when the transaction runs.
+ *     If a concurrent admin-route mint replaced token A with token B in between, revoking
+ *     B strands everyone holding a link the operator was never shown — and the operator
+ *     would read the success output as "I replaced A". So the plan compares the live
+ *     token's id against the inspected one and refuses on any mismatch, including the
+ *     `inspected = none → live = B` case (nothing was inspected, so nothing is consented
+ *     to). This is the compare half of a compare-and-swap; the caller's revoke `where`
+ *     is the swap half, scoped to `revokeTokenId`.
+ *
+ * A refusal here writes nothing: the caller throws `MintUsageError`, which rolls the
+ * transaction back before any mutation runs.
  */
-export function planTokenAction({ activeToken, revokeExisting }) {
+export function planTokenAction({ activeToken, revokeExisting, inspectedTokenId = null }) {
   if (!activeToken) return { action: "mint" };
-  if (revokeExisting) return { action: "revoke-then-mint" };
-  return {
-    action: "refuse",
-    reason:
-      `An active staff-review link already exists for this partner: ` +
-      `id=${activeToken.id} issuedAt=${activeToken.issuedAt?.toISOString?.() ?? activeToken.issuedAt}. ` +
-      `Minting would strand anyone holding it. Pass --revoke-existing to replace it deliberately.`,
-  };
+
+  if (!revokeExisting) {
+    return {
+      action: "refuse",
+      reason:
+        `An active staff-review link already exists for this partner: ` +
+        `${describeToken(activeToken)}. ` +
+        `Minting would strand anyone holding it. Pass --revoke-existing to replace it deliberately.`,
+    };
+  }
+
+  if (activeToken.id !== inspectedTokenId) {
+    return {
+      action: "refuse",
+      reason:
+        `The live staff-review link changed after this run inspected it. ` +
+        `--revoke-existing consented to revoking ` +
+        `${inspectedTokenId ? `id=${inspectedTokenId}` : "nothing (no live link was present)"}, ` +
+        `but the live link is now ${describeToken(activeToken)} — most likely a concurrent mint ` +
+        `through the admin route. Revoking it would strand holders of a link you were never ` +
+        `shown. Nothing was written. Re-run to inspect the current link and decide again.`,
+    };
+  }
+
+  return { action: "revoke-then-mint", revokeTokenId: activeToken.id };
 }
 
 /**
@@ -196,22 +236,47 @@ export async function runMintStaffLink({ argv, prisma, log = () => {}, warn = ()
   const enrollmentClosesAt = enrollmentClosesAtFrom(args.hours);
   const token = createCatalogAccessToken();
 
-  // The active-token check, revoke decision, and mint must all happen inside a single
-  // transaction so a concurrent mint through the admin route cannot land between the read
-  // and the write. With SQLite/Turso's single-writer serialisation, the tx holds the write
-  // lock for the entire read-decide-revoke-mint sequence, eliminating the race.
+  // The token the operator is consenting to replace. Read OUTSIDE the transaction on
+  // purpose: this is the "inspected" state — what a human would have seen before deciding
+  // to pass --revoke-existing — and `planTokenAction` refuses if the live token has moved
+  // away from it by the time the locked section runs. It is a baseline for the
+  // compare-and-swap, never the basis for a write.
+  const inspectedToken = await prisma.catalogAccessToken.findFirst({
+    where: activeStaffTokenWhere(partner.id),
+    select: { id: true, issuedAt: true },
+  });
+
   const { record, revokedPrevious } = await prisma.$transaction(async (tx) => {
+    // Serialise against the admin route (`/api/admin/myco/staff-links`), which takes this
+    // same lock in its own mint transaction. Taken BEFORE the read below, because a lock
+    // acquired after it would leave exactly the window it exists to close: two mints could
+    // both read "no active link", then queue up and both create one.
+    //
+    // A transaction alone does NOT give us this. Tripdar is Postgres, not SQLite/Turso —
+    // under Read Committed there is no row to contend on when the answer is "none exists",
+    // so nothing serialises the two readers. See `staffLinkMintLock.ts` for why the lock is
+    // transaction-scoped and why this is not a unique constraint.
+    await lockStaffLinkMint(tx, { partnerId: partner.id });
+
     const activeToken = await tx.catalogAccessToken.findFirst({
       where: activeStaffTokenWhere(partner.id),
       select: { id: true, issuedAt: true },
     });
-    const plan = planTokenAction({ activeToken, revokeExisting: args.revokeExisting });
+    const plan = planTokenAction({
+      activeToken,
+      revokeExisting: args.revokeExisting,
+      inspectedTokenId: inspectedToken?.id ?? null,
+    });
     // MintUsageError thrown here rolls back the transaction and re-throws unchanged.
     if (plan.action === "refuse") throw new MintUsageError(plan.reason);
 
     if (plan.action === "revoke-then-mint") {
       await tx.catalogAccessToken.updateMany({
-        where: activeStaffTokenWhere(partner.id),
+        // Scoped to the inspected token id AND the partner/purpose/status predicate. The
+        // id is the compare-and-swap; the predicate is the KEWL-2480 blast-radius guard.
+        // Keeping both means a mismatched id revokes nothing rather than the wrong row,
+        // and a bad id can still never reach another partner.
+        where: { ...activeStaffTokenWhere(partner.id), id: plan.revokeTokenId },
         data: {
           status: "revoked",
           revokedAt: new Date(),

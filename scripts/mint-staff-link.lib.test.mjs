@@ -26,6 +26,10 @@ import {
   planTokenAction,
   runMintStaffLink,
 } from "./mint-staff-link.lib.mjs";
+import {
+  STAFF_LINK_MINT_LOCK_NAMESPACE,
+  staffLinkMintLockKey,
+} from "../src/domain/myco/staffLinkMintLock.ts";
 
 const PARTNER_ID = "partner_qa_0001";
 const OTHER_PARTNER_ID = "partner_tmt_live";
@@ -92,7 +96,16 @@ function makePrisma({
       },
     },
     $transaction: async (fn) =>
-      fn({ catalogAccessToken: tokenModel, reviewerEnrollmentEvent: prisma.reviewerEnrollmentEvent }),
+      fn({
+        catalogAccessToken: tokenModel,
+        reviewerEnrollmentEvent: prisma.reviewerEnrollmentEvent,
+        // KEWL-2491: the tx client the lock helper needs. Recorded like everything else so
+        // the lock's presence and ordering are assertable rather than assumed.
+        $executeRawUnsafe: async (...args) => {
+          record("$executeRawUnsafe", args);
+          return 1;
+        },
+      }),
   };
   return prisma;
 }
@@ -230,7 +243,12 @@ describe("mint-staff-link — refuses to clobber a live link", () => {
   it("planTokenAction refuses on an active token and mints on none", () => {
     const activeToken = { id: "token_live", issuedAt: new Date("2026-07-28T18:00:00.000Z") };
     expect(planTokenAction({ activeToken, revokeExisting: false }).action).toBe("refuse");
-    expect(planTokenAction({ activeToken, revokeExisting: true }).action).toBe("revoke-then-mint");
+    // KEWL-2491: --revoke-existing alone is no longer sufficient. It authorises revoking
+    // the token this run inspected, so the inspected id has to match for the revoke to be
+    // planned. The mismatch cases are covered in the compare-and-swap describe below.
+    expect(
+      planTokenAction({ activeToken, revokeExisting: true, inspectedTokenId: "token_live" }).action
+    ).toBe("revoke-then-mint");
     expect(planTokenAction({ activeToken: null, revokeExisting: false }).action).toBe("mint");
   });
 });
@@ -249,10 +267,13 @@ describe("mint-staff-link — the revoke is scoped to the partner that was passe
     expect(revoke).toBeDefined();
     // The assertion that would have caught the original bug: the partner id in the revoke
     // filter is the one the operator passed, and the filter cannot match anyone else.
+    // KEWL-2491 adds `id` — the compare-and-swap — without dropping any of the three
+    // blast-radius fields, so a bad id still cannot reach another partner's rows.
     expect(revoke.args.where).toEqual({
       purpose: "staff_review",
       partnerId: PARTNER_ID,
       status: "active",
+      id: "token_live",
     });
     expect(revoke.args.where.partnerId).not.toBe(OTHER_PARTNER_ID);
     expect(revoke.args.data.revokedBy).toBe(MINT_ACTOR);
@@ -316,26 +337,44 @@ describe("mint-staff-link — --force gates the PIN assertion only", () => {
 });
 
 /**
- * KEWL-2491 — the active-token read must happen inside the transaction, not before it.
+ * KEWL-2491 — two entry points mint a partner's shared staff link, and nothing made them
+ * atomic with respect to each other.
  *
- * The race: a concurrent admin-route mint can land between the pre-tx `findFirst` and the
- * tx's `updateMany`/`create`. If the script saw no token it would mint alongside the admin's
- * newly created one, leaving two active links for the same partner. If it saw the old token
- * with `--revoke-existing`, its unconditional `updateMany` would revoke the admin's new
- * token that the operator never inspected.
+ * The race has two distinct outcomes, and they need two distinct fixes:
  *
- * The fix: move `findFirst` + `planTokenAction` + refuse inside `$transaction`. With
- * SQLite/Turso's single-writer serialisation, the tx holds the write lock for the entire
- * read-decide-revoke-mint sequence, making it atomic.
+ *  1. **Duplicate live links.** Script and admin route both read "no active link", both
+ *     create one. Fixed by `pg_advisory_xact_lock`, taken by BOTH entry points on the same
+ *     partner+purpose key, BEFORE the read.
  *
- * These tests use a split mock: the outer `catalogAccessToken` has no `findFirst` (calling
- * it throws — catching any regression to the pre-tx read), while the tx layer returns the
- * value the DB would contain after a concurrent mint.
+ *  2. **Revoking an uninspected token.** The operator saw token A and passed
+ *     `--revoke-existing`. A concurrent admin mint replaced A with B. An unconditioned
+ *     revoke kills B — a link the operator was never shown — and reports success as if it
+ *     had replaced A. Fixed by comparing the live token id against the inspected one and
+ *     refusing on mismatch (the compare half of a compare-and-swap; the revoke `where`'s
+ *     `id` is the swap half).
+ *
+ * The lock alone does not fix (2): serialised access still revokes the wrong token. The
+ * CAS alone does not fix (1): two transactions that both see nothing both proceed to
+ * create. The tests below cover each independently.
+ *
+ * A NOTE ON WHAT AN EARLIER FIX GOT WRONG (`b784f26`): it moved the read inside
+ * `$transaction` and asserted that SQLite/Turso single-writer serialisation made the
+ * sequence atomic. This database is Postgres (`prisma/schema.prisma` → `postgresql`,
+ * Neon). Under Read Committed, a transaction boundary serialises nothing when the
+ * contended state is the ABSENCE of a row. That version also kept the unconditioned
+ * `updateMany`, and the test here asserted revoking the uninspected token was "consistent"
+ * — encoding the defect as correct behaviour. Both are corrected below.
  */
-describe("mint-staff-link — KEWL-2491: active-token read is inside the transaction", () => {
-  /** Builds a prisma double where the outer catalogAccessToken.findFirst is forbidden,
-   * but the tx layer's findFirst returns `txActiveToken`. */
-  function makeSplitPrisma({ txActiveToken = null } = {}) {
+describe("mint-staff-link — KEWL-2491: mints are serialised and the revoke is compare-and-swapped", () => {
+  const LOCK_SQL = "SELECT pg_advisory_xact_lock($1::int, $2::int)";
+
+  /**
+   * A double whose pre-transaction read and in-transaction read can return DIFFERENT
+   * tokens — which is the whole race. `inspectedToken` is what the operator's run sees
+   * before the tx (the "inspected" state); `txActiveToken` is what the database actually
+   * holds once the lock is acquired, i.e. after a concurrent mint has landed.
+   */
+  function makeRacingPrisma({ inspectedToken = null, txActiveToken = null } = {}) {
     const calls = [];
     const record = (layer, method, args) => calls.push({ layer, method, args });
 
@@ -346,11 +385,18 @@ describe("mint-staff-link — KEWL-2491: active-token read is inside the transac
       },
       updateMany: async (args) => {
         record("tx", "catalogAccessToken.updateMany", args);
-        return { count: 1 };
+        // Honour the `id` predicate the way Postgres would, so a compare-and-swap that
+        // matches nothing reports count 0 instead of silently "succeeding".
+        const matches = txActiveToken && (!args.where.id || args.where.id === txActiveToken.id);
+        return { count: matches ? 1 : 0 };
       },
       create: async (args) => {
         record("tx", "catalogAccessToken.create", args);
-        return { id: "token_new", issuedAt: new Date("2026-07-29T00:00:00.000Z"), enrollmentClosesAt: args.data.enrollmentClosesAt };
+        return {
+          id: "token_new",
+          issuedAt: new Date("2026-07-29T00:00:00.000Z"),
+          enrollmentClosesAt: args.data.enrollmentClosesAt,
+        };
       },
     };
 
@@ -365,13 +411,18 @@ describe("mint-staff-link — KEWL-2491: active-token read is inside the transac
       mycoEmployee: {
         findMany: async (args) => {
           record("outer", "mycoEmployee.findMany", args);
-          return [{ id: "e1", name: "Adrienne", email: "adrienne@x.internal", pinHash: null, pinSetAt: null }];
+          return [
+            { id: "e1", name: "Adrienne", email: "adrienne@x.internal", pinHash: null, pinSetAt: null },
+          ];
         },
       },
       catalogAccessToken: {
-        // Intentionally absent: if the implementation calls outer findFirst, this throws and
-        // fails the test. All token reads must go through the tx layer.
-        findFirst: () => { throw new Error("catalogAccessToken.findFirst must not be called outside the transaction"); },
+        // The pre-tx inspection read. It exists deliberately (it is the CAS baseline), but
+        // it must never be the read a write is planned from — the tx read is.
+        findFirst: async (args) => {
+          record("outer", "catalogAccessToken.findFirst", args);
+          return inspectedToken;
+        },
       },
       reviewerEnrollmentEvent: {
         create: async (args) => {
@@ -380,60 +431,179 @@ describe("mint-staff-link — KEWL-2491: active-token read is inside the transac
         },
       },
       $transaction: async (fn) =>
-        fn({ catalogAccessToken: txTokenModel, reviewerEnrollmentEvent: { create: prisma.reviewerEnrollmentEvent.create } }),
+        fn({
+          catalogAccessToken: txTokenModel,
+          reviewerEnrollmentEvent: { create: prisma.reviewerEnrollmentEvent.create },
+          $executeRawUnsafe: async (...args) => {
+            record("tx", "$executeRawUnsafe", args);
+            return 1;
+          },
+        }),
     };
     return prisma;
   }
 
-  it("reads the active token inside the tx, not outside it", async () => {
-    const prisma = makeSplitPrisma({ txActiveToken: null });
-    // Should succeed (no active token in tx) and NOT call the forbidden outer findFirst.
-    const result = await runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma });
-    expect(result.id).toBe("token_new");
-    const txRead = prisma.calls.filter((c) => c.layer === "tx" && c.method === "catalogAccessToken.findFirst");
-    expect(txRead).toHaveLength(1);
-  });
+  const txWritesOf = (prisma) =>
+    prisma.calls.filter(
+      (call) =>
+        call.layer === "tx" &&
+        (call.method === "catalogAccessToken.create" ||
+          call.method === "catalogAccessToken.updateMany" ||
+          call.method === "reviewerEnrollmentEvent.create")
+    );
 
-  it("refuses without writing when a concurrent mint lands before the tx runs", async () => {
-    // Simulates: script is called with no active token visible to an outer read (old code
-    // would proceed), but by the time the tx executes, a concurrent admin-route mint has
-    // already created a token. New code: tx sees the token and refuses (no --revoke-existing).
-    const concurrent = { id: "token_concurrent", issuedAt: new Date("2026-07-29T09:00:00.000Z") };
-    const prisma = makeSplitPrisma({ txActiveToken: concurrent });
+  describe("the advisory lock", () => {
+    it("is taken inside the transaction and BEFORE the active-token read", async () => {
+      const prisma = makeRacingPrisma();
+      await runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma });
 
-    await expect(runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma }))
-      .rejects.toBeInstanceOf(MintUsageError);
-
-    // The refuse message must name the concurrent token so the operator knows what to inspect.
-    await expect(runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma }))
-      .rejects.toThrow(/token_concurrent/);
-
-    // No writes despite the outer layer seeing "nothing" (which old code would have minted on).
-    const txWrites = prisma.calls.filter((c) => c.layer === "tx" && (c.method === "catalogAccessToken.create" || c.method === "catalogAccessToken.updateMany"));
-    expect(txWrites).toHaveLength(0);
-  });
-
-  it("with --revoke-existing, revokes what the tx actually sees at execution time", async () => {
-    // Simulates: operator saw old token A and passed --revoke-existing. A concurrent mint
-    // replaced A with B before the tx ran. New code: tx sees B, revokes B, mints C.
-    // This is consistent: only one active token exits the tx. The WHERE is still scoped to
-    // the correct partner (not a cross-partner write).
-    const tokenB = { id: "token_B", issuedAt: new Date("2026-07-29T10:00:00.000Z") };
-    const prisma = makeSplitPrisma({ txActiveToken: tokenB });
-
-    const result = await runMintStaffLink({
-      argv: [`--partner=${PARTNER_ID}`, "--revoke-existing"],
-      prisma,
+      const txSequence = prisma.calls.filter((call) => call.layer === "tx").map((call) => call.method);
+      // Ordering is the entire point: a lock taken after the read leaves open exactly the
+      // window it exists to close.
+      expect(txSequence[0]).toBe("$executeRawUnsafe");
+      expect(txSequence[1]).toBe("catalogAccessToken.findFirst");
+      expect(txSequence.indexOf("$executeRawUnsafe")).toBeLessThan(
+        txSequence.indexOf("catalogAccessToken.create")
+      );
     });
 
-    expect(result.revokedPrevious).toBe(true);
-    const revoke = prisma.calls.find((c) => c.method === "catalogAccessToken.updateMany");
-    expect(revoke).toBeDefined();
-    expect(revoke.args.where.partnerId).toBe(PARTNER_ID);
-    expect(revoke.args.where.purpose).toBe("staff_review");
-    expect(revoke.args.where.status).toBe("active");
-    // One token was minted: exactly one active link after the tx.
-    const created = prisma.calls.filter((c) => c.method === "catalogAccessToken.create");
-    expect(created).toHaveLength(1);
+    it("locks on pg_advisory_xact_lock keyed to this partner", async () => {
+      const prisma = makeRacingPrisma();
+      await runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma });
+
+      const lock = prisma.calls.find((call) => call.method === "$executeRawUnsafe");
+      const [sql, namespace, key] = lock.args;
+      expect(sql).toBe(LOCK_SQL);
+      expect(namespace).toBe(STAFF_LINK_MINT_LOCK_NAMESPACE);
+      // The key the admin route computes for the same partner — that both entry points
+      // derive the SAME key from the same helper is what makes them mutually exclusive.
+      expect(key).toBe(staffLinkMintLockKey(PARTNER_ID, "staff_review"));
+    });
+
+    it("takes the lock exactly once, and does not take another partner's", async () => {
+      const prisma = makeRacingPrisma();
+      await runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma });
+
+      const locks = prisma.calls.filter((call) => call.method === "$executeRawUnsafe");
+      expect(locks).toHaveLength(1);
+      expect(locks[0].args[2]).not.toBe(staffLinkMintLockKey(OTHER_PARTNER_ID, "staff_review"));
+    });
+
+    it("is still taken on the refusal paths, so the decision itself is serialised", async () => {
+      // The refuse cases must ALSO hold the lock while they read — otherwise a run could
+      // decide "refuse" against a token that a concurrent mint was mid-way through
+      // replacing, and report an id that never existed at commit time.
+      const prisma = makeRacingPrisma({
+        inspectedToken: { id: "token_live", issuedAt: new Date("2026-07-28T18:00:00.000Z") },
+        txActiveToken: { id: "token_live", issuedAt: new Date("2026-07-28T18:00:00.000Z") },
+      });
+
+      await expect(
+        runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma })
+      ).rejects.toBeInstanceOf(MintUsageError);
+
+      const txSequence = prisma.calls.filter((call) => call.layer === "tx").map((call) => call.method);
+      expect(txSequence[0]).toBe("$executeRawUnsafe");
+      expect(txWritesOf(prisma)).toEqual([]);
+    });
+  });
+
+  describe("the compare-and-swap on --revoke-existing", () => {
+    it("REFUSES when a concurrent mint replaced the inspected token, writing nothing", async () => {
+      // The case the previous fix got backwards. Operator inspected A and consented to
+      // replacing A. By the time the lock is held, a concurrent admin mint has made B live.
+      // Revoking B would strand everyone holding a link the operator was never shown, and
+      // the success output would claim A was replaced. The only safe answer is to refuse.
+      const tokenA = { id: "token_A", issuedAt: new Date("2026-07-29T09:00:00.000Z") };
+      const tokenB = { id: "token_B", issuedAt: new Date("2026-07-29T10:00:00.000Z") };
+      const prisma = makeRacingPrisma({ inspectedToken: tokenA, txActiveToken: tokenB });
+
+      await expect(
+        runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`, "--revoke-existing"], prisma })
+      ).rejects.toBeInstanceOf(MintUsageError);
+
+      // Nothing revoked, nothing minted, no ledger row — the refusal is total.
+      expect(txWritesOf(prisma)).toEqual([]);
+    });
+
+    it("names both the consented token and the one it actually found", async () => {
+      const tokenA = { id: "token_A", issuedAt: new Date("2026-07-29T09:00:00.000Z") };
+      const tokenB = { id: "token_B", issuedAt: new Date("2026-07-29T10:00:00.000Z") };
+      const prisma = makeRacingPrisma({ inspectedToken: tokenA, txActiveToken: tokenB });
+
+      // The operator has to be able to tell this apart from an ordinary refuse-on-live-link,
+      // so both ids appear and the message says the link changed underneath them.
+      await expect(
+        runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`, "--revoke-existing"], prisma })
+      ).rejects.toThrow(/changed after this run inspected it[\s\S]*token_A[\s\S]*token_B/);
+    });
+
+    it("REFUSES when nothing was inspected but a token appeared before the lock", async () => {
+      // `--revoke-existing` passed against no visible link is consent to revoke nothing.
+      // A token that appears in the window is by definition uninspected, so it is not
+      // covered by that consent even though the flag is set.
+      const concurrent = { id: "token_concurrent", issuedAt: new Date("2026-07-29T09:00:00.000Z") };
+      const prisma = makeRacingPrisma({ inspectedToken: null, txActiveToken: concurrent });
+
+      await expect(
+        runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`, "--revoke-existing"], prisma })
+      ).rejects.toThrow(/nothing \(no live link was present\)[\s\S]*token_concurrent/);
+      expect(txWritesOf(prisma)).toEqual([]);
+    });
+
+    it("scopes the revoke to the inspected id AND the partner predicate when they agree", async () => {
+      const tokenA = { id: "token_A", issuedAt: new Date("2026-07-29T09:00:00.000Z") };
+      const prisma = makeRacingPrisma({ inspectedToken: tokenA, txActiveToken: tokenA });
+
+      const result = await runMintStaffLink({
+        argv: [`--partner=${PARTNER_ID}`, "--revoke-existing"],
+        prisma,
+      });
+
+      const revoke = prisma.calls.find((call) => call.method === "catalogAccessToken.updateMany");
+      // Both halves present: `id` is the swap, the other three are the KEWL-2480 blast-radius
+      // guard. Dropping either one reintroduces a bug we already shipped once.
+      expect(revoke.args.where).toEqual({
+        id: "token_A",
+        partnerId: PARTNER_ID,
+        purpose: "staff_review",
+        status: "active",
+      });
+      expect(revoke.args.data.revokedBy).toBe(MINT_ACTOR);
+      expect(result.revokedPrevious).toBe(true);
+
+      // Exactly one link exists after the tx: one revoked, one created.
+      expect(prisma.calls.filter((call) => call.method === "catalogAccessToken.create")).toHaveLength(1);
+    });
+  });
+
+  describe("without --revoke-existing", () => {
+    it("refuses on a token that appeared after the inspection read, writing nothing", async () => {
+      // Refuse-by-default has to survive the race too: the inspection saw nothing, so the
+      // old pre-tx-read code would have minted a second live link alongside the concurrent
+      // one. The locked read is what catches it.
+      const concurrent = { id: "token_concurrent", issuedAt: new Date("2026-07-29T09:00:00.000Z") };
+      const prisma = makeRacingPrisma({ inspectedToken: null, txActiveToken: concurrent });
+
+      await expect(
+        runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma })
+      ).rejects.toThrow(/token_concurrent[\s\S]*--revoke-existing/);
+      expect(txWritesOf(prisma)).toEqual([]);
+    });
+
+    it("plans the write from the locked read, not the inspection read", async () => {
+      // Inverse of the case above: the inspection saw a live token but it was revoked
+      // concurrently, so by lock time there is none. Minting is correct — there is nothing
+      // to strand — and it proves the decision is made from the tx read.
+      const stale = { id: "token_stale", issuedAt: new Date("2026-07-29T08:00:00.000Z") };
+      const prisma = makeRacingPrisma({ inspectedToken: stale, txActiveToken: null });
+
+      const result = await runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma });
+
+      expect(result.id).toBe("token_new");
+      expect(result.revokedPrevious).toBe(false);
+      // Nothing was revoked: there was no live token at decision time.
+      expect(prisma.calls.some((call) => call.method === "catalogAccessToken.updateMany")).toBe(false);
+    });
   });
 });

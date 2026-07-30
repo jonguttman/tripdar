@@ -25,6 +25,7 @@ import {
 } from "@/domain/myco/catalogTokens";
 import { ensureFieldRules } from "@/domain/myco/staffReviewService";
 import { staffReviewerWhere } from "@/domain/myco/staffReviewRoster";
+import { lockStaffLinkMint } from "@/domain/myco/staffLinkMintLock";
 import {
   DEFAULT_ENROLLMENT_HOURS,
   enrollmentClosesAtFrom,
@@ -142,6 +143,18 @@ export async function POST(request: NextRequest) {
   const token = createCatalogAccessToken();
 
   const record = await prisma.$transaction(async (tx) => {
+    // KEWL-2491 — the same partner-scoped advisory lock `scripts/mint-staff-link.lib.mjs`
+    // takes. Without it, this route and the script can both read "no active link" under
+    // Postgres Read Committed and both create one, leaving two live links for one partner.
+    // Taken before the supersede below so no other minter can slip between them.
+    //
+    // The script additionally compare-and-swaps its revoke against a token the operator
+    // inspected. This route deliberately does NOT: it has no inspected-token premise — it
+    // is an authenticated admin action whose contract is the unconditional supersede-all
+    // documented above, and making it conditional would let a forwarded old link survive
+    // a mint. Both entry points share the lock; only the script carries the CAS.
+    await lockStaffLinkMint(tx, { partnerId: partner.id });
+
     // Exactly one live staff link per partner: supersede every previous one, shared or
     // per-reviewer, so a forwarded old copy stops working the moment this is minted.
     await tx.catalogAccessToken.updateMany({
