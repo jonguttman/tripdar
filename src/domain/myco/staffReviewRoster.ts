@@ -10,6 +10,9 @@
  * unbound token now authorizes whoever the roster query returns, so the query IS the
  * access-control boundary. An `active: true` row created by any future employee import
  * would otherwise become a claimable identity on a link that is already in circulation.
+ *
+ * KEWL-2475 — the allowlist is now PER PARTNER SCOPE rather than one flat list, so a QA
+ * sandbox identity can exist without touching TMT's boundary. See below.
  */
 
 import type { Prisma } from "@prisma/client";
@@ -27,6 +30,65 @@ export const STAFF_REVIEWER_EMAILS = [
 export const STAFF_REVIEWER_COUNT = STAFF_REVIEWER_EMAILS.length;
 
 /**
+ * KEWL-2475 — the QA sandbox reviewer.
+ *
+ * Agents had no way to open the staff review screens on production without claiming one
+ * of the five unclaimed REAL reviewer identities, which permanently takes that person's
+ * name (KEWL-2474). This address is the fixture identity that closes that gap.
+ *
+ * It is deliberately NOT a seventh entry in `STAFF_REVIEWER_EMAILS`. A flat seventh entry
+ * would be safe only while no row carrying it exists under the TMT partner — an invariant
+ * nothing in the schema or the seeds enforces. Instead the QA address is admitted ONLY when
+ * the roster query is scoped to the QA partner, so TMT's allowlist is literally the same
+ * six addresses it was before this change and cannot be widened by it.
+ *
+ * `.invalid` is the RFC 2606 reserved TLD: this address can never be deliverable, and it
+ * cannot collide with a real `@themushroomtop.internal` row.
+ */
+export const QA_STAFF_REVIEWER_EMAIL = "qa-reviewer@tripdar-qa.invalid";
+
+/**
+ * Env var naming the QA sandbox partner. The QA identity is admitted in an environment
+ * ONLY if this is set there — absent, `approvedReviewerEmails()` is the six TMT addresses
+ * for every scope, exactly as before. That is the fail-closed direction: a missing var can
+ * only remove the QA identity, never grant one.
+ */
+export const QA_STAFF_REVIEW_PARTNER_ID_ENV = "QA_STAFF_REVIEW_PARTNER_ID";
+
+export function qaStaffReviewPartnerId(): string | null {
+  const configured = process.env[QA_STAFF_REVIEW_PARTNER_ID_ENV]?.trim();
+  return configured ? configured : null;
+}
+
+export function isQaStaffReviewPartner(partnerId: string | null | undefined): boolean {
+  const configured = qaStaffReviewPartnerId();
+  return Boolean(configured && partnerId && partnerId === configured);
+}
+
+/**
+ * The approved addresses for one partner scope.
+ *
+ * The QA scope REPLACES the list rather than extending it, in both directions:
+ *  - a TMT-scoped read never sees the QA address, so this change cannot widen TMT;
+ *  - a QA-scoped read never sees the six TMT addresses, so the QA link cannot be used to
+ *    claim a real reviewer's name even if a TMT-emailed row were somehow created under the
+ *    QA partner.
+ *
+ * A misconfigured env var pointing at the TMT partner id would therefore make TMT's roster
+ * query return nothing (`resolveReviewerRoster` → 410 `roster_empty`) — it fails closed and
+ * loudly, and can never hand a real name to a QA holder.
+ *
+ * An UNSCOPED read (no partnerId — the admin single-reviewer PIN reset) is the six TMT
+ * addresses only. The QA reviewer's PIN is resettable through the partner-scoped
+ * `reset_all` action instead; an unscoped id lookup is not a path into the QA scope.
+ */
+export function approvedReviewerEmails(partnerId?: string | null): string[] {
+  return isQaStaffReviewPartner(partnerId)
+    ? [QA_STAFF_REVIEWER_EMAIL]
+    : [...STAFF_REVIEWER_EMAILS];
+}
+
+/**
  * The single predicate every roster read must go through.
  *
  * Both narrowing arguments are optional so admin paths that key on an employee id
@@ -42,11 +104,16 @@ export function staffReviewerWhere(
     ...(partnerId ? { partnerId } : {}),
     active: true,
     optedOut: false,
-    email: { in: [...STAFF_REVIEWER_EMAILS] },
+    email: { in: approvedReviewerEmails(partnerId) },
   };
 }
 
-/** True when an address is on the approved roster. Case-insensitive; null is never on it. */
+/**
+ * True when an address is on the approved TMT roster. Case-insensitive; null is never on it.
+ *
+ * Deliberately TMT-only and partner-unaware: this asks "is this one of Jon's six", which is
+ * not a question the QA fixture identity should ever answer yes to.
+ */
 export function isStaffReviewerEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   const normalized = email.trim().toLowerCase();

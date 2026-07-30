@@ -168,6 +168,54 @@ For env vars, do not use `node --env-file=`; reuse the template's `loadDotenvFil
 helper. If a script needs enums, namespaces, or param properties, swap
 `--experimental-strip-types` for `--experimental-transform-types`.
 
+## Staff catalog review — verifying the screens (QA sandbox)
+
+The staff catalog review screens (`/staff/catalog/<token>`) sit behind a shared partner
+link plus a per-reviewer PIN. **Never claim one of The Mushroom Top's unclaimed reviewer
+identities to get in.** Setting a PIN for Adrienne, Clay, Dani, Devon or Eddie takes that
+person's name permanently until Jon clears it by hand, on a link real reviewers are using
+(KEWL-2474). Use the QA sandbox instead: its own partner, its own single reviewer, its own
+catalog fixtures, its own link — structurally unable to reach TMT's roster or link.
+
+**Getting the QA link and PIN — re-mint, don't look them up.** Only the token's sha256 hash
+and a hashed PIN are stored, so neither is recoverable from the database, and the
+`QA_STAFF_REVIEW_URL` / `QA_STAFF_REVIEW_PIN` Vercel env vars **read back as empty strings**
+(`vercel env pull` yields `""` on both Production and Preview — verified 2026-07-30, while
+every other var in the same pull carries a real value). Do not try to read them; do not
+store the link or PIN in a ticket comment either. The QA link is cheap to re-mint on an
+inactive partner with fixture-only data, so re-minting *is* the retrieval path:
+
+```bash
+cd ~/dev/tripdar && node --env-file=.env.local \
+  node_modules/vite-node/vite-node.mjs scripts/seed-qa-staff-review.mjs -- \
+  --remint --pin=NNNN
+```
+
+It revokes and re-mints **only the QA partner's** link and prints the URL once. Pass a
+4-digit `--pin` you choose so the value is known rather than generated-and-lost. The
+`--remint` flag is what handles a lost raw token; without it the script leaves the existing
+link alone. It is partner-scoped throughout and cannot touch TMT's link, roster or
+enrollment window.
+
+`QA_STAFF_REVIEW_PARTNER_ID` is different — it **is** read at runtime by
+`staffReviewRoster.ts` and must be set in the target environment, or the QA reviewer is
+admitted nowhere and the QA link fails closed with `410 roster_empty`. That is the first
+thing to check if the QA link 410s.
+
+Also:
+
+- Production is **`www.tripd.ar`** (apex 307s to www; `tripdar.com` is an unrelated parked
+  lander that 200s on every path).
+- A token page can return 200 with a shell for a well-formed but unknown token — check
+  `GET /api/myco/staff-review/<token>` or the rendered text, not the status code.
+- **Do not run `scripts/mint-staff-link.mjs`** for verification. It hardcodes the TMT
+  partner lookup and revokes the current live link before minting a new one, cutting off
+  reviewers mid-pilot.
+- The QA link's `enrollmentOpen` stays `true` even though its one identity already holds a
+  PIN — the seed writes `pinHash` directly and never calls
+  `closeEnrollmentIfRosterComplete`. Inert (enrollment is compare-and-set on
+  `pinHash IS NULL`). **Do not hand-flip the flag.**
+
 ## Deployment
 
 Vercel + Neon. Build: `prisma generate && next build`
