@@ -10,7 +10,13 @@
 
 import { describe, expect, it } from "vitest";
 
-import { PHOTO_CHECK_FIELD, REVIEWABLE_FIELD_SPECS } from "./catalogFieldSpec";
+import {
+  CATALOG_FIELD_SPECS,
+  PHOTO_CHECK_FIELD,
+  REVIEWABLE_FIELD_SPECS,
+} from "./catalogFieldSpec";
+import { evaluateListingGate, type GateFieldRule } from "./listingGate";
+import { type ReadinessInput } from "./readiness";
 import {
   COLLAPSED_BLOCKER_LIMIT,
   blockerInertReason,
@@ -276,5 +282,79 @@ describe("blockerInertReason", () => {
       expect(resolveBlockerTarget(entry, RENDERED_FIELDS)).toBeNull();
       expect(blockerInertReason(entry).length).toBeGreaterThan(0);
     }
+  });
+});
+
+/**
+ * The coupling guard.
+ *
+ * `readinessKeyFromLabel` parses `Missing ${key}` — a template that lives in
+ * `listingGate.ts`, in USER-VISIBLE copy that will get reworded. Every other readiness
+ * test in this file hand-writes that string, so all of them keep passing after a
+ * rewording while the resolver silently stops resolving anything: all 8 reachable
+ * readiness blockers turn inert and tell the reviewer "an admin has to fix it in the
+ * catalog" about a field they are looking straight at. Green CI, wrong screen.
+ *
+ * So this drives the REAL gate and asserts each blocker it emits still finds its card.
+ * Reword the label, rename a `readinessKey`, or drop a rule from the rendered set, and
+ * this fails here instead of in front of a reviewer.
+ */
+describe("readiness labels stay routable against the real gate", () => {
+  /** Nothing supplied — so `computeReadiness` reports every key missing. */
+  const EMPTY_READINESS: ReadinessInput = {
+    format: "",
+    brand: null,
+    brandId: null,
+    productUnitMg: null,
+    unitsPerPack: null,
+    totalDoseMg: null,
+    onsetMinutes: null,
+    durationMinutes: null,
+    brandMicroUnits: null,
+    brandMiniUnits: null,
+    brandMacroUnits: null,
+    brandDoseTiers: null,
+    photoUrl: null,
+    photoCount: 0,
+    vibeScores: null,
+    strengthOffset: null,
+  };
+
+  /** The full seeded rule set, Tier D included — that is what drives gate exclusion. */
+  const GATE_RULES: GateFieldRule[] = CATALOG_FIELD_SPECS.map((spec) => ({
+    fieldName: spec.fieldName,
+    tier: spec.tier,
+    gateRequired: spec.gateRequired,
+    readinessKey: spec.readinessKey,
+    label: spec.label,
+    gateSatisfyingValues: spec.gateSatisfyingValues,
+  }));
+
+  const readinessBlockers = evaluateListingGate({
+    readiness: EMPTY_READINESS,
+    rules: GATE_RULES,
+    fieldStates: {},
+    activeCompound: "psilocybin",
+    researchOnly: false,
+    override: null,
+  }).blockers.filter((entry) => entry.kind === "readiness");
+
+  it("emits the 8 gate-relevant readiness keys and no Tier-D ones", () => {
+    expect(readinessBlockers).toHaveLength(8);
+  });
+
+  it("routes every readiness blocker the gate actually emits to a rendered card", () => {
+    const unroutable = readinessBlockers.filter(
+      (entry) => resolveBlockerTarget(entry, RENDERED_FIELDS) === null
+    );
+
+    // Named rather than counted so a failure says WHICH label stopped parsing.
+    expect(unroutable.map((entry) => entry.label)).toEqual([]);
+  });
+
+  it("sends the photo readiness blocker to the photo-confirmation card", () => {
+    const photo = readinessBlockers.find((entry) => entry.label.includes("photo"));
+
+    expect(resolveBlockerTarget(photo!, RENDERED_FIELDS)?.fieldName).toBe(PHOTO_CHECK_FIELD);
   });
 });
