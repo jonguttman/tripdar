@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.15.1] - 2026-07-29
+
+### Fixed
+- **Staff-link mints are now serialised across both entry points** (KEWL-2491): `scripts/mint-staff-link.mjs` and `POST /api/admin/myco/staff-links` both mint a partner's shared `staff_review` link, and nothing serialised them against each other — two concurrent mints could each read "no active link" and each create one, leaving two live doors into the review surface. Both paths now take the same partner+purpose `pg_advisory_xact_lock` through one shared helper (`src/domain/myco/staffLinkMintLock.ts`), inside their transaction and before the active-token read. The lock is transaction-scoped, so a refusal that throws cannot leak it onto a pooled connection. No schema change: an advisory lock enforces the invariant without DDL against live data that may already violate it.
+- **`--revoke-existing` can no longer revoke a link the operator never saw** (KEWL-2491): the flag consents to replacing *the inspected* link, not whatever is live when the transaction runs. If a concurrent admin-route mint replaced token A with token B in between, the old unconditioned `updateMany` revoked B and reported success as though it had replaced A. The script now captures the inspected token id before the transaction and refuses, writing nothing, if the live id differs — including the case where nothing was inspected and a token appeared. The revoke `where` carries that id alongside the existing partner/purpose/status predicate, so the compare-and-swap is added without weakening the KEWL-2480 blast-radius scope. The admin route deliberately keeps its unconditional supersede-all: it has no inspected-token premise, and conditioning it would let a forwarded old link survive a re-mint.
+
+### Changed
+- Corrected a stale `// Note: SQLite does not support enums` comment at the top of `prisma/schema.prisma` (KEWL-2491). This datasource is PostgreSQL/Neon and has been for some time; the leftover note read as a statement about the current database and had already misled one concurrency fix into assuming SQLite/Turso single-writer semantics that do not apply here.
+
 ## [1.15.0] - 2026-07-29
 
 ### Added
