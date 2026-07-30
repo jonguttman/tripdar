@@ -156,16 +156,46 @@ node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types s
 ```
 
 Copy `scripts/check-myco-strain-slug-drift.mts` as the template (npm script:
-`npm run check:myco-strain-drift`). Three rules that make it work:
+`npm run check:myco-strain-drift`). The rules that make it work:
 
 1. `import { PrismaClient } from "@prisma/client"` — resolves normally.
 2. Import project source with a **relative path and an explicit `.ts` extension**:
    `import { normalizeStrainSlug } from "../src/domain/strain/data.ts"`.
+
+   **This only works if the module you import is a *leaf*** — i.e. it has no relative
+   *value* imports of its own (`import type` is fine, type-stripping erases it). The
+   `.ts` extension you write fixes *your* import; it does nothing for the imports
+   *inside* that module, and all **223 relative imports under `src/` are extensionless**
+   — that is the declared project convention (`tsconfig.json`: `moduleResolution:
+   "bundler"`, `allowImportingTsExtensions: true`). Node's ESM resolver never adds `.ts`,
+   so a non-leaf chain dies with `ERR_MODULE_NOT_FOUND` on a path that looks like a
+   missing file but is not. `src/domain/strain/data.ts` happens to be a leaf; e.g.
+   `reviewerEnrollment.ts` and `staffFieldVerification.ts` are not.
+   **Rule 2b — non-leaf chain → run the script through vite-node**, which applies the
+   project's own resolver:
+
+   ```bash
+   node --env-file=.env.local node_modules/vite-node/vite-node.mjs scripts/<name>.mjs -- [args]
+   ```
+
+   The `--` before the script's own arguments is required; vite-node consumes everything
+   before it. vite-node is already in `node_modules` — do not install anything.
+   Exemplar: `scripts/mint-staff-link.mjs` (also `scripts/seed-qa-staff-review.mjs`,
+   which is on the unmerged `kewl2475-qa-staff-review-sandbox` branch — not on `main`
+   yet, so don't grep for it here and conclude it is missing).
+
+   **Do not resolve this by adding `.ts` extensions to imports inside `src/`.** It would
+   make those files deviate from a 223/223 convention `tsconfig.json` explicitly
+   declares, and it only fixes today's import graph — the next script hits the same wall
+   one module over. (KEWL-2480; registry entry KEWL-2411.)
 3. The `@/*` tsconfig alias does **not** resolve — strip-types does no tsconfig path
    mapping. `import ... from "@/domain/strain/data.ts"` fails `ERR_MODULE_NOT_FOUND`.
+   Under vite-node it *does* resolve, via `vite.config.ts`'s `resolve.alias`.
 
-For env vars, do not use `node --env-file=`; reuse the template's `loadDotenvFile()`
-helper. If a script needs enums, namespaces, or param properties, swap
+For env vars in the **strip-types** form, do not use `node --env-file=`; reuse the
+template's `loadDotenvFile()` helper. That caveat does not apply to rule 2b: under
+vite-node, `node` loads `--env-file=.env.local` before vite-node starts, so it works
+(verified 2026-07-29, KEWL-2480). If a script needs enums, namespaces, or param properties, swap
 `--experimental-strip-types` for `--experimental-transform-types`.
 
 ## Staff catalog review — verifying the screens (QA sandbox)
