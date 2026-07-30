@@ -1,11 +1,27 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  QA_STAFF_REVIEWER_EMAIL,
+  QA_STAFF_REVIEW_PARTNER_ID_ENV,
   STAFF_REVIEWER_COUNT,
   STAFF_REVIEWER_EMAILS,
+  approvedReviewerEmails,
+  isQaStaffReviewPartner,
   isStaffReviewerEmail,
   staffReviewerWhere,
 } from "./staffReviewRoster";
+
+const TMT_PARTNER_ID = "partner-tmt";
+const QA_PARTNER_ID = "partner-qa-sandbox";
+
+/** The QA identity is env-gated, so every test that needs it opts in explicitly. */
+function seedQaIdentity(partnerId = QA_PARTNER_ID) {
+  process.env[QA_STAFF_REVIEW_PARTNER_ID_ENV] = partnerId;
+}
+
+afterEach(() => {
+  delete process.env[QA_STAFF_REVIEW_PARTNER_ID_ENV];
+});
 
 /**
  * KEWL-2402 / KEWL-2379. Under Jon's shared unbound link, the roster query is the
@@ -67,5 +83,81 @@ describe("staff reviewer allowlist", () => {
     expect(isStaffReviewerEmail(null)).toBe(false);
     expect(isStaffReviewerEmail(undefined)).toBe(false);
     expect(isStaffReviewerEmail("")).toBe(false);
+  });
+});
+
+/**
+ * KEWL-2475. A QA sandbox reviewer exists so agents can open the staff screens on prod
+ * without claiming a real unclaimed name (KEWL-2474). These tests are the reason it is
+ * partner-scoped rather than a seventh entry in the array: they must hold WITH the QA
+ * identity live, which is exactly the condition a flat seventh entry could not survive.
+ */
+describe("QA sandbox reviewer scoping (KEWL-2475)", () => {
+  it("does not widen the TMT allowlist, even with the QA identity seeded", () => {
+    seedQaIdentity();
+
+    // The literal boundary: still the same six addresses, in the same array.
+    expect(STAFF_REVIEWER_COUNT).toBe(6);
+    expect(STAFF_REVIEWER_EMAILS).not.toContain(QA_STAFF_REVIEWER_EMAIL);
+
+    // And the TMT-scoped QUERY — which is what actually authorizes anyone holding the
+    // shared TMT link — is exactly those six and nothing else.
+    expect(approvedReviewerEmails(TMT_PARTNER_ID).sort()).toEqual([
+      "adrienne@themushroomtop.internal",
+      "audrey@themushroomtop.internal",
+      "clay@themushroomtop.internal",
+      "dani@themushroomtop.internal",
+      "devon@themushroomtop.internal",
+      "eddie@themushroomtop.internal",
+    ]);
+    expect(staffReviewerWhere(TMT_PARTNER_ID).email).toEqual({
+      in: [...STAFF_REVIEWER_EMAILS],
+    });
+  });
+
+  it("admits the QA address only under the QA partner scope", () => {
+    seedQaIdentity();
+
+    expect(staffReviewerWhere(QA_PARTNER_ID).email).toEqual({ in: [QA_STAFF_REVIEWER_EMAIL] });
+    expect(isQaStaffReviewPartner(QA_PARTNER_ID)).toBe(true);
+    expect(isQaStaffReviewPartner(TMT_PARTNER_ID)).toBe(false);
+    expect(isQaStaffReviewPartner(null)).toBe(false);
+  });
+
+  it("never lets a QA-scoped read reach a real reviewer's name", () => {
+    seedQaIdentity();
+
+    // Replacement, not extension. Even a TMT-emailed row created under the QA partner
+    // could not be claimed through the QA link.
+    for (const approved of STAFF_REVIEWER_EMAILS) {
+      expect(approvedReviewerEmails(QA_PARTNER_ID)).not.toContain(approved);
+    }
+  });
+
+  it("admits the QA address nowhere when the env var is unset", () => {
+    // Local dev and any preview without the var: the QA identity simply does not exist.
+    expect(approvedReviewerEmails(QA_PARTNER_ID)).toEqual([...STAFF_REVIEWER_EMAILS]);
+    expect(approvedReviewerEmails(undefined)).toEqual([...STAFF_REVIEWER_EMAILS]);
+    expect(isQaStaffReviewPartner(QA_PARTNER_ID)).toBe(false);
+  });
+
+  it("keeps the unscoped admin read on the six TMT addresses", () => {
+    seedQaIdentity();
+
+    // The single-reviewer PIN reset passes an id with no partner. That must not become a
+    // way into the QA scope — nor a way to widen TMT.
+    const where = staffReviewerWhere(undefined, "employee-anything");
+    expect(where.email).toEqual({ in: [...STAFF_REVIEWER_EMAILS] });
+  });
+
+  it("fails closed if the env var is misconfigured onto the TMT partner", () => {
+    // Wrong direction of failure matters: pointing QA at TMT must lock the real roster
+    // OUT (410 roster_empty upstream), never hand a real name to a QA link holder.
+    seedQaIdentity(TMT_PARTNER_ID);
+
+    expect(approvedReviewerEmails(TMT_PARTNER_ID)).toEqual([QA_STAFF_REVIEWER_EMAIL]);
+    expect(approvedReviewerEmails(TMT_PARTNER_ID)).not.toContain(
+      "audrey@themushroomtop.internal"
+    );
   });
 });

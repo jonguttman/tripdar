@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.0] - 2026-07-29
+
+### Added
+- **QA staff-review sandbox** (KEWL-2475): agents can now open the staff catalog review screens on production without claiming one of the five unclaimed *real* reviewer identities, which permanently took that person's name until Jon cleared it by hand (gap: KEWL-2474). `scripts/seed-qa-staff-review.mjs` seeds a parallel sandbox — its own inactive partner on a non-obvious subdomain, one fixture reviewer, its own staff link and PIN, and a catalog covering a clean listable product plus one product per `ListingBlockerKind` (readiness / unverified field / wrong-photo answer / disputed field / unknown active compound / research-only) and all four urgency tiers. The QA partner is created `active: false`, so `/api/myco/recommend` (which resolves a store by `subdomain` + `active: true`) cannot reach it; no vibe profile or confirmed strength offset is seeded either, so `computeReadiness()` would still reject every QA row even if the partner were activated. Nothing about The Mushroom Top is touched — not its roster, its live shared link, its enrollment window, or any reviewer's PIN.
+
+### Changed
+- **Staff reviewer allowlist is now per-partner-scope** (KEWL-2475): `staffReviewerWhere()` resolves its email allowlist through `approvedReviewerEmails(partnerId)` instead of one flat array. `STAFF_REVIEWER_EMAILS` remains literally the same six Mushroom Top addresses, and a TMT-scoped roster query returns exactly those six. The QA fixture address is admitted **only** under the QA partner id (named by the `QA_STAFF_REVIEW_PARTNER_ID` env var), and it *replaces* rather than extends the list in both directions — so this change cannot widen TMT's boundary, and a QA link cannot reach a real reviewer's name. With the env var unset the QA identity is admitted nowhere, and a misconfiguration pointing it at the TMT partner locks the real roster out (410 `roster_empty`) rather than handing a real name to a QA link holder. Under a shared unbound token this query *is* the access control, so the boundary is asserted by test rather than left to an unenforced invariant.
+
 ## [1.14.0] - 2026-07-28
 
 ### Fixed
