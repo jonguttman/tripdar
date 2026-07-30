@@ -9,9 +9,9 @@
  * top-level-await script that would run the transaction on import. So the decision logic
  * lives here, behind an injected `prisma`, and `mint-staff-link.mjs` is a thin wrapper.
  *
- * See `mint-staff-link.lib.test.mjs` for the four cases that pin the blast radius:
- * no partner, refuse-on-active-token, partner-scoped revoke `where`, and `--force`
- * not implying the revoke.
+ * See `mint-staff-link.lib.test.mjs` for the five cases that pin the blast radius:
+ * no partner, ambiguous partner, refuse-on-active-token, partner-scoped revoke `where`,
+ * and `--force` not implying the revoke.
  */
 
 import {
@@ -87,9 +87,47 @@ export function parseMintArgs(argv) {
 /**
  * Accepts an id or an exact name so the operator can paste whichever they have, without
  * either form silently falling back to a hardcoded partner.
+ *
+ * This predicate is deliberately allowed to match more than one row: `Partner.name` carries
+ * no `@unique` in `prisma/schema.prisma` (only `apiKeyHash` does), so two partners may share
+ * a name and one partner's `name` may equal another's `id`. Resolving that with `findFirst`
+ * would pick arbitrarily — and on a revoke-capable script an arbitrary pick is a wrong-target
+ * write, not a near miss. `resolvePartner` below refuses instead of guessing (KEWL-2486).
  */
 export function partnerSelectorWhere(selector) {
   return { OR: [{ id: selector }, { name: selector }] };
+}
+
+/**
+ * Resolve `--partner` to exactly one partner, or refuse having written nothing.
+ *
+ * `take: 2` is all the guard needs: one row is the happy path, two is already proof of
+ * ambiguity. The refusal therefore reports "at least" the rows it fetched rather than
+ * claiming to have enumerated every match — the operator's next step is the same either way
+ * (re-run with the id), and paging the full set to phrase the message differently would be
+ * the only reason to read more.
+ */
+export async function resolvePartner({ prisma, selector }) {
+  const matches = await prisma.partner.findMany({
+    where: partnerSelectorWhere(selector),
+    take: 2,
+    select: { id: true, name: true },
+  });
+
+  if (matches.length === 0) throw new MintUsageError(`Partner not found: ${selector}`);
+
+  if (matches.length > 1) {
+    const listed = matches
+      .map((match) => `  id=${match.id} name=${JSON.stringify(match.name)}`)
+      .join("\n");
+    throw new MintUsageError(
+      `Ambiguous --partner=${selector} — it matched at least ${matches.length} partners:\n${listed}\n` +
+        "Partner names are not unique, and a partner's name may equal another partner's id. " +
+        "Re-run with --partner=<id> to name exactly one. Nothing was written."
+    );
+  }
+
+  return matches[0];
 }
 
 /**
@@ -129,11 +167,7 @@ export function planTokenAction({ activeToken, revokeExisting }) {
 export async function runMintStaffLink({ argv, prisma, log = () => {}, warn = () => {} }) {
   const args = parseMintArgs(argv);
 
-  const partner = await prisma.partner.findFirst({
-    where: partnerSelectorWhere(args.partner),
-    select: { id: true, name: true },
-  });
-  if (!partner) throw new MintUsageError(`Partner not found: ${args.partner}`);
+  const partner = await resolvePartner({ prisma, selector: args.partner });
 
   const reviewers = await prisma.mycoEmployee.findMany({
     where: staffReviewerWhere(partner.id),

@@ -3,8 +3,14 @@
  *
  * The bug these cover: the script hardcoded `name: "The Mushroom Top"` and revoked EVERY
  * active staff-review token for that partner before minting, with no partner argument at
- * all. The third case below — asserting the revoke `where` object carries the partner id
- * that was actually passed in — is the one that would have caught it.
+ * all. The revoke-scope case below — asserting the revoke `where` object carries the
+ * partner id that was actually passed in — is the one that would have caught it.
+ *
+ * KEWL-2486 adds the ambiguity block: `Partner.name` is not unique, so a selector can match
+ * two partners, and the old `findFirst` would have picked one arbitrarily and revoked its
+ * live link. Those cases assert the refusal happens at the resolution read, before anything
+ * downstream of it runs. No production data ever had a collision — the guard exists because
+ * the day one appears is a data event no test run would catch.
  *
  * Every case runs against a recording prisma double. Nothing here touches a database, and
  * `mint-staff-link.mjs` itself is deliberately never imported (it is a top-level-await
@@ -28,9 +34,16 @@ const OTHER_PARTNER_ID = "partner_tmt_live";
  * Records every call. Any model/method not configured below throws, so a code path that
  * reaches an unexpected table fails the test rather than silently no-opping.
  */
-function makePrisma({ partner = { id: PARTNER_ID, name: "QA Partner" }, reviewers, activeToken = null } = {}) {
+function makePrisma({
+  partner = { id: PARTNER_ID, name: "QA Partner" },
+  /** Overrides `partner` when a case needs 0 or >1 rows back from the selector. */
+  partners,
+  reviewers,
+  activeToken = null,
+} = {}) {
   const calls = [];
   const record = (method, args) => calls.push({ method, args });
+  const partnerRows = partners ?? (partner ? [partner] : []);
 
   const tokenModel = {
     findFirst: async (args) => {
@@ -54,9 +67,11 @@ function makePrisma({ partner = { id: PARTNER_ID, name: "QA Partner" }, reviewer
   const prisma = {
     calls,
     partner: {
-      findFirst: async (args) => {
-        record("partner.findFirst", args);
-        return partner;
+      // Honours `take` the way Prisma does, so the guard's `take: 2` is exercised rather
+      // than assumed.
+      findMany: async (args) => {
+        record("partner.findMany", args);
+        return partnerRows.slice(0, args.take ?? partnerRows.length);
       },
     },
     mycoEmployee: {
@@ -107,6 +122,97 @@ describe("mint-staff-link — --partner is required", () => {
     expect(args.partner).toBe(PARTNER_ID);
     expect(args.revokeExisting).toBe(false);
     expect(args.force).toBe(false);
+  });
+});
+
+describe("mint-staff-link — refuses an ambiguous partner instead of guessing", () => {
+  const DUPLICATE_NAME = "The Mushroom Top";
+
+  it("refuses when the selector matches two partners sharing a name, writing nothing", async () => {
+    const prisma = makePrisma({
+      partners: [
+        { id: "partner_tmt_live", name: DUPLICATE_NAME },
+        { id: "partner_tmt_dupe", name: DUPLICATE_NAME },
+      ],
+    });
+
+    await expect(
+      runMintStaffLink({ argv: [`--partner=${DUPLICATE_NAME}`, "--revoke-existing"], prisma })
+    ).rejects.toThrow(/Ambiguous --partner/);
+
+    // Not just "no write": the run stopped at the resolution read and never looked at the
+    // roster or the token table, so no branch downstream of it could have fired.
+    expect(prisma.calls.map((call) => call.method)).toEqual(["partner.findMany"]);
+    expect(writes(prisma)).toEqual([]);
+  });
+
+  it("refuses when one partner's name equals another partner's id, writing nothing", async () => {
+    // Legal in the schema: `Partner.name` has no @unique, so nothing stops a name from
+    // being spelled exactly like some other partner's id.
+    const COLLIDING = "partner_tmt_live";
+    const prisma = makePrisma({
+      partners: [
+        { id: COLLIDING, name: "The Mushroom Top" },
+        { id: "partner_qa_0001", name: COLLIDING },
+      ],
+    });
+
+    await expect(runMintStaffLink({ argv: [`--partner=${COLLIDING}`], prisma })).rejects.toThrow(
+      /Ambiguous --partner/
+    );
+    expect(prisma.calls.map((call) => call.method)).toEqual(["partner.findMany"]);
+    expect(writes(prisma)).toEqual([]);
+  });
+
+  it("names every match it saw so the operator can pick the id", async () => {
+    const prisma = makePrisma({
+      partners: [
+        { id: "partner_tmt_live", name: DUPLICATE_NAME },
+        { id: "partner_tmt_dupe", name: DUPLICATE_NAME },
+      ],
+    });
+
+    await expect(runMintStaffLink({ argv: [`--partner=${DUPLICATE_NAME}`], prisma })).rejects.toThrow(
+      /partner_tmt_live[\s\S]*partner_tmt_dupe[\s\S]*--partner=<id>/
+    );
+    // Two rows is already proof of ambiguity, so the guard reads no further than that.
+    expect(prisma.calls[0].args.take).toBe(2);
+  });
+
+  it("refuses with the not-found message when the selector matches nothing", async () => {
+    const prisma = makePrisma({ partners: [] });
+
+    await expect(runMintStaffLink({ argv: ["--partner=nope"], prisma })).rejects.toThrow(
+      /Partner not found: nope/
+    );
+    expect(writes(prisma)).toEqual([]);
+  });
+
+  it("still resolves and proceeds on exactly one match", async () => {
+    // Guards the guard: refusing on >1 must not have made the ordinary single-match path
+    // refuse too.
+    const prisma = makePrisma({ partners: [{ id: PARTNER_ID, name: "QA Partner" }] });
+
+    const result = await runMintStaffLink({
+      argv: [`--partner=${PARTNER_ID}`, "https://www.tripd.ar"],
+      prisma,
+    });
+
+    expect(result.id).toBe("token_new");
+    expect(result.partner).toEqual({ id: PARTNER_ID, name: "QA Partner" });
+    const created = prisma.calls.find((call) => call.method === "catalogAccessToken.create");
+    expect(created.args.data.partnerId).toBe(PARTNER_ID);
+  });
+
+  it("resolves by exact name as well as by id", async () => {
+    const prisma = makePrisma({ partners: [{ id: PARTNER_ID, name: "QA Partner" }] });
+
+    const result = await runMintStaffLink({ argv: ["--partner=QA Partner"], prisma });
+
+    expect(result.partner.id).toBe(PARTNER_ID);
+    expect(prisma.calls[0].args.where).toEqual({
+      OR: [{ id: "QA Partner" }, { name: "QA Partner" }],
+    });
   });
 });
 

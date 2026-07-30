@@ -11,7 +11,10 @@
  *   --partner=<name|id>   REQUIRED. There is no default partner. It used to resolve
  *                         "The Mushroom Top" implicitly, which meant any run — including
  *                         one pasted out of this header to try the command — pointed at
- *                         the live pilot (KEWL-2480).
+ *                         the live pilot (KEWL-2480). Partner names are not unique, so if
+ *                         the value matches more than one partner the script REFUSES,
+ *                         prints the matches, and asks you to re-run with the id — it does
+ *                         not pick one for you (KEWL-2486).
  *
  *   --revoke-existing     DANGEROUS. Revokes the partner's current active staff-review
  *                         link before minting the replacement. Everyone holding the old
