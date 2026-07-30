@@ -150,6 +150,9 @@ export async function GET(
         helpText: rule.helpText,
         tier: rule.tier,
         inputType: rule.inputType,
+        // KEWL-2473: a `readiness` blocker carries no fieldName, so the client needs the
+        // rule's readiness key to route "Missing mg per unit" to the card that supplies it.
+        readinessKey: rule.readinessKey,
         allowsConfirmedAbsent: rule.allowsConfirmedAbsent,
         requiredConfirmations: state.requiredConfirmations,
         confirmationsCount: state.confirmationsCount,

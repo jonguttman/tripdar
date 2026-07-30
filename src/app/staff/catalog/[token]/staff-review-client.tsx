@@ -9,7 +9,15 @@
  * waits for a "submit the whole product" step and nothing is ever lost mid-product.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+
+import {
+  blockerInertReason,
+  blockerKey,
+  blockerPanelModel,
+  fieldAnchorId,
+  resolveBlockerTarget,
+} from "@/domain/myco/listingBlockerRouting";
 
 /* ------------------------------------------------------------------ types --- */
 
@@ -74,6 +82,11 @@ interface DetailField {
   helpText: string | null;
   tier: FieldTier;
   inputType: InputType;
+  /**
+   * The `computeReadiness()` key this field supplies, when it supplies one. This is how a
+   * `readiness` blocker (which carries no fieldName) finds its destination — KEWL-2473.
+   */
+  readinessKey?: string | null;
   allowsConfirmedAbsent: boolean;
   requiredConfirmations: number;
   confirmationsCount: number;
@@ -218,6 +231,30 @@ function fieldStateStyle(state: FieldStateName): string {
   if (state === "confirmed") return "border-emerald-300 bg-emerald-50 text-emerald-800";
   if (state === "needs_re_review") return "border-amber-300 bg-amber-50 text-amber-900";
   return "border-neutral-200 bg-neutral-50 text-neutral-600";
+}
+
+/**
+ * Applied to every card a blocker can send the reviewer to (KEWL-2473).
+ *
+ * `scroll-mb-32` is the load-bearing part: the status bar is `fixed inset-x-0 bottom-0`
+ * and neither `scrollIntoView` nor the browser's own focus scroll knows a fixed overlay
+ * is there, so on a 375px viewport the control we just focused lands underneath it.
+ * Scroll margin is what reserves the clearance; `focus-visible` keeps the ring, and
+ * `outline-none` only suppresses the always-on ring a `tabIndex={-1}` container gets.
+ */
+const FOCUS_TARGET_CLASS =
+  "scroll-mt-4 scroll-mb-32 outline-none focus-visible:ring-2 focus-visible:ring-neutral-950 focus-visible:ring-offset-2";
+
+/**
+ * Bring a blocker's destination into view and put the caret on something real.
+ *
+ * Focus, not scroll, is the accessible part — `scrollIntoView` alone moves the viewport
+ * and leaves a screen reader exactly where it was. `preventScroll` keeps the browser's
+ * own focus scroll from fighting the centred one we just asked for.
+ */
+function revealAndFocus(group: HTMLElement | null, focusTarget: HTMLElement | null): void {
+  group?.scrollIntoView({ block: "center", behavior: "smooth" });
+  focusTarget?.focus({ preventScroll: true });
 }
 
 /* ---------------------------------------------------------- root component --- */
@@ -854,6 +891,17 @@ function DetailScreen({
   onSubmitAnswer: (productId: string, answer: AnswerPayload) => Promise<string | null>;
   onSubmitNote: (productId: string, note: string) => Promise<string | null>;
 }) {
+  // A blocker tap names a field; the nonce is what makes tapping the SAME blocker twice
+  // re-fire the scroll+focus instead of being swallowed as an unchanged prop.
+  const [focusRequest, setFocusRequest] = useState<{ fieldName: string; nonce: number } | null>(
+    null
+  );
+  const requestFieldFocus = useCallback((fieldName: string) => {
+    setFocusRequest((previous) => ({ fieldName, nonce: (previous?.nonce ?? 0) + 1 }));
+  }, []);
+  const focusSignalFor = (fieldName: string) =>
+    focusRequest && focusRequest.fieldName === fieldName ? focusRequest.nonce : null;
+
   const backLink = (
     <button
       type="button"
@@ -921,11 +969,19 @@ function DetailScreen({
         </p>
       ) : null}
 
+      {/*
+        Directly under the photo and above the review form (KEWL-2473): the reviewer sees
+        what is standing in the way before they start answering, and each row takes them
+        to the control that clears it.
+      */}
+      <ListingBlockerPanel gate={detail.gate} fields={detail.fields} onNavigate={requestFieldFocus} />
+
       {photoCheck ? (
         <PhotoCheckCard
           field={photoCheck}
           productId={detail.product.id}
           onSubmitAnswer={onSubmitAnswer}
+          focusSignal={focusSignalFor(photoCheck.fieldName)}
         />
       ) : null}
 
@@ -936,6 +992,7 @@ function DetailScreen({
             field={field}
             productId={detail.product.id}
             onSubmitAnswer={onSubmitAnswer}
+            focusSignal={focusSignalFor(field.fieldName)}
           />
         ))}
       </section>
@@ -945,23 +1002,6 @@ function DetailScreen({
         notes={detail.notes}
         onSubmitNote={onSubmitNote}
       />
-
-      <section className="mt-6 rounded-lg border border-neutral-200 p-4">
-        <h2 className="text-sm font-semibold text-neutral-900">What's blocking this listing</h2>
-        <p className="mt-1 text-sm text-neutral-600">
-          {detail.gate.verifiedFieldCount} of {detail.gate.requiredFieldCount} required fields
-          verified.
-        </p>
-        {detail.gate.blockers.length === 0 ? (
-          <p className="mt-2 text-sm text-emerald-700">Nothing blocking it.</p>
-        ) : (
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-700">
-            {detail.gate.blockers.map((blocker, index) => (
-              <li key={`${blocker.kind}-${blocker.fieldName ?? index}`}>{blocker.label}</li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 p-3">
@@ -988,6 +1028,80 @@ function DetailScreen({
         </div>
       </div>
     </main>
+  );
+}
+
+/* -------------------------------------------------------- blocker panel --- */
+
+/**
+ * KEWL-2473 — "What's blocking this listing", moved under the photo and made navigable.
+ *
+ * Every row is either a real destination or plainly inert with a reason. `fieldName` is
+ * never trusted as a destination; see `listingBlockerRouting.ts` for why.
+ */
+export function ListingBlockerPanel({
+  gate,
+  fields,
+  onNavigate,
+}: {
+  gate: DetailData["gate"];
+  fields: readonly DetailField[];
+  onNavigate: (fieldName: string) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
+
+  // Nothing blocking it — say nothing. An empty panel in this position would push the
+  // review form down the page to tell the reviewer there is no news.
+  if (gate.blockers.length === 0) return null;
+
+  const { visible, hiddenCount, canExpand } = blockerPanelModel(gate.blockers, expanded);
+
+  return (
+    <section className="mt-4 rounded-lg border border-neutral-200 p-4">
+      <h2 className="text-sm font-semibold text-neutral-900">What's blocking this listing</h2>
+      <p className="mt-1 text-sm text-neutral-600">
+        {gate.verifiedFieldCount} of {gate.requiredFieldCount} required fields verified.
+      </p>
+
+      <ul id={listId} className="mt-2 space-y-1 text-sm text-neutral-700">
+        {visible.map((blocker, index) => {
+          const target = resolveBlockerTarget(blocker, fields);
+          return (
+            <li key={blockerKey(blocker, index)}>
+              {target ? (
+                <button
+                  type="button"
+                  onClick={() => onNavigate(target.fieldName)}
+                  className="min-h-[44px] w-full text-left font-medium text-neutral-900 underline underline-offset-2"
+                >
+                  {blocker.label}
+                </button>
+              ) : (
+                <div className="py-2">
+                  <span className="block">{blocker.label}</span>
+                  <span className="mt-0.5 block text-xs text-neutral-500">
+                    {blockerInertReason(blocker)}
+                  </span>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {canExpand ? (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={listId}
+          onClick={() => setExpanded((value) => !value)}
+          className="mt-2 min-h-[44px] w-full rounded-lg border border-neutral-300 px-3 text-sm font-medium text-neutral-900"
+        >
+          {expanded ? `Show fewer` : `Show ${hiddenCount} more`}
+        </button>
+      ) : null}
+    </section>
   );
 }
 
@@ -1018,14 +1132,25 @@ function PhotoCheckCard({
   field,
   productId,
   onSubmitAnswer,
+  focusSignal,
 }: {
   field: DetailField;
   productId: string;
   onSubmitAnswer: (productId: string, answer: AnswerPayload) => Promise<string | null>;
+  /** Bumped nonce when a blocker sends the reviewer here; null when it did not. */
+  focusSignal: number | null;
 }) {
   const [saving, setSaving] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const groupRef = useRef<HTMLElement>(null);
+
+  // There is no editor to open here — the three answers are always on screen — so the
+  // group itself is the focus point.
+  useEffect(() => {
+    if (focusSignal === null) return;
+    revealAndFocus(groupRef.current, groupRef.current);
+  }, [focusSignal]);
 
   async function answer(action: ReviewAction, value?: string, key?: string) {
     setSaving(key ?? action);
@@ -1049,8 +1174,16 @@ function PhotoCheckCard({
   const current = formatValue(field.currentValue);
 
   return (
-    <section className="mt-4 rounded-lg border-2 border-neutral-950 p-4">
-      <h2 className="text-base font-semibold text-neutral-950">{field.label}</h2>
+    <section
+      ref={groupRef}
+      id={fieldAnchorId(field.fieldName)}
+      tabIndex={-1}
+      aria-labelledby={`${fieldAnchorId(field.fieldName)}-label`}
+      className={`mt-4 rounded-lg border-2 border-neutral-950 p-4 ${FOCUS_TARGET_CLASS}`}
+    >
+      <h2 id={`${fieldAnchorId(field.fieldName)}-label`} className="text-base font-semibold text-neutral-950">
+        {field.label}
+      </h2>
       {field.helpText ? <p className="mt-1 text-sm text-neutral-600">{field.helpText}</p> : null}
 
       <div className="mt-3 grid grid-cols-3 gap-2">
@@ -1087,10 +1220,13 @@ function FieldCard({
   field,
   productId,
   onSubmitAnswer,
+  focusSignal,
 }: {
   field: DetailField;
   productId: string;
   onSubmitAnswer: (productId: string, answer: AnswerPayload) => Promise<string | null>;
+  /** Bumped nonce when a blocker sends the reviewer here; null when it did not. */
+  focusSignal: number | null;
 }) {
   const [source, setSource] = useState<SourceValue>("packaging");
   const [editing, setEditing] = useState<"correct" | "fill" | null>(null);
@@ -1098,10 +1234,31 @@ function FieldCard({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [pendingFocus, setPendingFocus] = useState(false);
 
   const current = formatValue(field.currentValue);
   const filled = hasValue(field.currentValue);
   const yourAnswer = formatValue(field.yourAnswer);
+
+  // Arriving from a blocker has to leave the reviewer typing, not just looking at the
+  // card — so open the editor first, then focus in the effect below once its input exists.
+  // An editor already open (with a draft in it) is left alone.
+  useEffect(() => {
+    if (focusSignal === null) return;
+    setEditing((previous) => previous ?? (filled ? "correct" : "fill"));
+    setPendingFocus(true);
+    // `filled` is read for the initial mode only; re-running on it would re-open a
+    // reviewer-closed editor when a save changes the field's value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusSignal]);
+
+  useEffect(() => {
+    if (!pendingFocus) return;
+    setPendingFocus(false);
+    revealAndFocus(groupRef.current, inputRef.current ?? groupRef.current);
+  }, [pendingFocus]);
 
   async function send(action: ReviewAction, value?: unknown) {
     setBusy(true);
@@ -1129,12 +1286,19 @@ function FieldCard({
 
   return (
     <div
-      className={`rounded-lg border p-4 ${
+      ref={groupRef}
+      id={fieldAnchorId(field.fieldName)}
+      tabIndex={-1}
+      role="group"
+      aria-labelledby={`${fieldAnchorId(field.fieldName)}-label`}
+      className={`rounded-lg border p-4 ${FOCUS_TARGET_CLASS} ${
         field.state === "disputed" ? "border-red-400 bg-red-50/40" : "border-neutral-200"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <h3 className="text-base font-medium text-neutral-950">{field.label}</h3>
+        <h3 id={`${fieldAnchorId(field.fieldName)}-label`} className="text-base font-medium text-neutral-950">
+          {field.label}
+        </h3>
         <span
           className={`shrink-0 rounded border px-1.5 py-0.5 text-[11px] font-medium ${FIELD_TIER_STYLES[field.tier]}`}
         >
@@ -1215,6 +1379,7 @@ function FieldCard({
         <div className="mt-3 space-y-2">
           {field.inputType === "number" ? (
             <input
+              ref={inputRef}
               autoFocus
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
@@ -1225,6 +1390,7 @@ function FieldCard({
             />
           ) : (
             <input
+              ref={inputRef}
               autoFocus
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
