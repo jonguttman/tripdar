@@ -4,6 +4,29 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-29-001: mint-staff-link script read active token outside its transaction, enabling two concurrent mints
+
+**Symptoms:**
+- Two concurrent `runMintStaffLink` calls (one via the CLI script, one via the admin API route `POST /api/admin/myco/staff-links`) could both succeed, leaving two `active` `staff_review` `CatalogAccessToken` rows for the same partner.
+- Alternatively, if the operator ran the script with `--revoke-existing` while the admin route was concurrently minting a new token, the script's `updateMany` could revoke the admin route's newly created token — a token the operator had never inspected.
+
+**Root Cause:**
+`scripts/mint-staff-link.lib.mjs` (KEWL-2480) called `prisma.catalogAccessToken.findFirst` before entering `prisma.$transaction`. The decision to refuse or revoke-then-mint was made on stale data. A concurrent admin-route mint landing between that read and the script's transaction would not be visible to the script's guard, so either path could proceed to write — creating a duplicate, or revoking an uninspected replacement.
+
+The admin route (`src/app/api/admin/myco/staff-links/route.ts`) was already correct: its revoke and create both happen inside a single `$transaction`.
+
+**Fix (KEWL-2491):**
+Moved `catalogAccessToken.findFirst`, `planTokenAction`, and the refuse check inside the script's `prisma.$transaction` callback. With SQLite/Turso's single-writer serialisation, the transaction now holds the write lock for the entire read-decide-revoke-mint sequence, making all entry points atomic against each other.
+
+**Files Modified:**
+- `scripts/mint-staff-link.lib.mjs` — active-token read + plan + refuse moved inside `$transaction`; tx callback now returns `{ record, revokedPrevious }` so the guard result survives the closure.
+- `scripts/mint-staff-link.lib.test.mjs` — three new KEWL-2491 concurrency tests: (1) outer `findFirst` is forbidden (throws on call), proving the read goes through the tx layer; (2) a concurrent token appearing before the tx runs causes a correct refuse with no writes; (3) `--revoke-existing` with a concurrent token still produces exactly one active link post-tx.
+
+**Lesson:**
+In any check-then-act pattern on shared mutable state, the check and the act must be inside the same transaction. Extracting the read for readability or early-exit convenience re-introduces the TOCTOU race even when individual writes are wrapped. Guard the entire sequence or guard nothing.
+
+---
+
 ## BUG-2026-07-28-001: Dose ladder divided by active-compound mg produced overdose-direction unit counts
 
 **Symptoms:**

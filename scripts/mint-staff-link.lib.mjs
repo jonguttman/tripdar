@@ -193,17 +193,22 @@ export async function runMintStaffLink({ argv, prisma, log = () => {}, warn = ()
     }
   }
 
-  const activeToken = await prisma.catalogAccessToken.findFirst({
-    where: activeStaffTokenWhere(partner.id),
-    select: { id: true, issuedAt: true },
-  });
-  const plan = planTokenAction({ activeToken, revokeExisting: args.revokeExisting });
-  if (plan.action === "refuse") throw new MintUsageError(plan.reason);
-
   const enrollmentClosesAt = enrollmentClosesAtFrom(args.hours);
   const token = createCatalogAccessToken();
 
-  const record = await prisma.$transaction(async (tx) => {
+  // The active-token check, revoke decision, and mint must all happen inside a single
+  // transaction so a concurrent mint through the admin route cannot land between the read
+  // and the write. With SQLite/Turso's single-writer serialisation, the tx holds the write
+  // lock for the entire read-decide-revoke-mint sequence, eliminating the race.
+  const { record, revokedPrevious } = await prisma.$transaction(async (tx) => {
+    const activeToken = await tx.catalogAccessToken.findFirst({
+      where: activeStaffTokenWhere(partner.id),
+      select: { id: true, issuedAt: true },
+    });
+    const plan = planTokenAction({ activeToken, revokeExisting: args.revokeExisting });
+    // MintUsageError thrown here rolls back the transaction and re-throws unchanged.
+    if (plan.action === "refuse") throw new MintUsageError(plan.reason);
+
     if (plan.action === "revoke-then-mint") {
       await tx.catalogAccessToken.updateMany({
         where: activeStaffTokenWhere(partner.id),
@@ -246,14 +251,14 @@ export async function runMintStaffLink({ argv, prisma, log = () => {}, warn = ()
       },
     });
 
-    return created;
+    return { record: created, revokedPrevious: plan.action === "revoke-then-mint" };
   });
 
   return {
     id: record.id,
     partner: { id: partner.id, name: partner.name },
     shared: true,
-    revokedPrevious: plan.action === "revoke-then-mint",
+    revokedPrevious,
     url: `${args.baseUrl}/staff/catalog/${token}`,
     issuedAt: record.issuedAt,
     enrollmentClosesAt: record.enrollmentClosesAt,

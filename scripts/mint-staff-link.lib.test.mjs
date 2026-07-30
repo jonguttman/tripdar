@@ -314,3 +314,126 @@ describe("mint-staff-link — --force gates the PIN assertion only", () => {
     expect(result.revokedPrevious).toBe(false);
   });
 });
+
+/**
+ * KEWL-2491 — the active-token read must happen inside the transaction, not before it.
+ *
+ * The race: a concurrent admin-route mint can land between the pre-tx `findFirst` and the
+ * tx's `updateMany`/`create`. If the script saw no token it would mint alongside the admin's
+ * newly created one, leaving two active links for the same partner. If it saw the old token
+ * with `--revoke-existing`, its unconditional `updateMany` would revoke the admin's new
+ * token that the operator never inspected.
+ *
+ * The fix: move `findFirst` + `planTokenAction` + refuse inside `$transaction`. With
+ * SQLite/Turso's single-writer serialisation, the tx holds the write lock for the entire
+ * read-decide-revoke-mint sequence, making it atomic.
+ *
+ * These tests use a split mock: the outer `catalogAccessToken` has no `findFirst` (calling
+ * it throws — catching any regression to the pre-tx read), while the tx layer returns the
+ * value the DB would contain after a concurrent mint.
+ */
+describe("mint-staff-link — KEWL-2491: active-token read is inside the transaction", () => {
+  /** Builds a prisma double where the outer catalogAccessToken.findFirst is forbidden,
+   * but the tx layer's findFirst returns `txActiveToken`. */
+  function makeSplitPrisma({ txActiveToken = null } = {}) {
+    const calls = [];
+    const record = (layer, method, args) => calls.push({ layer, method, args });
+
+    const txTokenModel = {
+      findFirst: async (args) => {
+        record("tx", "catalogAccessToken.findFirst", args);
+        return txActiveToken;
+      },
+      updateMany: async (args) => {
+        record("tx", "catalogAccessToken.updateMany", args);
+        return { count: 1 };
+      },
+      create: async (args) => {
+        record("tx", "catalogAccessToken.create", args);
+        return { id: "token_new", issuedAt: new Date("2026-07-29T00:00:00.000Z"), enrollmentClosesAt: args.data.enrollmentClosesAt };
+      },
+    };
+
+    const prisma = {
+      calls,
+      partner: {
+        findMany: async (args) => {
+          record("outer", "partner.findMany", args);
+          return [{ id: PARTNER_ID, name: "QA Partner" }].slice(0, args.take ?? 1);
+        },
+      },
+      mycoEmployee: {
+        findMany: async (args) => {
+          record("outer", "mycoEmployee.findMany", args);
+          return [{ id: "e1", name: "Adrienne", email: "adrienne@x.internal", pinHash: null, pinSetAt: null }];
+        },
+      },
+      catalogAccessToken: {
+        // Intentionally absent: if the implementation calls outer findFirst, this throws and
+        // fails the test. All token reads must go through the tx layer.
+        findFirst: () => { throw new Error("catalogAccessToken.findFirst must not be called outside the transaction"); },
+      },
+      reviewerEnrollmentEvent: {
+        create: async (args) => {
+          record("tx", "reviewerEnrollmentEvent.create", args);
+          return { id: "event_new" };
+        },
+      },
+      $transaction: async (fn) =>
+        fn({ catalogAccessToken: txTokenModel, reviewerEnrollmentEvent: { create: prisma.reviewerEnrollmentEvent.create } }),
+    };
+    return prisma;
+  }
+
+  it("reads the active token inside the tx, not outside it", async () => {
+    const prisma = makeSplitPrisma({ txActiveToken: null });
+    // Should succeed (no active token in tx) and NOT call the forbidden outer findFirst.
+    const result = await runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma });
+    expect(result.id).toBe("token_new");
+    const txRead = prisma.calls.filter((c) => c.layer === "tx" && c.method === "catalogAccessToken.findFirst");
+    expect(txRead).toHaveLength(1);
+  });
+
+  it("refuses without writing when a concurrent mint lands before the tx runs", async () => {
+    // Simulates: script is called with no active token visible to an outer read (old code
+    // would proceed), but by the time the tx executes, a concurrent admin-route mint has
+    // already created a token. New code: tx sees the token and refuses (no --revoke-existing).
+    const concurrent = { id: "token_concurrent", issuedAt: new Date("2026-07-29T09:00:00.000Z") };
+    const prisma = makeSplitPrisma({ txActiveToken: concurrent });
+
+    await expect(runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma }))
+      .rejects.toBeInstanceOf(MintUsageError);
+
+    // The refuse message must name the concurrent token so the operator knows what to inspect.
+    await expect(runMintStaffLink({ argv: [`--partner=${PARTNER_ID}`], prisma }))
+      .rejects.toThrow(/token_concurrent/);
+
+    // No writes despite the outer layer seeing "nothing" (which old code would have minted on).
+    const txWrites = prisma.calls.filter((c) => c.layer === "tx" && (c.method === "catalogAccessToken.create" || c.method === "catalogAccessToken.updateMany"));
+    expect(txWrites).toHaveLength(0);
+  });
+
+  it("with --revoke-existing, revokes what the tx actually sees at execution time", async () => {
+    // Simulates: operator saw old token A and passed --revoke-existing. A concurrent mint
+    // replaced A with B before the tx ran. New code: tx sees B, revokes B, mints C.
+    // This is consistent: only one active token exits the tx. The WHERE is still scoped to
+    // the correct partner (not a cross-partner write).
+    const tokenB = { id: "token_B", issuedAt: new Date("2026-07-29T10:00:00.000Z") };
+    const prisma = makeSplitPrisma({ txActiveToken: tokenB });
+
+    const result = await runMintStaffLink({
+      argv: [`--partner=${PARTNER_ID}`, "--revoke-existing"],
+      prisma,
+    });
+
+    expect(result.revokedPrevious).toBe(true);
+    const revoke = prisma.calls.find((c) => c.method === "catalogAccessToken.updateMany");
+    expect(revoke).toBeDefined();
+    expect(revoke.args.where.partnerId).toBe(PARTNER_ID);
+    expect(revoke.args.where.purpose).toBe("staff_review");
+    expect(revoke.args.where.status).toBe("active");
+    // One token was minted: exactly one active link after the tx.
+    const created = prisma.calls.filter((c) => c.method === "catalogAccessToken.create");
+    expect(created).toHaveLength(1);
+  });
+});
