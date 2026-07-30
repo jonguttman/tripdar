@@ -200,6 +200,8 @@ export interface ScoreOptions {
     productUnitMaterialMassMg?: number;
     /** Basis that productUnitMaterialMassMg is stated on. Must be explicit. */
     productMaterialMassBasis?: string;
+    /** Units the package holds. Suppresses counts the pack cannot satisfy. */
+    productUnitsPerPack?: number;
     productFormat?: string;
     productPhotoUrl?: string;
     strengthOffset?: "standard" | "stronger" | "lighter";
@@ -263,10 +265,13 @@ export function scoreStrains(options: ScoreOptions): ScoredRecommendation[] {
       // Like-for-like guard. productUnitMg (active-compound mg) is deliberately
       // not consulted here: dividing dried-mushroom mg by active-compound mg is
       // the KEWL-2346 defect and overstates counts by orders of magnitude.
+      // The pack-size rule is applied against THIS recommendation's doseRange,
+      // so a product keeps its count at a level the pack can satisfy.
       const suggestedUnits = computeSuggestedUnits(doseRange, {
         activeCompound: adminConfig.activeCompound,
         unitMaterialMassMg: adminConfig.productUnitMaterialMassMg,
         materialMassBasis: adminConfig.productMaterialMassBasis,
+        unitsPerPack: adminConfig.productUnitsPerPack,
       });
       if (suggestedUnits) {
         product.suggestedUnits = suggestedUnits;

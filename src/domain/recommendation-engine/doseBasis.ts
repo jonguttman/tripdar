@@ -94,6 +94,11 @@ export interface LadderDivisorInput {
   unitMaterialMassMg?: number | null;
   /** The basis that mass is stated on. */
   materialMassBasis?: string | null;
+  /**
+   * Units the package actually holds. Gates the pack-size rule below; absent or
+   * null means we cannot determine it, and the count is suppressed.
+   */
+  unitsPerPack?: number | null;
 }
 
 /**
@@ -112,7 +117,17 @@ export function resolveLadderDivisorMg(input: LadderDivisorInput): number | null
 
 /**
  * Format the `suggestedUnits` range for a dose window, or undefined when the
- * product has no basis-compatible divisor.
+ * product has no basis-compatible divisor, or when the dose we are actually
+ * recommending to this customer needs more units than the package holds.
+ *
+ * The pack-size rule (KEWL-2492, rule 2 of Jon's Option A) is deliberately
+ * per-recommendation, not per-product: the same product keeps its count at a
+ * dose level it can satisfy and loses it at one it cannot. Telling a customer
+ * to take 20 of something sold in packs of 16 is the contradiction it exists
+ * to prevent.
+ *
+ * Suppression here means "no unit count", never "no product" — the caller
+ * builds product identity first and attaches the count only if we return one.
  */
 export function computeSuggestedUnits(
   doseRange: { lowMg: number; highMg: number },
@@ -125,6 +140,13 @@ export function computeSuggestedUnits(
 
   const lowUnits = Math.ceil(doseRange.lowMg / divisorMg);
   const highUnits = Math.ceil(doseRange.highMg / divisorMg);
+
+  // Fail closed on an undeterminable pack size, per the parent guardrail:
+  // if the contradiction state cannot be determined, suppress.
+  const { unitsPerPack } = divisor;
+  if (typeof unitsPerPack !== "number") return undefined;
+  if (!Number.isFinite(unitsPerPack) || unitsPerPack <= 0) return undefined;
+  if (highUnits > unitsPerPack) return undefined;
 
   return `${lowUnits}-${highUnits}`;
 }

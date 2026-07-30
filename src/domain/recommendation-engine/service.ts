@@ -33,6 +33,12 @@ export async function generateRecommendations(
     productUnitMg?: number;
     productUnitMaterialMassMg?: number;
     productMaterialMassBasis?: string;
+    /**
+     * Units per package (KEWL-2492). Only the catalog overlay below can supply
+     * this — StrainRecommendationConfig has no such column, so rows coming only
+     * from that path fail closed and emit no unit count.
+     */
+    productUnitsPerPack?: number;
     productFormat?: string;
     productPhotoUrl?: string;
     availability: string;
@@ -76,6 +82,7 @@ export async function generateRecommendations(
       productUnitMg: item.productUnitMg ?? undefined,
       productUnitMaterialMassMg: item.unitMaterialMassMg ?? undefined,
       productMaterialMassBasis: item.materialMassBasis ?? undefined,
+      productUnitsPerPack: item.unitsPerPack ?? undefined,
       productFormat: item.format,
       productPhotoUrl: item.photoUrl ?? undefined,
       availability: "in_stock",

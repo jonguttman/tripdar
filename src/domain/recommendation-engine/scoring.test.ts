@@ -34,6 +34,26 @@ const L1_INTENT: IntentVector = {
   depth_direction: 0.1,
 };
 
+/** All axes at 0.4 → avg intensity 0.4 → dose level 3 (500-2000 mg). */
+const L3_INTENT: IntentVector = {
+  clarity_cognition: 0.4,
+  mood_social: 0.4,
+  visual_pattern: 0.4,
+  somatic: 0.4,
+  energy_direction: 0.4,
+  depth_direction: 0.4,
+};
+
+/** All axes at 0.7 → avg intensity 0.7 → dose level 5 (3500-5000 mg). */
+const L5_INTENT: IntentVector = {
+  clarity_cognition: 0.7,
+  mood_social: 0.7,
+  visual_pattern: 0.7,
+  somatic: 0.7,
+  energy_direction: 0.7,
+  depth_direction: 0.7,
+};
+
 /** doseSensitivity "gentle" keeps the modifier at 1.0 so ranges stay canonical. */
 function profile(): StrainProfileVector {
   return {
@@ -68,6 +88,14 @@ const PRODUCT_IDENTITY = {
   productPhotoUrl: "https://example.test/gt.jpg",
   productFormat: "capsule",
   activeCompound: "psilocybin",
+  /**
+   * KEWL-2492: a pack size large enough not to trip the pack-size rule on its
+   * own. It lives on the shared fixture deliberately — without it, every
+   * suppression test below would pass for two reasons at once (its own rule AND
+   * an undeterminable pack size), and would keep passing even if the rule it
+   * names were deleted. Tests that exercise the pack rule override it.
+   */
+  productUnitsPerPack: 25,
 };
 
 describe("scoreStrains dose ladder basis guard", () => {
@@ -79,11 +107,15 @@ describe("scoreStrains dose ladder basis guard", () => {
   });
 
   describe("compatible material mass", () => {
+    // Pack sizes below are the real live values for the products these fixtures
+    // were modelled on (KEWL-2492). Two are exact boundary cases — highUnits
+    // equals the pack — which pins the rule as `>` and not `>=`.
     it("keeps unit counts for a 444 mg mushroom-material unit", () => {
       const result = score({
         ...PRODUCT_IDENTITY,
         productUnitMaterialMassMg: 444,
         productMaterialMassBasis: "mushroom_material",
+        productUnitsPerPack: 8, // Fun Guy Chocolate Bar: needs exactly 8, pack holds 8.
       });
       expect(result.product?.suggestedUnits).toBe("4-8");
     });
@@ -93,6 +125,7 @@ describe("scoreStrains dose ladder basis guard", () => {
         ...PRODUCT_IDENTITY,
         productUnitMaterialMassMg: 140,
         productMaterialMassBasis: "fruiting_body",
+        productUnitsPerPack: 25, // Cubiq Microdose Gummies: needs exactly 25, pack holds 25.
       });
       expect(result.product?.suggestedUnits).toBe("11-25");
     });
@@ -103,6 +136,7 @@ describe("scoreStrains dose ladder basis guard", () => {
           ...PRODUCT_IDENTITY,
           productUnitMaterialMassMg: 250,
           productMaterialMassBasis: "mushroom_material",
+          productUnitsPerPack: 16, // Neau Tropics Ghost Gummies.
         },
         L1_INTENT,
       );
@@ -211,6 +245,68 @@ describe("scoreStrains dose ladder basis guard", () => {
 
     it("still omits the product entirely when there is no mapped product", () => {
       expect(score({}).product).toBeUndefined();
+    });
+  });
+
+  /**
+   * KEWL-2492 — rule 2 of Jon's Option A: when the level we are recommending to
+   * THIS customer needs more units than the package holds, keep the product and
+   * drop the count.
+   *
+   * The fixture is the real, already-fully-backfilled `Gummies` catalog row
+   * (Neau Tropics — psilocybin / mushroom_material / 250 mg per unit / 16 per
+   * pack). Every dose-provenance field is populated, so these tests cannot pass
+   * merely because something was null.
+   */
+  describe("pack-size rule (per-recommendation, not per-product)", () => {
+    const REAL_BACKFILLED_ROW = {
+      ...PRODUCT_IDENTITY,
+      productName: "Ghost Gummies",
+      activeCompound: "psilocybin",
+      productUnitMaterialMassMg: 250,
+      productMaterialMassBasis: "mushroom_material",
+      productUnitsPerPack: 16,
+    };
+
+    it("suppresses the count at L5, where the dose needs 14-20 but the pack holds 16", () => {
+      const result = score(REAL_BACKFILLED_ROW, L5_INTENT);
+
+      expect(result.doseLevel).toBe(5);
+      expect(result.doseLowMg).toBe(3500);
+      expect(result.doseHighMg).toBe(5000);
+      // 3500/250 = 14, 5000/250 = 20. 20 > 16 → contradiction, so no count.
+      expect(result.product?.suggestedUnits).toBeUndefined();
+    });
+
+    it("keeps full product identity when the pack rule suppresses the count", () => {
+      const result = score(REAL_BACKFILLED_ROW, L5_INTENT);
+
+      expect(result.product).toBeDefined();
+      expect(result.product?.name).toBe("Ghost Gummies");
+      expect(result.product?.url).toBe("https://example.test/gt");
+      expect(result.product?.photoUrl).toBe("https://example.test/gt.jpg");
+      expect(result.product?.format).toBe("capsule");
+      // The key is omitted, not serialized as null — same contract as every
+      // other suppression path.
+      expect(JSON.parse(JSON.stringify(result.product))).not.toHaveProperty("suggestedUnits");
+    });
+
+    it("still emits the count for the same row at L3, where 2-8 fits in 16", () => {
+      const result = score(REAL_BACKFILLED_ROW, L3_INTENT);
+
+      expect(result.doseLevel).toBe(3);
+      // 500/250 = 2, 2000/250 = 8. 8 <= 16 → the pack can satisfy it.
+      expect(result.product?.suggestedUnits).toBe("2-8");
+    });
+
+    it("suppresses the count when the pack size is unknown, even if everything else is valid", () => {
+      const result = score({
+        ...REAL_BACKFILLED_ROW,
+        productUnitsPerPack: undefined,
+      });
+
+      expect(result.product?.name).toBe("Ghost Gummies");
+      expect(result.product?.suggestedUnits).toBeUndefined();
     });
   });
 });

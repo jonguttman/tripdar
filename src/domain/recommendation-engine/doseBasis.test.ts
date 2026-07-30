@@ -94,11 +94,15 @@ describe("resolveLadderDivisorMg", () => {
 describe("computeSuggestedUnits", () => {
   const l4 = { lowMg: 1500, highMg: 3500 };
 
+  // KEWL-2492: every case below now carries an explicit unitsPerPack. The
+  // suppression cases use a pack large enough that they still fail for the
+  // reason they name, not incidentally on an undeterminable pack size.
   it("produces bounded counts for a 444 mg mushroom-material unit", () => {
     expect(computeSuggestedUnits(l4, {
       activeCompound: "psilocybin",
       unitMaterialMassMg: 444,
       materialMassBasis: "mushroom_material",
+      unitsPerPack: 8,
     })).toBe("4-8");
   });
 
@@ -107,6 +111,7 @@ describe("computeSuggestedUnits", () => {
       activeCompound: "psilocin",
       unitMaterialMassMg: 140,
       materialMassBasis: "fruiting_body",
+      unitsPerPack: 25,
     })).toBe("11-25");
   });
 
@@ -118,6 +123,7 @@ describe("computeSuggestedUnits", () => {
           activeCompound: "psilocybin",
           unitMaterialMassMg: 1,
           materialMassBasis: "whole_fruit_body_extract",
+          unitsPerPack: 10000,
         },
       )).toBeUndefined();
     }
@@ -127,6 +133,7 @@ describe("computeSuggestedUnits", () => {
     expect(computeSuggestedUnits(l4, {
       activeCompound: "psilocybin",
       unitMaterialMassMg: 250,
+      unitsPerPack: 25,
     })).toBeUndefined();
   });
 
@@ -137,6 +144,7 @@ describe("computeSuggestedUnits", () => {
         activeCompound,
         unitMaterialMassMg: 444,
         materialMassBasis: "mushroom_material",
+        unitsPerPack: 8,
       })).toBeUndefined();
     },
   );
@@ -146,6 +154,67 @@ describe("computeSuggestedUnits", () => {
       activeCompound: "psilocybin",
       unitMaterialMassMg: 444,
       materialMassBasis: "mushroom_material",
+      unitsPerPack: 8,
     })).toBe("4-8");
+  });
+});
+
+/**
+ * KEWL-2492 — rule 2 of Jon's Option A. The divisor is the shipped one
+ * (unitMaterialMassMg gated on materialMassBasis), never productUnitMg.
+ *
+ * The fixture is the real, already-fully-backfilled `Gummies` catalog row:
+ * Neau Tropics, psilocybin / mushroom_material / 250 mg per unit / 16 per pack.
+ * Nothing here passes because a field was null.
+ */
+describe("computeSuggestedUnits pack-size rule", () => {
+  const GHOST_GUMMIES = {
+    activeCompound: "psilocybin",
+    unitMaterialMassMg: 250,
+    materialMassBasis: "mushroom_material",
+    unitsPerPack: 16,
+  } as const;
+
+  const windowFor = (level: number) => {
+    const l = CANONICAL_DOSE_LEVELS.find(d => d.level === level);
+    if (!l) throw new Error(`no canonical level ${level}`);
+    return { lowMg: l.standardLowMg, highMg: l.standardHighMg };
+  };
+
+  it("suppresses at L5, where the dose needs 14-20 and the pack holds 16", () => {
+    // 3500/250 = 14, 5000/250 = 20 → 20 > 16.
+    expect(computeSuggestedUnits(windowFor(5), GHOST_GUMMIES)).toBeUndefined();
+  });
+
+  it("still emits at L3, where 2-8 fits inside 16", () => {
+    // 500/250 = 2, 2000/250 = 8 → 8 <= 16. Not blanket suppression.
+    expect(computeSuggestedUnits(windowFor(3), GHOST_GUMMIES)).toBe("2-8");
+  });
+
+  it("is per-recommendation: the same row survives low levels and suppresses high ones", () => {
+    const emitted = CANONICAL_DOSE_LEVELS
+      .filter(l => computeSuggestedUnits(windowFor(l.level), GHOST_GUMMIES) !== undefined)
+      .map(l => l.level);
+    // L1-L4 need at most 14 units; L5 needs 20 and L6 needs 30.
+    expect(emitted).toEqual([1, 2, 3, 4]);
+  });
+
+  it("treats the boundary as inclusive — needing exactly the pack size still emits", () => {
+    // L4 high 3500/250 = 14. A pack of exactly 14 is satisfiable.
+    expect(computeSuggestedUnits(windowFor(4), { ...GHOST_GUMMIES, unitsPerPack: 14 })).toBe("6-14");
+    // A pack of 13 is not.
+    expect(computeSuggestedUnits(windowFor(4), { ...GHOST_GUMMIES, unitsPerPack: 13 })).toBeUndefined();
+  });
+
+  it.each([
+    ["undefined", undefined],
+    ["null", null],
+    ["zero", 0],
+    ["negative", -5],
+    ["NaN", Number.NaN],
+  ])("fails closed on a %s pack size even with a valid divisor", (_label, unitsPerPack) => {
+    expect(
+      computeSuggestedUnits(windowFor(3), { ...GHOST_GUMMIES, unitsPerPack }),
+    ).toBeUndefined();
   });
 });
