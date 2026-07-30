@@ -22,7 +22,15 @@
  * Idempotent. Re-running rebuilds the QA fixture ledger from scratch (see FIXTURE LEDGER
  * below) and leaves the link alone unless `--remint` is passed.
  *
- * Run: node --env-file=.env.local scripts/seed-qa-staff-review.mjs [--base=URL] [--pin=NNNN] [--remint]
+ * Run it through vite-node, NOT bare node:
+ *
+ *   node --env-file=.env.local node_modules/vite-node/vite-node.mjs \
+ *     scripts/seed-qa-staff-review.mjs -- [--base=URL] [--pin=NNNN] [--remint]
+ *
+ * Bare `node` cannot load this: it reaches `staffFieldVerification.ts` and
+ * `reviewerEnrollment.ts`, whose own relative imports are extensionless (`./catalogFieldSpec`),
+ * which Node's ESM resolver rejects even with type stripping on. vite-node applies the
+ * project's resolver, so the same imports load fine.
  *
  * Env / flags:
  *   --base=URL     base URL printed in the staff link (default https://www.tripd.ar)
@@ -102,7 +110,9 @@ const COMPLETE_COLUMNS = {
   brandMiniUnits: 3,
   brandMacroUnits: 8,
   brandDoseInstructions: "One capsule with food. Wait 90 minutes before taking another.",
-  materialMassBasis: "active_compound",
+  // Constrained in Neon by StoreProductCatalog_materialMassBasis_vocabulary_check to
+  // dried_mushroom_equivalent_mg | fruiting_body | mushroom_material.
+  materialMassBasis: "fruiting_body",
   ingredients: ["Psilocybe cubensis extract", "Lion's Mane"],
   flavors: [],
   strainSlug: null,
@@ -125,7 +135,7 @@ const COMPLETE_ANSWERS = {
   format: "capsule",
   [PHOTO_CHECK_FIELD]: "yes",
   activeCompound: "psilocybin",
-  doseBasis: "active_compound",
+  doseBasis: "fruiting_body",
   productUnitMg: 100,
   unitsPerPack: 10,
   totalDoseMg: 1000,
