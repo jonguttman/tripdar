@@ -8,8 +8,19 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// Note: SQLite does not support enums. Enum validation is enforced in application logic.
-// Valid values are documented here for reference:
+// Note: this datasource is PostgreSQL (Neon) — see `datasource db` above. The columns
+// listed below are strings NOT because the database cannot express enums, but as a
+// leftover from an earlier SQLite datasource; Postgres enums ARE available here and are
+// used further down this file (e.g. `PhotoJobStatus`). Converting those live columns to
+// native enums is a separate migration nobody has done yet.
+//
+// Corrected in KEWL-2491: the previous "SQLite does not support enums" note here read as
+// a statement about the current database and had already misled one concurrency fix into
+// assuming SQLite/Turso single-writer semantics this database does not have. If you are
+// reasoning about isolation or locking, this is Postgres Read Committed.
+//
+// Validation for these string columns is enforced in application logic. Valid values are
+// documented here for reference:
 //
 // DoseCategory: MICRODOSE, LOW, MODERATE, HIGH
 // ExperienceScale: MICRO, MACRO

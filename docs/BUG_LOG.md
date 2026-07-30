@@ -4,6 +4,50 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-29-001: staff-link mints were not serialised across the script and the admin route
+
+**Symptoms:**
+- Two concurrent mints (one via `scripts/mint-staff-link.mjs`, one via `POST /api/admin/myco/staff-links`) could both succeed, leaving two `active` `staff_review` `CatalogAccessToken` rows for the same partner. Under a shared unbound token the roster query *is* the access control, so a second live link is a second live door.
+- Alternatively, an operator running the script with `--revoke-existing` after inspecting token A could revoke token B — a link minted concurrently by the admin route that the operator was never shown — while the script's success output read as "replaced A".
+
+**Root Cause:**
+Both entry points ran the same unguarded check-then-act: read the partner's active token, decide, then revoke and create. Nothing serialised the two sequences against each other, and `CatalogAccessToken` carries no uniqueness rule for "one active `staff_review` token per partner" (`@@index([partnerId, purpose, status])` is non-unique and enforces nothing). Separately, the script's revoke `updateMany` was conditioned only on partner/purpose/status, never on the id of the token the operator had actually inspected — so whatever was live at write time got revoked.
+
+**The first fix was wrong, and why (this is the important part):**
+The initial fix (`b784f26`) moved the read inside `$transaction` and asserted that "SQLite/Turso's single-writer serialisation" made the sequence atomic. **This database is PostgreSQL (Neon)** — see `datasource db` in `prisma/schema.prisma`. Under Postgres' default Read Committed isolation, a transaction boundary serialises nothing here, because the contended state is the *absence* of a row: two transactions can both read "no active link" and both proceed to create. The fix shipped green tests on top of a false premise about the database.
+
+The premise came from somewhere real: `prisma/schema.prisma` still carried a top-of-file note reading `// Note: SQLite does not support enums`, a leftover from an earlier SQLite datasource that read as a statement about the current database. That note has been corrected in place.
+
+That first attempt also left the revoke unconditioned, and its test asserted that revoking the uninspected replacement was "consistent" — encoding the defect as correct behaviour. A test can lock a bug in as a requirement; that one did.
+
+**Fix (KEWL-2491):**
+Two independent fixes, because neither closes the hole alone — a lock without the compare-and-swap still revokes the wrong token, and a compare-and-swap without the lock still lets two mints both create:
+
+1. **Serialisation.** A new shared helper, `src/domain/myco/staffLinkMintLock.ts`, takes `pg_advisory_xact_lock` keyed on partner id + purpose. **Both** entry points call it, inside their transaction and *before* the active-token read. Transaction-scoped (`_xact_`) so it releases on COMMIT and ROLLBACK alike — a refusal that throws mid-transaction cannot leak a held lock onto a pooled connection. An advisory lock rather than a partial unique index because it needs no DDL against live data that may already violate the constraint.
+2. **Compare-and-swap.** The script captures the inspected token id *before* the transaction, and inside the locked section refuses — writing nothing — if the live token id differs, including the "nothing inspected, something appeared" case. The revoke `where` carries that id **alongside** the partner/purpose/status predicate, so the id is the CAS and the predicate remains the KEWL-2480 blast-radius guard.
+
+The admin route takes the lock **only**. Its `updateMany` supersede-all is deliberately unconditional — it is an authenticated admin action with no inspected-token premise, and its documented contract is that a forwarded old link stops working the moment a new one is minted. A CAS there would let a forwarded link survive a re-mint, which is a security regression, not symmetry.
+
+**Files Modified:**
+- `src/domain/myco/staffLinkMintLock.ts` (new) — the one lock helper both entry points share; FNV-1a key derivation into signed int32 (what `pg_advisory_xact_lock(int, int)` requires).
+- `src/domain/myco/staffLinkMintLock.test.ts` (new) — key determinism (the load-bearing property: if the two callers ever derived different keys, both would look locked while blocking nobody), int32 range, and that the lock is awaited before returning.
+- `scripts/mint-staff-link.lib.mjs` — lock before the read; `planTokenAction` gained the CAS branch; revoke scoped to the inspected id; the false SQLite/Turso comment deleted.
+- `scripts/mint-staff-link.lib.test.mjs` — the "revoking the replacement is consistent" test inverted to assert a refusal; added the no-token-inspected case, lock-ordering cases, and the refuse-path lock case.
+- `src/app/api/admin/myco/staff-links/route.ts` — takes the shared lock; supersede-all unchanged.
+- `src/app/api/admin/myco/staff-links/route.test.ts` (new) — proves the route takes the *same* key the script does, and pins the deliberate absence of a CAS on this path.
+- `prisma/schema.prisma` — corrected the stale "SQLite does not support enums" note that made the first fix's premise look true.
+
+**Verification:**
+Each fix was mutation-tested independently against the full suite: removing the script's lock fails 4 tests, removing the route's lock fails 3, reverting the CAS fails 5. No production token was minted or revoked to verify this.
+
+**Lesson:**
+Two lessons, and the second is the one that cost a review cycle.
+
+1. Check-then-act on shared mutable state needs a contention point. A transaction is not one by itself — under Read Committed there is nothing to contend on when the answer is "no row exists". Either a lock or a uniqueness constraint has to create the thing that conflicts.
+2. **Verify which database you are reasoning about before reasoning about isolation.** The fix was argued from a comment in the schema file rather than from the `datasource` block eight lines above it, and the tests were written to match the reasoning instead of the behaviour — so they passed. A stale comment is a live hazard: when you find one, fix it in the same change, or the next person repeats the mistake.
+
+---
+
 ## BUG-2026-07-28-001: Dose ladder divided by active-compound mg produced overdose-direction unit counts
 
 **Symptoms:**
