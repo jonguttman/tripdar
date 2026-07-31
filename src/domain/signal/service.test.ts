@@ -53,7 +53,7 @@ describe("Tripdar Signal Service (Meaning Layer v1.0 guards)", () => {
 
   it("rejects invalid enum values", async () => {
     const { prisma, calls } = makePrismaMock();
-    const badInput = { ...makeValidSignalInput(), doseCategory: "MID" } as SignalRecord;
+    const badInput = { ...makeValidSignalInput(), doseCategory: "MID" };
 
     await expect(createSignal(prisma, badInput)).rejects.toBeInstanceOf(SignalValidationError);
     expect(calls.length).toBe(0);

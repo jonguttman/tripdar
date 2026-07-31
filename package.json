@@ -47,6 +47,7 @@
     "start": "next start",
     "preview": "vite preview",
     "test": "vitest run",
+    "typecheck": "tsc --noEmit",
     "check:myco-strain-drift": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/check-myco-strain-slug-drift.mts"
   }
 }
