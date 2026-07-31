@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.16.0] - 2026-07-31
+
+### Added
+- **Super-admin View as mode** (KEWL-2602): `/admin` now server-renders a partner-admin picker for super admins and a persistent read-only banner while simulating the selected user's role and partner scope. The target is stored in a signed, HttpOnly cookie, but every admin request still authenticates the real session and rechecks that the real user is a super admin before using it.
+
+### Fixed
+- View as is enforced read-only across every non-read request under `/api/admin/**`, preserving the real actor's audit identity. Loading `/admin/myco` in View as mode also suppresses the legacy first-visit `User.partnerId` auto-assignment, so observation cannot permanently bind an unassigned real user to a partner.
+
 ## [1.15.4] - 2026-07-31
 
 ### Fixed

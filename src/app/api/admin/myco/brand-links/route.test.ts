@@ -27,8 +27,7 @@ const prismaMock = vi.hoisted(() => ({
 const getServerSessionMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
-vi.mock("next-auth", () => ({ getServerSession: getServerSessionMock }));
-vi.mock("@/domain/auth/config", () => ({ authOptions: {} }));
+vi.mock("@/domain/auth/adminSession", () => ({ getAdminSession: getServerSessionMock }));
 
 import { DELETE, GET, POST } from "./route";
 

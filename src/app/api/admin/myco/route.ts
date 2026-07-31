@@ -3,9 +3,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getAdminSession } from "@/domain/auth/adminSession";
 import { Prisma } from "@prisma/client";
-import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
 import { computeReadiness } from "@/domain/myco/readiness";
@@ -34,7 +33,7 @@ type BrandDoseTier = {
 };
 
 async function requireAuth() {
-  const session = await getServerSession(authOptions);
+  const session = await getAdminSession();
 
   if (!session?.user?.email) {
     return NextResponse.json(
@@ -206,7 +205,8 @@ function deriveLegacyBrandUnits(tiers: BrandDoseTier[]): {
 async function resolvePartnerForUser(
   email: string,
   userRole: Awaited<ReturnType<typeof getUserRole>>,
-  requestedPartnerId: string | null
+  requestedPartnerId: string | null,
+  viewAsActive: boolean
 ) {
   const user = await prisma.user.findUnique({ where: { email } });
 
@@ -228,7 +228,9 @@ async function resolvePartnerForUser(
     orderBy: { createdAt: "asc" },
   });
 
-  if (defaultPartner && user && !user.partnerId) {
+  // A normal first visit may bind a real admin to the default partner. View-as is
+  // observational only: looking at an unbound user's screen must never mutate them.
+  if (defaultPartner && user && !user.partnerId && !viewAsActive) {
     await prisma.user.update({
       where: { id: user.id },
       data: { partnerId: defaultPartner.id },
@@ -255,7 +257,12 @@ export async function GET(request: NextRequest) {
     const email = auth.user!.email!;
     const userRole = await getUserRole(email);
     const partnerId = request.nextUrl.searchParams.get("partnerId");
-    const selectedPartner = await resolvePartnerForUser(email, userRole, partnerId);
+    const selectedPartner = await resolvePartnerForUser(
+      email,
+      userRole,
+      partnerId,
+      Boolean(auth.viewAs)
+    );
     const [partners, brands] = await Promise.all([
       prisma.partner.findMany({
         orderBy: { name: "asc" },

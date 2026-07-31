@@ -4,6 +4,41 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-31-003: admin impersonation could write as the target or mutate an unbound target on read
+
+**Symptoms:**
+- The requested super-admin View-as feature had no safe identity boundary to reuse: admin routes read the session email directly, and writes would therefore either ignore the target or risk attributing target-scoped changes to the wrong person.
+- The Myco admin GET calls `resolvePartnerForUser()`, which historically persisted the oldest active partner onto any user whose `partnerId` was null. Merely viewing an unbound user's Myco screen could permanently alter that real user's scope.
+
+**Root Cause:**
+Authentication, effective admin identity, and partner fallback were coupled inside individual routes. There was no central distinction between the authenticated actor and the read-only identity being observed, and the partner resolver treated a GET fallback as permission to write.
+
+**Fix:**
+- Added a signed, HttpOnly View-as target cookie plus `getAdminSession()`, which re-authenticates the actual database session and rechecks `super_admin` on every admin request before resolving a current `partner_admin` target.
+- Routed every session-authenticated `/api/admin/**` handler through that helper, so role and partner ownership checks see the target only after the real-actor gate passes.
+- Added an edge middleware guard that refuses non-read `/api/admin/**` methods while a valid View-as cookie is active.
+- Passed explicit View-as state into the Myco partner resolver and suppressed its legacy default-partner write while observing another user.
+
+**Files Modified:**
+- `src/domain/auth/viewAs.ts`
+- `src/domain/auth/adminSession.ts`
+- `src/app/api/view-as/route.ts`
+- `src/app/admin/layout.tsx`
+- `src/app/admin/AdminShell.tsx`
+- `src/middleware.ts`
+- session-authenticated routes under `src/app/api/admin/`
+- `src/app/api/admin/myco/route.ts`
+
+**Prevention:**
+- Impersonation state may select a read identity, never grant authority. Revalidate the real actor on every request and keep both identities explicit.
+- Enforce observation-only behavior at a route-family boundary so a newly added admin mutation is denied automatically.
+- GET fallbacks must not persist identity or ownership defaults when the request is observational.
+
+**Lesson Learned:**
+Safe View as is not session substitution. It is a separately authenticated, read-only projection with the real actor preserved and every hidden read-side write disabled.
+
+---
+
 ## BUG-2026-07-31-002: Resend initialization made local Next.js builds require a runtime secret
 
 **Symptoms:**

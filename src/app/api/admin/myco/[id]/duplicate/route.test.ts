@@ -39,8 +39,7 @@ vi.mock("@/lib/prisma", async () => {
   const { createPrismaMock } = await import("@/test/prismaMock");
   return { prisma: createPrismaMock(prismaMock) };
 });
-vi.mock("next-auth", () => ({ getServerSession: getServerSessionMock }));
-vi.mock("@/domain/auth/config", () => ({ authOptions: {} }));
+vi.mock("@/domain/auth/adminSession", () => ({ getAdminSession: getServerSessionMock }));
 vi.mock("@/domain/myco/adminAccess", () => ({
   resolveProductForAdmin: resolveProductForAdminMock,
 }));

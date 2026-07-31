@@ -18,8 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/domain/auth/config";
+import { getAdminSession } from "@/domain/auth/adminSession";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
 import { staffReviewerWhere } from "@/domain/myco/staffReviewRoster";
@@ -38,7 +37,7 @@ const MIN_REASON_LENGTH = 12;
 const LEDGER_PAGE_SIZE = 200;
 
 async function requireSuperAdmin() {
-  const session = await getServerSession(authOptions);
+  const session = await getAdminSession();
   if (!session?.user?.email) {
     return NextResponse.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
   }
