@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.15.4] - 2026-07-31
+
+### Fixed
+- Resend is now initialized on the first email send instead of at module import, so local and scratch `next build` runs no longer require `RESEND_API_KEY` while real sends still fail fast when the key is missing. (KEWL-2577)
+
+## [1.15.3] - 2026-07-31
+
+### Fixed
+- **Brand-link mutations are serialized in the admin screen** (KEWL-2578): generating or revoking a brand portal link now disables every brand row, and a synchronous in-flight guard closes the pre-render double-click window. Concurrent mints can no longer overwrite the only recoverable raw URL in the one-shot result.
+
+## [1.15.2] - 2026-07-31
+
+### Added
+- **Brand portal email handoff** (KEWL-2560): the admin brand-links mint result now keeps "Copy link" and adds "Email this brand" plus a "Copy message" fallback using Adrienne's approved subject/body with the freshly minted one-shot URL.
+
+## [1.15.1] - 2026-07-29
+
+### Fixed
+- **Staff-link mints are now serialised across both entry points** (KEWL-2491): `scripts/mint-staff-link.mjs` and `POST /api/admin/myco/staff-links` both mint a partner's shared `staff_review` link, and nothing serialised them against each other — two concurrent mints could each read "no active link" and each create one, leaving two live doors into the review surface. Both paths now take the same partner+purpose `pg_advisory_xact_lock` through one shared helper (`src/domain/myco/staffLinkMintLock.ts`), inside their transaction and before the active-token read. The lock is transaction-scoped, so a refusal that throws cannot leak it onto a pooled connection. No schema change: an advisory lock enforces the invariant without DDL against live data that may already violate it.
+- **`--revoke-existing` can no longer revoke a link the operator never saw** (KEWL-2491): the flag consents to replacing *the inspected* link, not whatever is live when the transaction runs. If a concurrent admin-route mint replaced token A with token B in between, the old unconditioned `updateMany` revoked B and reported success as though it had replaced A. The script now captures the inspected token id before the transaction and refuses, writing nothing, if the live id differs — including the case where nothing was inspected and a token appeared. The revoke `where` carries that id alongside the existing partner/purpose/status predicate, so the compare-and-swap is added without weakening the KEWL-2480 blast-radius scope. The admin route deliberately keeps its unconditional supersede-all: it has no inspected-token premise, and conditioning it would let a forwarded old link survive a re-mint.
+
+### Changed
+- Corrected a stale `// Note: SQLite does not support enums` comment at the top of `prisma/schema.prisma` (KEWL-2491). This datasource is PostgreSQL/Neon and has been for some time; the leftover note read as a statement about the current database and had already misled one concurrency fix into assuming SQLite/Turso single-writer semantics that do not apply here.
+
+## [1.15.0] - 2026-07-29
+
+### Added
+- **QA staff-review sandbox** (KEWL-2475): agents can now open the staff catalog review screens on production without claiming one of the five unclaimed *real* reviewer identities, which permanently took that person's name until Jon cleared it by hand (gap: KEWL-2474). `scripts/seed-qa-staff-review.mjs` seeds a parallel sandbox — its own inactive partner on a non-obvious subdomain, one fixture reviewer, its own staff link and PIN, and a catalog covering a clean listable product plus one product per `ListingBlockerKind` (readiness / unverified field / wrong-photo answer / disputed field / unknown active compound / research-only) and all four urgency tiers. The QA partner is created `active: false`, so `/api/myco/recommend` (which resolves a store by `subdomain` + `active: true`) cannot reach it; no vibe profile or confirmed strength offset is seeded either, so `computeReadiness()` would still reject every QA row even if the partner were activated. Nothing about The Mushroom Top is touched — not its roster, its live shared link, its enrollment window, or any reviewer's PIN.
+
+### Changed
+- **Staff reviewer allowlist is now per-partner-scope** (KEWL-2475): `staffReviewerWhere()` resolves its email allowlist through `approvedReviewerEmails(partnerId)` instead of one flat array. `STAFF_REVIEWER_EMAILS` remains literally the same six Mushroom Top addresses, and a TMT-scoped roster query returns exactly those six. The QA fixture address is admitted **only** under the QA partner id (named by the `QA_STAFF_REVIEW_PARTNER_ID` env var), and it *replaces* rather than extends the list in both directions — so this change cannot widen TMT's boundary, and a QA link cannot reach a real reviewer's name. With the env var unset the QA identity is admitted nowhere, and a misconfiguration pointing it at the TMT partner locks the real roster out (410 `roster_empty`) rather than handing a real name to a QA link holder. Under a shared unbound token this query *is* the access control, so the boundary is asserted by test rather than left to an unenforced invariant.
+
 ## [1.14.0] - 2026-07-28
 
 ### Fixed

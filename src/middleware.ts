@@ -18,6 +18,8 @@ import { checkPublicWriteRateLimit } from "@/domain/myco/publicWriteRateLimit";
 
 const PARTNER_API_PREFIX = "/api/v1";
 const BRAND_PUBLIC_WRITE_PREFIX = "/api/myco/brand-portal";
+// Advertised on both the CORS preflight and the 405 `Allow` header.
+const BRAND_PORTAL_ALLOWED_METHODS = "GET, POST, OPTIONS";
 
 // In-memory rate limit store (edge-compatible)
 // In production, use Vercel KV or similar edge-compatible store
@@ -129,7 +131,7 @@ export async function middleware(request: NextRequest) {
         status: 204,
         headers: {
           "Access-Control-Allow-Origin": request.headers.get("origin") || "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
+          "Access-Control-Allow-Methods": BRAND_PORTAL_ALLOWED_METHODS,
           "Access-Control-Allow-Headers": "Content-Type",
           "Access-Control-Max-Age": "86400",
           "X-Request-ID": requestId,
@@ -137,35 +139,54 @@ export async function middleware(request: NextRequest) {
       });
     }
 
-    if (request.method !== "POST") {
-      return NextResponse.json(
-        { success: false, error: { code: "METHOD_NOT_ALLOWED", message: "Only POST is allowed." } },
-        { status: 405, headers: { "X-Request-ID": requestId, Allow: "POST, OPTIONS" } }
-      );
-    }
-
-    const ip = extractClientIp(request);
-    const token = extractBrandPortalToken(pathname);
-    const rlResult = await checkPublicWriteRateLimit({
-      ip: ip ?? "unknown",
-      token: token ?? "unknown",
-    });
-
-    if (!rlResult.allowed) {
+    // GET/HEAD read the portal's current brand + product state and must reach the
+    // route handler. Only POST is a public *write*.
+    if (request.method !== "POST" && request.method !== "GET" && request.method !== "HEAD") {
       return NextResponse.json(
         {
           success: false,
-          error: { code: "RATE_LIMIT_EXCEEDED", message: "Too many submissions. Please try again later." },
+          error: { code: "METHOD_NOT_ALLOWED", message: "Only GET, POST are allowed." },
         },
-        {
-          status: 429,
-          headers: {
-            "X-Request-ID": requestId,
-            "X-RateLimit-Remaining": "0",
-            "Retry-After": rlResult.retryAfterSeconds.toString(),
-          },
-        }
+        { status: 405, headers: { "X-Request-ID": requestId, Allow: BRAND_PORTAL_ALLOWED_METHODS } }
       );
+    }
+
+    // Rate limiting is enforced HERE ONLY. The Node route handlers must not call
+    // `checkPublicWriteRateLimit` as well — doing so double-increments both the IP
+    // and token buckets and halves the effective limits (KEWL-2383).
+    if (request.method === "POST") {
+      const ip = extractClientIp(request);
+      const token = extractBrandPortalToken(pathname);
+      const rlResult = await checkPublicWriteRateLimit({
+        ip: ip ?? "unknown",
+        token: token ?? "unknown",
+      });
+
+      if (!rlResult.allowed) {
+        const storeFailed = rlResult.reason === "store_error";
+        return NextResponse.json(
+          {
+            success: false,
+            error: storeFailed
+              ? {
+                  code: "RATE_LIMIT_UNAVAILABLE",
+                  message: "Submissions are temporarily unavailable. Please try again shortly.",
+                }
+              : {
+                  code: "RATE_LIMIT_EXCEEDED",
+                  message: "Too many submissions. Please try again later.",
+                },
+          },
+          {
+            status: storeFailed ? 503 : 429,
+            headers: {
+              "X-Request-ID": requestId,
+              "X-RateLimit-Remaining": "0",
+              "Retry-After": rlResult.retryAfterSeconds.toString(),
+            },
+          }
+        );
+      }
     }
 
     const response = NextResponse.next();

@@ -26,6 +26,7 @@ import {
   REVIEWER_NOTE_FIELD,
 } from "@/domain/myco/catalogFieldSpec";
 import { reviewerStillOwesField } from "@/domain/myco/staffFieldVerification";
+import { approvedPhotoCount, photoStatusLabel } from "@/domain/myco/photoVisibility";
 import { buildCatalogFieldChange, type CatalogFieldSource } from "@/domain/myco/catalogProvenance";
 
 export const dynamic = "force-dynamic";
@@ -41,10 +42,12 @@ type ReviewAction = (typeof VALID_ACTIONS)[number];
 
 const PRODUCT_INCLUDE = {
   brandRef: { select: { name: true } },
+  // The reviewer sees every photo including pending brand submissions — that is
+  // the point of this surface — so this include is deliberately unfiltered. The
+  // gate count below is taken from the approved subset only (KEWL-2460).
   photos: { orderBy: [{ isPrimary: "desc" as const }, { sortOrder: "asc" as const }] },
   vibeProfile: true,
   strengthOffset: true,
-  _count: { select: { photos: true } },
   catalogFieldChanges: {
     orderBy: { createdAt: "asc" as const },
     select: {
@@ -118,7 +121,7 @@ export async function GET(
   const gate = evaluateGateForItem({
     item,
     extras: {
-      photoCount: item._count.photos,
+      photoCount: approvedPhotoCount(item.photos),
       vibeScores: item.vibeProfile?.scores ?? null,
       strengthOffset: item.strengthOffset
         ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
@@ -147,6 +150,9 @@ export async function GET(
         helpText: rule.helpText,
         tier: rule.tier,
         inputType: rule.inputType,
+        // KEWL-2473: a `readiness` blocker carries no fieldName, so the client needs the
+        // rule's readiness key to route "Missing mg per unit" to the card that supplies it.
+        readinessKey: rule.readinessKey,
         allowsConfirmedAbsent: rule.allowsConfirmedAbsent,
         requiredConfirmations: state.requiredConfirmations,
         confirmationsCount: state.confirmationsCount,
@@ -188,6 +194,10 @@ export async function GET(
           url: photo.url,
           tag: photo.tag,
           isPrimary: photo.isPrimary,
+          // Pending brand submissions render here labelled, never as live assets.
+          status: photo.status,
+          statusLabel: photoStatusLabel(photo.status),
+          submissionSource: photo.submissionSource,
         })),
       },
       fields,
@@ -416,7 +426,7 @@ export async function POST(
   const gate = evaluateGateForItem({
     item: { ...refreshed, ...(columnUpdates as object) } as never,
     extras: {
-      photoCount: refreshed._count.photos,
+      photoCount: approvedPhotoCount(refreshed.photos),
       vibeScores: refreshed.vibeProfile?.scores ?? null,
       strengthOffset: refreshed.strengthOffset
         ? { offset: refreshed.strengthOffset.offset, confirmed: refreshed.strengthOffset.confirmed }

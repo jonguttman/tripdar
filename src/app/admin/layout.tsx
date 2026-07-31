@@ -19,6 +19,7 @@ import {
 const navItems: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin", label: "Dashboard", icon: "grid" },
   { href: "/admin/myco", label: "Myco Store", icon: "spark" },
+  { href: "/admin/myco/brand-links", label: "Brand Links", icon: "key" },
   { href: "/admin/strains", label: "Strains", icon: "leaf" },
   { href: "/admin/collections", label: "Collections", icon: "folder" },
   { href: "/admin/reviews", label: "Reviews", icon: "star" },
@@ -29,17 +30,29 @@ const navItems: { href: string; label: string; icon: IconName }[] = [
 ];
 
 /* High-traffic sections pinned to the mobile bottom tab bar. */
-const tabBarItems = [
-  navItems[0], // Dashboard
-  navItems[1], // Myco Store
-  navItems[4], // Reviews
-  navItems[6], // Trip Reports
-];
+/* Selected by href, not index — inserting a nav entry must not silently repoint these. */
+const tabBarHrefs = ["/admin", "/admin/myco", "/admin/reviews", "/admin/reports"];
+const tabBarItems = tabBarHrefs.map(
+  (href) => navItems.find((item) => item.href === href)!
+);
 
+/**
+ * Longest match wins. `/admin/myco/brand-links` is its own nav entry, so a plain
+ * prefix test would light it up *and* `/admin/myco` at the same time.
+ */
 function isActiveRoute(pathname: string, href: string): boolean {
-  return (
-    pathname === href || (href !== "/admin" && pathname.startsWith(href))
+  const matches = navItems
+    .map((item) => item.href)
+    .filter(
+      (candidate) =>
+        pathname === candidate ||
+        (candidate !== "/admin" && pathname.startsWith(`${candidate}/`))
+    );
+  if (matches.length === 0) return false;
+  const deepest = matches.reduce((best, candidate) =>
+    candidate.length > best.length ? candidate : best
   );
+  return href === deepest;
 }
 
 export default function AdminLayout({
