@@ -55,7 +55,7 @@ export async function PATCH(
       );
     }
 
-    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    const access = await resolveProductForAdmin(auth.user!.email!, id, request);
     if (!access.ok) {
       return NextResponse.json(
         { success: false, error: { message: access.message } },
@@ -137,7 +137,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string; photoId?: string }> }
 ) {
   const auth = await requireAuth();
@@ -152,7 +152,7 @@ export async function DELETE(
       );
     }
 
-    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    const access = await resolveProductForAdmin(auth.user!.email!, id, request);
     if (!access.ok) {
       return NextResponse.json(
         { success: false, error: { message: access.message } },

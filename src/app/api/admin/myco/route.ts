@@ -8,6 +8,7 @@ import { Prisma } from "@prisma/client";
 import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
+import { resolveAdminIdentity } from "@/domain/auth/viewAs";
 import { computeReadiness } from "@/domain/myco/readiness";
 import { approvedPhotoCount } from "@/domain/myco/photoVisibility";
 import { aggregateTesterVotes, computeConfidence } from "@/domain/myco/community";
@@ -206,7 +207,8 @@ function deriveLegacyBrandUnits(tiers: BrandDoseTier[]): {
 async function resolvePartnerForUser(
   email: string,
   userRole: Awaited<ReturnType<typeof getUserRole>>,
-  requestedPartnerId: string | null
+  requestedPartnerId: string | null,
+  options: { skipAutoAssign?: boolean } = {}
 ) {
   const user = await prisma.user.findUnique({ where: { email } });
 
@@ -228,7 +230,7 @@ async function resolvePartnerForUser(
     orderBy: { createdAt: "asc" },
   });
 
-  if (defaultPartner && user && !user.partnerId) {
+  if (defaultPartner && user && !user.partnerId && !options.skipAutoAssign) {
     await prisma.user.update({
       where: { id: user.id },
       data: { partnerId: defaultPartner.id },
@@ -252,10 +254,13 @@ export async function GET(request: NextRequest) {
   if (auth instanceof NextResponse) return auth;
 
   try {
-    const email = auth.user!.email!;
-    const userRole = await getUserRole(email);
+    const identity = await resolveAdminIdentity(auth.user!.email!, request);
+    const email = identity.effectiveEmail;
+    const userRole = identity.effectiveRole;
     const partnerId = request.nextUrl.searchParams.get("partnerId");
-    const selectedPartner = await resolvePartnerForUser(email, userRole, partnerId);
+    const selectedPartner = await resolvePartnerForUser(email, userRole, partnerId, {
+      skipAutoAssign: identity.isViewAsActive,
+    });
     const [partners, brands] = await Promise.all([
       prisma.partner.findMany({
         orderBy: { name: "asc" },

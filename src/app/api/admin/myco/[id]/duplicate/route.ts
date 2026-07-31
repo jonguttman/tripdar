@@ -22,7 +22,7 @@ import { resolveProductForAdmin } from "@/domain/myco/adminAccess";
 import { normalizeStrainSlug } from "@/domain/strain/data";
 
 export async function POST(
-  _req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getServerSession(authOptions);
@@ -33,7 +33,7 @@ export async function POST(
   try {
     const { id } = await params;
 
-    const access = await resolveProductForAdmin(session.user.email, id);
+    const access = await resolveProductForAdmin(session.user.email, id, request);
     if (!access.ok) {
       return NextResponse.json(
         { success: false, error: { message: access.message } },

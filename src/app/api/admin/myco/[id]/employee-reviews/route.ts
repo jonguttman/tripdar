@@ -38,7 +38,7 @@ function reviewUrl(request: NextRequest, token: string): string {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await requireAuth();
@@ -46,7 +46,7 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    const access = await resolveProductForAdmin(auth.user!.email!, id, request);
     if (!access.ok) {
       return NextResponse.json(
         { success: false, error: { message: access.message } },
@@ -105,7 +105,7 @@ export async function POST(
 
   try {
     const { id } = await params;
-    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    const access = await resolveProductForAdmin(auth.user!.email!, id, request);
     if (!access.ok) {
       return NextResponse.json(
         { success: false, error: { message: access.message } },

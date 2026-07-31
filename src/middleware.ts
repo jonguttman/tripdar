@@ -18,6 +18,9 @@ import { checkPublicWriteRateLimit } from "@/domain/myco/publicWriteRateLimit";
 
 const PARTNER_API_PREFIX = "/api/v1";
 const BRAND_PUBLIC_WRITE_PREFIX = "/api/myco/brand-portal";
+const ADMIN_API_PREFIX = "/api/admin";
+const ADMIN_VIEW_AS_CONTROL_PATH = "/api/admin/view-as";
+const ADMIN_VIEW_AS_COOKIE = "tripdar_admin_view_as_user_id";
 // Advertised on both the CORS preflight and the 405 `Allow` header.
 const BRAND_PORTAL_ALLOWED_METHODS = "GET, POST, OPTIONS";
 
@@ -115,6 +118,30 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isBrandPublicWritePath = pathname.startsWith(BRAND_PUBLIC_WRITE_PREFIX);
+  const isAdminApiPath = pathname.startsWith(ADMIN_API_PREFIX);
+
+  if (isAdminApiPath) {
+    const hasViewAsCookie = Boolean(request.cookies.get(ADMIN_VIEW_AS_COOKIE)?.value);
+    const isSafeMethod =
+      request.method === "GET" || request.method === "HEAD" || request.method === "OPTIONS";
+    const isEnteringViewAs =
+      pathname === ADMIN_VIEW_AS_CONTROL_PATH && request.method === "POST" && !hasViewAsCookie;
+
+    if (hasViewAsCookie && !isSafeMethod && !isEnteringViewAs) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            code: "VIEW_AS_READ_ONLY",
+            message: "View-as mode is read-only. Exit View-as mode before making admin changes.",
+          },
+        },
+        { status: 403 }
+      );
+    }
+
+    return NextResponse.next();
+  }
 
   // Only process partner API routes and unauthenticated brand write routes.
   if (!pathname.startsWith(PARTNER_API_PREFIX) && !isBrandPublicWritePath) {
@@ -338,6 +365,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     // Match all /api/v1/* routes
+    "/api/admin/:path*",
     "/api/v1/:path*",
     "/api/myco/brand-portal/:path*",
   ],

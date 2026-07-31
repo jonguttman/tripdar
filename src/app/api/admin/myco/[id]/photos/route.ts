@@ -49,7 +49,7 @@ export async function POST(
   try {
     const { id } = await params;
 
-    const access = await resolveProductForAdmin(auth.user!.email!, id);
+    const access = await resolveProductForAdmin(auth.user!.email!, id, request);
     if (!access.ok) {
       return NextResponse.json(
         { success: false, error: { message: access.message } },

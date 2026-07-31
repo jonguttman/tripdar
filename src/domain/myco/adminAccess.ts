@@ -9,7 +9,8 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { getUserRole } from "@/domain/auth/role";
+import { resolveAdminIdentity } from "@/domain/auth/viewAs";
+import type { NextRequest } from "next/server";
 
 export type ProductAccessResult =
   | { ok: true; productId: string; partnerId: string }
@@ -17,7 +18,8 @@ export type ProductAccessResult =
 
 export async function resolveProductForAdmin(
   email: string,
-  productId: string
+  productId: string,
+  request?: NextRequest
 ): Promise<ProductAccessResult> {
   const product = await prisma.storeProductCatalog.findUnique({
     where: { id: productId },
@@ -28,13 +30,14 @@ export async function resolveProductForAdmin(
     return { ok: false, status: 404, message: "Product not found" };
   }
 
-  const role = await getUserRole(email);
+  const identity = await resolveAdminIdentity(email, request);
+  const role = identity.effectiveRole;
   if (role === "super_admin") {
     return { ok: true, productId: product.id, partnerId: product.partnerId };
   }
 
   const user = await prisma.user.findUnique({
-    where: { email },
+    where: { email: identity.effectiveEmail },
     select: { partnerId: true },
   });
   if (!user?.partnerId || user.partnerId !== product.partnerId) {
