@@ -2014,7 +2014,11 @@ export default function MycoAdminPage() {
                               const shareText = `Try ${product.productName} and give me your feedback: ${url}`;
                               // Try native share on mobile, fall back to clipboard-only
                               if (navigator.share) {
-                                try { await navigator.share({ title: product.productName, text: shareText, url }); } catch {}
+                                try {
+                                  await navigator.share({ title: product.productName, text: shareText, url });
+                                } catch {
+                                  // Ignore share cancellation; the tester link is already copied.
+                                }
                               }
                               alert(`Tester link copied!\n\n${url}\n\nText or AirDrop it to anyone who's tried this product.`);
                             } catch {

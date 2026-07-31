@@ -114,7 +114,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       { success: false, error: { code: "INVALID_ACTION", message: "Unknown action" } },
       { status: 400 }
     );
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json(
       { success: false, error: { code: "SERVER_ERROR", message: "Action failed" } },
       { status: 500 }

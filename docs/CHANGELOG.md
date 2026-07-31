@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.16.1] - 2026-07-31
+
+### Fixed
+- **ESLint unused-binding configuration** (KEWL-2609): `@typescript-eslint/no-unused-vars` now honors the project's leading-underscore convention for intentionally-unused args, variables, and catch bindings. Restored the request and catch bindings that KEWL-2585 removed only to satisfy the misconfigured lint gate, fixing the production build type error from `requireAuth(request)` call sites.
+
+## [1.16.0] - 2026-07-31
+
+### Added
+- **ESLint CI gate and targeted file linting** (KEWL-2585): added ESLint 10 flat config scoped to `src/` plus `eslint.config.mjs`, with Next and React Hooks rules registered for Next 16. `npm run lint` now exits 0 with the known React Hooks compiler and `<img>` findings reported as warnings, and CI runs lint after dependency install.
+
+### Fixed
+- Cleared the initial blocking lint baseline by mechanically removing unused variables, empty block, irregular whitespace, and `prefer-const` findings, and replacing deliberate invalid-input `any` casts with narrower typed assertions.
+
 ## [1.15.4] - 2026-07-31
 
 ### Fixed

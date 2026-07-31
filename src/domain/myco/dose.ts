@@ -171,7 +171,7 @@ export function computeDoseGuidance(
 
   const mgText =
     mgLow !== null ? (mgHigh !== null && mgHigh !== mgLow ? ` (${mgLow}–${mgHigh}mg)` : ` (${mgLow}mg)`) : "";
-  let guidanceText = `A typical ${tier.label.toLowerCase()} starting point for this product is ${unitsText}${mgText}.`;
+  const guidanceText = `A typical ${tier.label.toLowerCase()} starting point for this product is ${unitsText}${mgText}.`;
 
   let offsetNote: string | undefined;
   if (product.strengthOffset === "stronger") {

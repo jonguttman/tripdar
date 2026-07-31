@@ -29,7 +29,7 @@ describe("createPrismaMock", () => {
   it("throws by name when a model method is not stubbed", () => {
     const mock = createPrismaMock({ assignment: { findFirst: vi.fn() } });
 
-    expect(() => (mock as Record<string, any>).assignment.findUnique).toThrowError(
+    expect(() => (mock as { assignment: { findUnique: unknown } }).assignment.findUnique).toThrowError(
       /prisma\.assignment\.findUnique is not stubbed in this test/
     );
     expect(drainUnstubbedPrismaAccesses()).toEqual(["prisma.assignment.findUnique"]);
@@ -38,7 +38,7 @@ describe("createPrismaMock", () => {
   it("throws by name when the model itself is not stubbed", () => {
     const mock = createPrismaMock({ assignment: { findFirst: vi.fn() } });
 
-    expect(() => (mock as Record<string, any>).employee).toThrowError(
+    expect(() => (mock as { employee: unknown }).employee).toThrowError(
       /prisma\.employee is not stubbed in this test/
     );
     expect(drainUnstubbedPrismaAccesses()).toEqual(["prisma.employee"]);
@@ -47,7 +47,7 @@ describe("createPrismaMock", () => {
   it("labels the root so transaction clients read as `tx.model.method`", () => {
     const mock = createPrismaMock({ review: { create: vi.fn() } }, "tx");
 
-    expect(() => (mock as Record<string, any>).review.update).toThrowError(
+    expect(() => (mock as { review: { update: unknown } }).review.update).toThrowError(
       /tx\.review\.update is not stubbed in this test/
     );
     expect(drainUnstubbedPrismaAccesses()).toEqual(["tx.review.update"]);
@@ -58,7 +58,7 @@ describe("createPrismaMock", () => {
 
     // Awaiting anything that touches the mock reads `.then`; a throw there would replace
     // the real failure with an unrelated one.
-    expect(() => (mock as Record<string, any>).then).not.toThrow();
+    expect(() => (mock as { then: unknown }).then).not.toThrow();
     await expect(Promise.resolve(mock)).resolves.toBeDefined();
     expect(drainUnstubbedPrismaAccesses()).toEqual([]);
   });
@@ -66,8 +66,8 @@ describe("createPrismaMock", () => {
   it("records every distinct miss so the global hook can report them together", () => {
     const mock = createPrismaMock({ assignment: {} });
 
-    expect(() => (mock as Record<string, any>).assignment.findFirst).toThrow();
-    expect(() => (mock as Record<string, any>).assignment.update).toThrow();
+    expect(() => (mock as { assignment: { findFirst: unknown; update: unknown } }).assignment.findFirst).toThrow();
+    expect(() => (mock as { assignment: { findFirst: unknown; update: unknown } }).assignment.update).toThrow();
 
     expect(drainUnstubbedPrismaAccesses()).toEqual([
       "prisma.assignment.findFirst",

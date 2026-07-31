@@ -111,7 +111,7 @@ export function sniffImageFormat(bytes: Buffer): SniffedFormat | null {
   }
 
   // SVG is text. Allow a BOM, leading whitespace, XML prolog and comments.
-  const head = bytes.toString("utf8", 0, Math.min(bytes.length, 2048)).replace(/^﻿/, "");
+  const head = bytes.toString("utf8", 0, Math.min(bytes.length, 2048)).replace(/^\uFEFF/, "");
   if (/^\s*(?:<\?xml[^>]*\?>\s*|<!--[\s\S]*?-->\s*|<!DOCTYPE[^>]*>\s*)*<svg[\s>]/i.test(head)) {
     return "svg";
   }
