@@ -29,7 +29,7 @@ describe("createPrismaMock", () => {
   it("throws by name when a model method is not stubbed", () => {
     const mock = createPrismaMock({ assignment: { findFirst: vi.fn() } });
 
-    expect(() => (mock as { assignment: { findUnique: unknown } }).assignment.findUnique).toThrowError(
+    expect(() => (mock as unknown as { assignment: { findUnique: unknown } }).assignment.findUnique).toThrowError(
       /prisma\.assignment\.findUnique is not stubbed in this test/
     );
     expect(drainUnstubbedPrismaAccesses()).toEqual(["prisma.assignment.findUnique"]);
@@ -38,7 +38,7 @@ describe("createPrismaMock", () => {
   it("throws by name when the model itself is not stubbed", () => {
     const mock = createPrismaMock({ assignment: { findFirst: vi.fn() } });
 
-    expect(() => (mock as { employee: unknown }).employee).toThrowError(
+    expect(() => (mock as unknown as { employee: unknown }).employee).toThrowError(
       /prisma\.employee is not stubbed in this test/
     );
     expect(drainUnstubbedPrismaAccesses()).toEqual(["prisma.employee"]);
@@ -47,7 +47,7 @@ describe("createPrismaMock", () => {
   it("labels the root so transaction clients read as `tx.model.method`", () => {
     const mock = createPrismaMock({ review: { create: vi.fn() } }, "tx");
 
-    expect(() => (mock as { review: { update: unknown } }).review.update).toThrowError(
+    expect(() => (mock as unknown as { review: { update: unknown } }).review.update).toThrowError(
       /tx\.review\.update is not stubbed in this test/
     );
     expect(drainUnstubbedPrismaAccesses()).toEqual(["tx.review.update"]);
@@ -58,7 +58,7 @@ describe("createPrismaMock", () => {
 
     // Awaiting anything that touches the mock reads `.then`; a throw there would replace
     // the real failure with an unrelated one.
-    expect(() => (mock as { then: unknown }).then).not.toThrow();
+    expect(() => (mock as unknown as { then: unknown }).then).not.toThrow();
     await expect(Promise.resolve(mock)).resolves.toBeDefined();
     expect(drainUnstubbedPrismaAccesses()).toEqual([]);
   });
