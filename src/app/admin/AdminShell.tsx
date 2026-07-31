@@ -102,7 +102,7 @@ export default function AdminShell({
         return;
       }
       window.location.href = data.redirect || "/admin/myco";
-    } catch (err) {
+    } catch (_err) {
       setPwError("Network error — try again");
       setPwLoading(false);
     }

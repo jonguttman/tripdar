@@ -108,7 +108,7 @@ export default function StrainsAdminPage() {
       } else {
         setError(data.error?.message || "Failed to load strains");
       }
-    } catch (err) {
+    } catch (_err) {
       setError("Network error loading strains");
     } finally {
       setLoading(false);
@@ -229,7 +229,7 @@ export default function StrainsAdminPage() {
       } else {
         setError(data?.error?.message || "Operation failed");
       }
-    } catch (err) {
+    } catch (_err) {
       setError("Network error");
     } finally {
       setLoading(false);
@@ -254,7 +254,7 @@ export default function StrainsAdminPage() {
       } else {
         setError(data.error?.message || "Delete failed");
       }
-    } catch (err) {
+    } catch (_err) {
       setError("Network error");
     } finally {
       setLoading(false);
@@ -289,7 +289,7 @@ export default function StrainsAdminPage() {
       } else {
         setError(data.error?.message || "Upload failed");
       }
-    } catch (err) {
+    } catch (_err) {
       setError("Network error uploading image");
     } finally {
       setUploadingImage(false);
@@ -336,7 +336,7 @@ export default function StrainsAdminPage() {
       } else {
         setError(data.error?.message || "Initialization failed");
       }
-    } catch (err) {
+    } catch (_err) {
       setError("Network error");
     } finally {
       setLoading(false);

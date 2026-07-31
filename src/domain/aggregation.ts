@@ -69,7 +69,7 @@ const MINIMUM_SIGNALS_TO_SPEAK = 3;
  * The insufficient data message per spec.
  * "This is the only valid 'insufficient data' message. It is not an apology; it is a boundary."
  */
-function insufficientDataMessage(_dimension: Dimension): string {
+function insufficientDataMessage(): string {
   return `Not enough reports yet to describe patterns for ${FIXED_CONTEXT.strain} at ${FIXED_CONTEXT.dose.toLowerCase()}.`;
 }
 
@@ -114,7 +114,7 @@ export function aggregateDimension(
     return {
       dimension,
       canSpeak: false,
-      sentence: insufficientDataMessage(dimension),
+      sentence: insufficientDataMessage(),
       signalCount,
     };
   }
@@ -130,7 +130,7 @@ export function aggregateDimension(
     return {
       dimension,
       canSpeak: false,
-      sentence: insufficientDataMessage(dimension),
+      sentence: insufficientDataMessage(),
       signalCount,
     };
   }
@@ -155,7 +155,7 @@ export function aggregateDimension(
     return {
       dimension,
       canSpeak: false,
-      sentence: insufficientDataMessage(dimension),
+      sentence: insufficientDataMessage(),
       signalCount,
     };
   }
@@ -280,4 +280,3 @@ export function verifyAggregationCompliance(aggregation: FullAggregation): boole
 
   return true;
 }
-

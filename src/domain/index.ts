@@ -72,7 +72,7 @@ function runExample(): void {
   console.log();
 
   // Invalid signal creation (wrong dimension)
-  const invalidInput = { dimension: "Focus" as any, direction: "More" as any };
+  const invalidInput = { dimension: "Focus" as Dimension, direction: "More" as Direction };
   const invalidResult = validateSignalInput(invalidInput);
   console.log("Validating invalid input:", invalidInput);
   console.log("  Valid:", invalidResult.valid);
@@ -297,4 +297,3 @@ export * from "./strain";
 
 // Re-export partner integration (for API routes)
 export * from "./partner";
-
