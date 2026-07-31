@@ -232,6 +232,29 @@ describe("brand portal submission route", () => {
     });
   });
 
+  describe("internal notification", () => {
+    it("notifies Jon and Scotty after saving a submission even when no receipt address exists", async () => {
+      const response = await post({
+        contact: {
+          submitterName: "Dana Reyes",
+          submitterRole: "Head of Ops",
+          contactPermission: false,
+        },
+        products: [{ catalogItemId: "item-1", productUnitMg: 300 }],
+      });
+
+      expect(response.status).toBe(201);
+      expect(sendEmailMock).toHaveBeenCalledTimes(1);
+      expect(sendEmailMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: ["jonguttman@gmail.com", "scottyclaw@gmail.com"],
+          subject: "Brand submission ready for review: Micro Mind",
+          text: expect.stringContaining("Review queue: https://tripdar.test/admin/myco/brand-submissions"),
+        }),
+      );
+    });
+  });
+
   // Gap 2 — the input used to accept files the backend then discarded.
   describe("single brand logo and artwork", () => {
     it("refuses a second logo rather than silently orphaning it", async () => {
@@ -312,7 +335,7 @@ describe("brand portal submission route", () => {
         products: [{ catalogItemId: "item-1", sku: "SKU-999" }],
       });
 
-      expect(sendEmailMock).toHaveBeenCalledTimes(1);
+      expect(sendEmailMock).toHaveBeenCalledTimes(2);
       expect(sendEmailMock.mock.calls[0][0].to).toBe("dana@brand.test");
     });
 
@@ -373,7 +396,7 @@ describe("brand portal submission route", () => {
       expect(sendEmailMock.mock.calls[0][0].text).toContain("SKU: SKU-123 -> (cleared)");
     });
 
-    it("skips the send when we hold no email at all, without failing the submission", async () => {
+    it("skips the submitter receipt when we hold no email at all, without failing the submission", async () => {
       const response = await post({
         contact: contact({ preferredContactMethod: "signal", contactHandle: "+15550001234" }),
         products: [{ catalogItemId: "item-1", sku: "SKU-999" }],
@@ -381,7 +404,11 @@ describe("brand portal submission route", () => {
 
       expect(response.status).toBe(201);
       expect((await response.json()).data.acknowledgmentSent).toBe(false);
-      expect(sendEmailMock).not.toHaveBeenCalled();
+      expect(sendEmailMock).toHaveBeenCalledTimes(1);
+      expect(sendEmailMock.mock.calls[0][0].to).toEqual([
+        "jonguttman@gmail.com",
+        "scottyclaw@gmail.com",
+      ]);
     });
 
     it("keeps the submission when the receipt fails to send", async () => {

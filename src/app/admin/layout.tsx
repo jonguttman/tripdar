@@ -19,6 +19,7 @@ import {
 const navItems: { href: string; label: string; icon: IconName }[] = [
   { href: "/admin", label: "Dashboard", icon: "grid" },
   { href: "/admin/myco", label: "Myco Store", icon: "spark" },
+  { href: "/admin/myco/brand-submissions", label: "Brand Queue", icon: "file" },
   { href: "/admin/myco/brand-links", label: "Brand Links", icon: "key" },
   { href: "/admin/strains", label: "Strains", icon: "leaf" },
   { href: "/admin/collections", label: "Collections", icon: "folder" },
