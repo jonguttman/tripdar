@@ -6,7 +6,7 @@
  * Requires GitHub OAuth authentication.
  */
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/domain/auth/config";
 import { list } from "@vercel/blob";
@@ -32,7 +32,7 @@ async function requireAuth() {
  * GET /api/admin/strains/visualizations
  * Get visualization URLs for all strains
  */
-export async function GET() {
+export async function GET(_request: NextRequest) {
   const auth = await requireAuth();
   if (auth instanceof NextResponse) return auth;
 

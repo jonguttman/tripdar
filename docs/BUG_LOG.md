@@ -33,6 +33,44 @@ Module-scope initialization can make runtime-only dependencies part of Next.js b
 
 ---
 
+## BUG-2026-07-31-003: ESLint unused-binding false positive broke production build
+
+**Symptoms:**
+- Vercel production build for PR #55 failed with `Type error: Expected 0 arguments, but got 1`.
+- The first surfaced failure was `src/app/api/admin/strains/[id]/route.ts`, where handlers still called `requireAuth(request)` after `requireAuth` had been changed to accept no arguments.
+- The same mismatch existed in `src/app/api/admin/strains/image/route.ts` and `src/app/api/admin/strains/route.ts`.
+
+**Root Cause:**
+`eslint.config.mjs` enabled `@typescript-eslint/no-unused-vars` without honoring the repo's standard leading-underscore convention. Intentionally-unused parameters like `_request` were reported as lint errors, and the earlier lint-gate cleanup removed those parameters instead of configuring the rule correctly. Some call sites still passed the request object, so the tooling-driven edit became a TypeScript build failure.
+
+**Fix:**
+- Configured `@typescript-eslint/no-unused-vars` with `argsIgnorePattern`, `varsIgnorePattern`, and `caughtErrorsIgnorePattern` set to `^_`.
+- Restored intentionally-unused request parameters on strain admin routes.
+- Restored omitted catch bindings as underscore-prefixed values in the admin layout, admin strains page, and partner API routes.
+
+**Files Modified:**
+- `eslint.config.mjs`
+- `src/app/api/admin/strains/[id]/route.ts`
+- `src/app/api/admin/strains/image/route.ts`
+- `src/app/api/admin/strains/route.ts`
+- `src/app/api/admin/strains/visualizations/route.ts`
+- `src/app/admin/layout.tsx`
+- `src/app/admin/strains/page.tsx`
+- `src/app/api/admin/partners/[id]/route.ts`
+- `src/app/api/admin/partners/route.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Configure lint rules to match the codebase's intentional-unused naming convention before making mechanical cleanup edits.
+- When changing a helper signature, search for and update all call sites in the same commit, then run the production build or typecheck gate that exercises route handlers.
+- Treat leading-underscore bindings as an explicit author signal; do not delete them just to satisfy a default lint rule.
+
+**Lesson Learned:**
+Lint gates should encode established project conventions. If the rule is misconfigured, changing shipped code to appease it can turn a style false positive into a production build failure.
+
+---
+
 ## BUG-2026-07-31-001: concurrent brand-link mints could hide an unrecoverable live credential
 
 **Symptoms:**

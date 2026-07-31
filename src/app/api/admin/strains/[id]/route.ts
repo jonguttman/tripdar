@@ -20,7 +20,7 @@ import {
 /**
  * Check if user is authenticated
  */
-async function requireAuth() {
+async function requireAuth(_request: NextRequest) {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {

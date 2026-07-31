@@ -63,6 +63,11 @@ export default [
       ...next.configs.recommended.rules,
       ...next.configs["core-web-vitals"].rules,
       "@next/next/no-img-element": "warn",
+      "@typescript-eslint/no-unused-vars": ["error", {
+        argsIgnorePattern: "^_",
+        varsIgnorePattern: "^_",
+        caughtErrorsIgnorePattern: "^_",
+      }],
       "react-hooks/immutability": "warn",
       "react-hooks/set-state-in-effect": "warn",
     },

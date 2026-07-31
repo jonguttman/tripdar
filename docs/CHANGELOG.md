@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.16.1] - 2026-07-31
+
+### Fixed
+- **ESLint unused-binding configuration** (KEWL-2609): `@typescript-eslint/no-unused-vars` now honors the project's leading-underscore convention for intentionally-unused args, variables, and catch bindings. Restored the request and catch bindings that KEWL-2585 removed only to satisfy the misconfigured lint gate, fixing the production build type error from `requireAuth(request)` call sites.
+
 ## [1.16.0] - 2026-07-31
 
 ### Added
