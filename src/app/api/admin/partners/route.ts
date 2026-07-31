@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         apiKey, // Only returned on creation!
       }
     });
-  } catch (error) {
+  } catch {
     return NextResponse.json(
       { success: false, error: { code: "SERVER_ERROR", message: "Failed to register partner" } },
       { status: 500 }

@@ -110,7 +110,7 @@ export async function GET(request: NextRequest) {
 
     // Fetch blob list once for visualization URLs and image URLs
     let imageBlobs: { pathname: string; url: string }[] = [];
-    let visualizationMap: Map<string, string> = new Map();
+    const visualizationMap: Map<string, string> = new Map();
     try {
       const { blobs } = await list({ prefix: "Strain_Graphics/" });
       imageBlobs = filterImageBlobs(blobs);

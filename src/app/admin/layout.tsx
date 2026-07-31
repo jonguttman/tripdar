@@ -95,7 +95,7 @@ export default function AdminLayout({
         return;
       }
       window.location.href = data.redirect || "/admin/myco";
-    } catch (err) {
+    } catch {
       setPwError("Network error — try again");
       setPwLoading(false);
     }

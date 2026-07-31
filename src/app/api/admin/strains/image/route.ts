@@ -14,7 +14,7 @@ import { put, del, list } from "@vercel/blob";
 /**
  * Check if user is authenticated
  */
-async function requireAuth(_request: NextRequest) {
+async function requireAuth() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {

@@ -280,7 +280,7 @@ export async function getRecommendations(
 
   // Sort and get top recommendations
   const sorted = Array.from(candidateScores.entries())
-    .filter(([_, data]) => data.score > 0)
+    .filter(([, data]) => data.score > 0)
     .sort((a, b) => b[1].score - a[1].score)
     .slice(0, limit);
 

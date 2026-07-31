@@ -21,7 +21,7 @@ import { STRAIN_DATA as DEFAULT_STRAINS } from "@/domain/strain/data";
 /**
  * Check if user is authenticated
  */
-async function requireAuth(_request: NextRequest) {
+async function requireAuth() {
   const session = await getServerSession(authOptions);
 
   if (!session?.user?.email) {
