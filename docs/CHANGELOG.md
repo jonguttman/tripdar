@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.15.4] - 2026-07-31
+
+### Fixed
+- Resend is now initialized on the first email send instead of at module import, so local and scratch `next build` runs no longer require `RESEND_API_KEY` while real sends still fail fast when the key is missing. (KEWL-2577)
+
 ## [1.15.3] - 2026-07-31
 
 ### Fixed
