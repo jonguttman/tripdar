@@ -24,7 +24,7 @@
  * screen sends anything — forwarding the link to a brand stays a human decision.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Badge,
@@ -151,6 +151,12 @@ export default function BrandLinksPage() {
 
   /** Per-brand transient UI state, keyed by brand id. */
   const [busyBrandId, setBusyBrandId] = useState<string | null>(null);
+  /**
+   * State disables every row after React renders. The ref closes the smaller
+   * same-render window where two clicks could otherwise start two mutations
+   * before that disabled state reaches the buttons.
+   */
+  const mutationInFlight = useRef(false);
   const [rowError, setRowError] = useState<Record<string, string>>({});
   /** Set when POST rejects a multi-partner brand and hands back the candidates. */
   const [partnerChoice, setPartnerChoice] = useState<Record<string, string[]>>({});
@@ -210,8 +216,20 @@ export default function BrandLinksPage() {
       return next;
     });
 
+  function beginMutation(brandId: string): boolean {
+    if (mutationInFlight.current) return false;
+    mutationInFlight.current = true;
+    setBusyBrandId(brandId);
+    return true;
+  }
+
+  function finishMutation() {
+    mutationInFlight.current = false;
+    setBusyBrandId(null);
+  }
+
   async function mint(brand: Brand) {
-    setBusyBrandId(brand.id);
+    if (!beginMutation(brand.id)) return;
     setError(brand.id, null);
     try {
       const days = expiry[brand.id];
@@ -252,11 +270,12 @@ export default function BrandLinksPage() {
     } catch (error) {
       setError(brand.id, error instanceof Error ? error.message : "Could not generate a link");
     } finally {
-      setBusyBrandId(null);
+      finishMutation();
     }
   }
 
   async function revoke(brand: Brand, token: BrandLinkToken) {
+    if (mutationInFlight.current) return;
     if (
       !window.confirm(
         `Revoke ${brand.name}'s portal link?\n\nAnyone holding the current URL loses access immediately. You can generate a new one afterwards.`
@@ -264,7 +283,7 @@ export default function BrandLinksPage() {
     ) {
       return;
     }
-    setBusyBrandId(brand.id);
+    if (!beginMutation(brand.id)) return;
     setError(brand.id, null);
     try {
       const res = await fetch("/api/admin/myco/brand-links", {
@@ -281,7 +300,7 @@ export default function BrandLinksPage() {
     } catch (error) {
       setError(brand.id, error instanceof Error ? error.message : "Could not revoke the link");
     } finally {
-      setBusyBrandId(null);
+      finishMutation();
     }
   }
 
@@ -407,6 +426,7 @@ export default function BrandLinksPage() {
             const token = currentTokenByBrand.get(brand.id) ?? null;
             const status = effectiveStatus(token);
             const busy = busyBrandId === brand.id;
+            const mutationDisabled = busyBrandId !== null;
             const partnerIds = partnerChoice[brand.id];
 
             return (
@@ -466,21 +486,25 @@ export default function BrandLinksPage() {
                         <Button
                           variant="secondary"
                           loading={busy}
-                          disabled={busy}
+                          disabled={mutationDisabled}
                           onClick={() => confirmRegenerate(brand)}
                         >
                           Generate new link
                         </Button>
                         <Button
                           variant="danger-ghost"
-                          disabled={busy}
+                          disabled={mutationDisabled}
                           onClick={() => void revoke(brand, token!)}
                         >
                           Revoke
                         </Button>
                       </>
                     ) : (
-                      <Button loading={busy} disabled={busy} onClick={() => void mint(brand)}>
+                      <Button
+                        loading={busy}
+                        disabled={mutationDisabled}
+                        onClick={() => void mint(brand)}
+                      >
                         <Icon name="key" size={16} />
                         {status === "none" ? "Generate link" : "Generate new link"}
                       </Button>

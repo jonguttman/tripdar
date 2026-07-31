@@ -4,6 +4,33 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-31-001: concurrent brand-link mints could hide an unrecoverable live credential
+
+**Symptoms:**
+- While one brand-link mint request was in flight, every other brand row remained enabled.
+- A second successful mint replaced the first brand's raw URL in the single result card. Because the API stores only a SHA-256 hash, the first live URL could not be recovered and had to be rotated.
+
+**Root Cause:**
+`busyBrandId` disabled only the row whose request was running, while the page kept one shared `minted` result slot. React state also updates after the event handler returns, leaving a small same-render window where even globally disabled buttons alone would not stop two rapid mutations from starting.
+
+**Fix:**
+- Every brand row's mint, regenerate, and revoke action is disabled while any link mutation is running.
+- A synchronous `useRef` guard rejects a second mutation before React renders the disabled state.
+- Mint and revoke share the same guard so their reloads and token lifecycle writes cannot overlap from this screen.
+
+**Files Modified:**
+- `src/app/admin/myco/brand-links/page.tsx`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+One-shot credential surfaces must serialize mutations at both layers of the UI: visible disabled state for the operator and a synchronous handler guard for events that arrive before the next render.
+
+**Lesson Learned:**
+Per-row loading state is unsafe when every row writes to one shared, non-recoverable result slot. The serialization boundary has to match the shared resource, not the row that launched the request.
+
+---
+
 ## BUG-2026-07-29-001: staff-link mints were not serialised across the script and the admin route
 
 **Symptoms:**
