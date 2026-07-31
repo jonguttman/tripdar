@@ -24,6 +24,7 @@ import {
   DONT_KNOW_VALUE,
   PHOTO_CHECK_FIELD,
   REVIEWER_NOTE_FIELD,
+  isCatalogColumnWriteAllowed,
 } from "@/domain/myco/catalogFieldSpec";
 import { reviewerStillOwesField } from "@/domain/myco/staffFieldVerification";
 import { approvedPhotoCount, photoStatusLabel } from "@/domain/myco/photoVisibility";
@@ -408,6 +409,16 @@ export async function POST(
       // the point of the audit. "Confirmed absent" clears the column rather than storing
       // the sentinel.
       if (rule.catalogColumn && state.state === "confirmed") {
+        if (!isCatalogColumnWriteAllowed(rule.catalogColumn)) {
+          console.warn("[staff-review] Skipping disallowed catalog column projection", {
+            catalogItemId: item.id,
+            fieldName: rule.fieldName,
+            catalogColumn: rule.catalogColumn,
+            source: "staffReviewProductSubmit",
+          });
+          continue;
+        }
+
         updates[rule.catalogColumn] =
           state.confirmedValue === CONFIRMED_ABSENT_VALUE ? null : state.confirmedValue;
       }
@@ -416,6 +427,8 @@ export async function POST(
     if (Object.keys(updates).length > 0) {
       await tx.storeProductCatalog.update({
         where: { id: item.id },
+        // Prisma's generated type would reject arbitrary StoreProductCatalog keys
+        // such as `active`; this dynamic-column cast is safe only after allowlist filtering.
         data: updates as never,
       });
     }
@@ -424,6 +437,8 @@ export async function POST(
   });
 
   const gate = evaluateGateForItem({
+    // The projection merge is runtime-safe, but TypeScript cannot prove the result
+    // still satisfies the exact catalog item shape expected by evaluateGateForItem.
     item: { ...refreshed, ...(columnUpdates as object) } as never,
     extras: {
       photoCount: approvedPhotoCount(refreshed.photos),
