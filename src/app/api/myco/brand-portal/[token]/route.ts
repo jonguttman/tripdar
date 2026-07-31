@@ -64,6 +64,24 @@ const FIELD_LABELS: Record<string, string> = {
   socialHandles: "Social handles",
 };
 
+const DEFAULT_REVIEW_NOTIFY_RECIPIENTS = ["jonguttman@gmail.com", "scottyclaw@gmail.com"];
+
+function reviewNotifyRecipients(): string[] {
+  const configured = process.env.BRAND_SUBMISSION_NOTIFY_EMAILS?.split(",")
+    .map((email) => email.trim())
+    .filter(Boolean);
+  return configured?.length ? configured : DEFAULT_REVIEW_NOTIFY_RECIPIENTS;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function labelFor(field: string): string {
   return FIELD_LABELS[field] ?? field;
 }
@@ -424,6 +442,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       } catch (error) {
         console.error("[brand-portal] acknowledgment send failed:", error);
       }
+    }
+
+    // Internal arrival notification is separate from the submitter receipt. These
+    // submissions are rare and should land in front of Jon/Scotty immediately.
+    try {
+      const origin = new URL(request.url).origin;
+      const reviewUrl = `${origin}/admin/myco/brand-submissions`;
+      const safeBrandName = escapeHtml(brand.name);
+      const safeSubmitterName = escapeHtml(submission.contact.submitterName);
+      const safeSubmitterRole = escapeHtml(submission.contact.submitterRole);
+      await sendEmail({
+        to: reviewNotifyRecipients(),
+        subject: `Brand submission ready for review: ${brand.name}`,
+        html: `
+          <div style="font-family: sans-serif; line-height: 1.6;">
+            <h2 style="margin: 0 0 12px;">Brand submission ready for review</h2>
+            <p><strong>Brand:</strong> ${safeBrandName}</p>
+            <p><strong>Submitter:</strong> ${safeSubmitterName} (${safeSubmitterRole})</p>
+            <p><strong>Saved changes:</strong> ${pendingChanges.length} field claim(s), ${photoAssets.length} product photo(s), ${submission.missingProducts.length} missing product report(s).</p>
+            <p><a href="${reviewUrl}">Open the review queue</a></p>
+          </div>
+        `,
+        text: [
+          `Brand submission ready for review: ${brand.name}`,
+          `Submitter: ${submission.contact.submitterName} (${submission.contact.submitterRole})`,
+          `Saved changes: ${pendingChanges.length} field claim(s), ${photoAssets.length} product photo(s), ${submission.missingProducts.length} missing product report(s).`,
+          `Review queue: ${reviewUrl}`,
+        ].join("\n"),
+      });
+    } catch (error) {
+      console.error("[brand-portal] review notification send failed:", error);
     }
 
     return NextResponse.json(

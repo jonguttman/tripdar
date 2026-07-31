@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.15.5] - 2026-07-31
+
+### Added
+- **Brand submission review queue** (KEWL-2368): `/admin/myco/brand-submissions` now lists brand portal submissions with submitter/contact consent, image-usage grant, product field diffs, brand-level fields/assets, pending product photos, COA claims, and missing-product reports. Admins can accept or reject product fields, product photos, brand fields, and brand assets independently; accepted product-field claims promote through the existing `CatalogFieldChange` disposition/write-through path and staff-confirmed fields drop to `needs_re_review`.
+- **Immediate submission notification** (KEWL-2368): a saved brand portal submission now sends Jon and Scotty a best-effort review-queue email, separate from the submitter receipt.
+
 ## [1.15.4] - 2026-07-31
 
 ### Fixed
