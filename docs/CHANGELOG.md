@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.15.3] - 2026-07-31
+
+### Fixed
+- **Brand-link mutations are serialized in the admin screen** (KEWL-2578): generating or revoking a brand portal link now disables every brand row, and a synchronous in-flight guard closes the pre-render double-click window. Concurrent mints can no longer overwrite the only recoverable raw URL in the one-shot result.
+
+## [1.15.2] - 2026-07-31
+
+### Added
+- **Brand portal email handoff** (KEWL-2560): the admin brand-links mint result now keeps "Copy link" and adds "Email this brand" plus a "Copy message" fallback using Adrienne's approved subject/body with the freshly minted one-shot URL.
+
 ## [1.15.1] - 2026-07-29
 
 ### Fixed
