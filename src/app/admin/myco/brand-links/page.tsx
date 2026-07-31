@@ -87,6 +87,39 @@ const STATUS_LABEL: Record<EffectiveStatus, string> = {
   none: "No link yet",
 };
 
+const BRAND_EMAIL_SUBJECT = "Your products at The Mushroom Top";
+
+function buildBrandEmailBody(brandName: string, url: string): string {
+  return [
+    "Hi —",
+    "",
+    `We carry ${brandName} at The Mushroom Top, and I want to make sure we have you right.`,
+    "",
+    `This link opens a page with every ${brandName} product we have on file. It shows what we're missing and lets you fix anything that's wrong. No account, no password — it works on your phone.`,
+    "",
+    url,
+    "",
+    "The gaps are usually mg per unit, units per pack, ingredients, onset and duration, and your own dosing guidance. You can upload real product photos, your logo, and a lab test link while you're in there — those are what our customers actually see.",
+    "",
+    "If we're still listing something you've discontinued, flag it and we'll take it down.",
+    "",
+    "It's about five minutes. Thank you —",
+    "",
+    "Adrienne",
+    "The Mushroom Top",
+  ].join("\r\n");
+}
+
+function buildBrandEmailMessage(brandName: string, url: string): string {
+  return `Subject: ${BRAND_EMAIL_SUBJECT}\r\n\r\n${buildBrandEmailBody(brandName, url)}`;
+}
+
+function buildBrandMailtoHref(brandName: string, url: string): string {
+  return `mailto:?subject=${encodeURIComponent(BRAND_EMAIL_SUBJECT)}&body=${encodeURIComponent(
+    buildBrandEmailBody(brandName, url)
+  )}`;
+}
+
 function effectiveStatus(token: BrandLinkToken | null): EffectiveStatus {
   if (!token) return "none";
   if (token.status === "revoked") return "revoked";
@@ -126,6 +159,7 @@ export default function BrandLinksPage() {
 
   const [minted, setMinted] = useState<MintedLink | null>(null);
   const [copied, setCopied] = useState(false);
+  const [copiedMessage, setCopiedMessage] = useState(false);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -206,6 +240,7 @@ export default function BrandLinksPage() {
         return next;
       });
       setCopied(false);
+      setCopiedMessage(false);
       setMinted({
         brandId: brand.id,
         brandName: brand.name,
@@ -266,10 +301,30 @@ export default function BrandLinksPage() {
     try {
       await navigator.clipboard.writeText(minted.url);
       setCopied(true);
+      setCopiedMessage(false);
     } catch {
       // Clipboard is blocked outside a secure context; the URL is selectable above.
       setCopied(false);
       window.prompt("Copy this link:", minted.url);
+    }
+  }
+
+  function emailMinted() {
+    if (!minted) return;
+    window.location.href = buildBrandMailtoHref(minted.brandName, minted.url);
+  }
+
+  async function copyMintedMessage() {
+    if (!minted) return;
+    const message = buildBrandEmailMessage(minted.brandName, minted.url);
+    try {
+      await navigator.clipboard.writeText(message);
+      setCopiedMessage(true);
+      setCopied(false);
+    } catch {
+      // Clipboard can be unavailable in older or non-secure browser contexts.
+      setCopiedMessage(false);
+      window.prompt("Copy this message:", message);
     }
   }
 
@@ -315,10 +370,17 @@ export default function BrandLinksPage() {
               <p className="mt-3 break-all rounded-lg border border-moss-200 bg-bone-50 px-3 py-2 font-mono text-sm text-bark-800">
                 {minted.url}
               </p>
-              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
                 <Button onClick={copyMinted}>
                   <Icon name={copied ? "check" : "copy"} size={16} />
                   {copied ? "Copied" : "Copy link"}
+                </Button>
+                <Button variant="secondary" onClick={emailMinted}>
+                  Email this brand
+                </Button>
+                <Button variant="secondary" onClick={copyMintedMessage}>
+                  <Icon name={copiedMessage ? "check" : "copy"} size={16} />
+                  {copiedMessage ? "Message copied" : "Copy message"}
                 </Button>
                 <Button variant="secondary" onClick={() => setMinted(null)}>
                   Done

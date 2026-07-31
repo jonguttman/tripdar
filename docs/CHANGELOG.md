@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.15.2] - 2026-07-31
+
+### Added
+- **Brand portal email handoff** (KEWL-2560): the admin brand-links mint result now keeps "Copy link" and adds "Email this brand" plus a "Copy message" fallback using Adrienne's approved subject/body with the freshly minted one-shot URL.
+
 ## [1.15.1] - 2026-07-29
 
 ### Fixed
