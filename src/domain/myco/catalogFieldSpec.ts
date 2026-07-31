@@ -317,6 +317,15 @@ export const CATALOG_FIELD_SPECS: CatalogFieldSpec[] = [
   },
 ];
 
+/** StoreProductCatalog columns staff-review rules are allowed to project into. */
+export const CATALOG_COLUMN_WRITE_ALLOWLIST = new Set<string>(
+  CATALOG_FIELD_SPECS.flatMap((spec) => (spec.catalogColumn ? [spec.catalogColumn] : []))
+);
+
+export function isCatalogColumnWriteAllowed(catalogColumn: string): boolean {
+  return CATALOG_COLUMN_WRITE_ALLOWLIST.has(catalogColumn);
+}
+
 /** Field names the reviewer surface presents, in display order. Tier D is not reviewable here. */
 export const REVIEWABLE_FIELD_SPECS = CATALOG_FIELD_SPECS.filter((spec) => spec.tier !== "D").sort(
   (a, b) => a.sortOrder - b.sortOrder

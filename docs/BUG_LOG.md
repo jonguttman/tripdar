@@ -4,6 +4,35 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-07-31-002: Resend initialization made local Next.js builds require a runtime secret
+
+**Symptoms:**
+- `next build` failed during page-data collection when `RESEND_API_KEY` was unset.
+- Importing the brand-portal route evaluated the shared email module even though the build was not sending email.
+
+**Root Cause:**
+`src/lib/email.ts` constructed `Resend` at module scope. The Resend constructor rejects a missing key, so merely importing the module turned a runtime email configuration requirement into a build-time requirement.
+
+**Fix:**
+- Added a cached lazy client factory that constructs `Resend` on the first call to `sendEmail`.
+- Preserved fail-fast behavior on a real send; no placeholder API key is used.
+- Added a regression test proving the first send still rejects when `RESEND_API_KEY` is unset.
+
+**Files Modified:**
+- `src/lib/email.ts`
+- `src/lib/email.test.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Construct SDK clients that validate runtime-only credentials at the operation boundary when their modules are statically imported by Next.js routes.
+- Test both sides of the boundary: secret-free module/build evaluation and a loud failure when the configured operation is attempted.
+
+**Lesson Learned:**
+Module-scope initialization can make runtime-only dependencies part of Next.js build evaluation. Lazy construction keeps the configuration check at the first operation without weakening it.
+
+---
+
 ## BUG-2026-07-31-001: concurrent brand-link mints could hide an unrecoverable live credential
 
 **Symptoms:**

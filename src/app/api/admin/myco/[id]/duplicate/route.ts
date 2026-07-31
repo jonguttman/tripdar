@@ -82,7 +82,16 @@ export async function POST(
         brandDoseTiers: source.brandDoseTiers === null ? undefined : source.brandDoseTiers,
         brandDoseInstructions: source.brandDoseInstructions,
         photoUrl: null,
-        active: true,
+        // KEWL-2508: a duplicate is a brand-new row that has been reviewed by nobody.
+        // Verification lives per-product in `CatalogFieldVerificationState`, and those
+        // rows are deliberately NOT copied (confirmations are per-reviewer-per-product
+        // assertions about a physical package — inheriting them would forge staff
+        // sign-off). Combined with `photoUrl: null` and `flavors: []` above, the new row
+        // cannot clear the KEWL-2335 listing gate, so creating it active put an
+        // unverified product on the customer path — the exact KEWL-2327 failure. Same
+        // reasoning as `POST /api/admin/myco`, which also creates inactive. Activation
+        // happens only through PATCH, which evaluates the gate.
+        active: false,
         notes: source.notes,
         strengthOffset: {
           create: {

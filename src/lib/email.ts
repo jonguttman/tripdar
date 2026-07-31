@@ -1,6 +1,14 @@
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+let client: Resend | null = null;
+
+function resendClient(): Resend {
+  if (!client) {
+    client = new Resend(process.env.RESEND_API_KEY);
+  }
+
+  return client;
+}
 
 const FROM_ADDRESS = "Tripdar <noreply@tripd.ar>";
 const REPLY_TO_ADDRESS = "scottyclaw@gmail.com";
@@ -17,7 +25,7 @@ export interface SendEmailOptions {
 export async function sendEmail(options: SendEmailOptions) {
   const { to, subject, html, text, from = FROM_ADDRESS, replyTo = REPLY_TO_ADDRESS } = options;
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await resendClient().emails.send({
     from,
     to: Array.isArray(to) ? to : [to],
     subject,

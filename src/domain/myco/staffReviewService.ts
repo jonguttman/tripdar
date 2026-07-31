@@ -14,6 +14,7 @@ import {
   CONFIRMED_ABSENT_VALUE,
   PHOTO_CHECK_FIELD,
   REVIEWER_NOTE_FIELD,
+  isCatalogColumnWriteAllowed,
   type CatalogFieldSpec,
 } from "./catalogFieldSpec";
 import {
@@ -394,6 +395,16 @@ export async function recomputeCatalogItemProjection(
     if (cacheDiverged) cacheRowsChanged.push(rule.fieldName);
 
     if (rule.catalogColumn && state.state === "confirmed") {
+      if (!isCatalogColumnWriteAllowed(rule.catalogColumn)) {
+        console.warn("[staff-review] Skipping disallowed catalog column projection", {
+          catalogItemId,
+          fieldName: rule.fieldName,
+          catalogColumn: rule.catalogColumn,
+          source: "recomputeCatalogItemProjection",
+        });
+        continue;
+      }
+
       const expected =
         state.confirmedValue === CONFIRMED_ABSENT_VALUE ? null : state.confirmedValue;
       const actual = itemRecord[rule.catalogColumn] ?? null;
@@ -427,6 +438,8 @@ export async function recomputeCatalogItemProjection(
     if (Object.keys(columnUpdates).length > 0) {
       await tx.storeProductCatalog.update({
         where: { id: catalogItemId },
+        // Prisma's generated type would reject arbitrary StoreProductCatalog keys
+        // such as `active`; this dynamic-column cast is safe only after allowlist filtering.
         data: columnUpdates as never,
       });
     }

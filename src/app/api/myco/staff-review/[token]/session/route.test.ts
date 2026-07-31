@@ -76,6 +76,8 @@ async function post(body: Record<string, unknown>, headers: Record<string, strin
     headers: { "content-type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
+  // The test uses the web Request shape; this cast silences the narrower NextRequest
+  // handler signature, not a runtime difference in the fields this route reads.
   return POST(request as never, { params: Promise.resolve({ token: "raw-token" }) });
 }
 
