@@ -1,6 +1,8 @@
-import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
@@ -8,6 +10,8 @@ import { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const WORKER_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REMBG_SCRIPT = path.join(WORKER_DIR, "rembg_mask.py");
 const CONFIG_ROOT = path.join(REPO_ROOT, "photo-pipeline/config");
 const SUPPORTED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".heic", ".heif", ".dng", ".tif", ".tiff"]);
 const PREFIXES = {
@@ -31,6 +35,8 @@ const HEURISTIC_QA_REVIEW_WARNING =
   "review: Claude Vision unavailable; heuristic QA requires human catalog approval";
 const GENERATIVE_REVIEW_WARNING =
   "review: AI-enhanced generative output is non-catalog-safe; human label verification required";
+const REMBG_REVIEW_WARNING =
+  "review: local rembg/u2net produced a catalog-safe isolation at zero cost; human catalog approval still required";
 
 let prisma;
 
@@ -380,14 +386,21 @@ async function assessQualityWithClaude(imagePath) {
 
 async function processCatalogSafe({ normalizedPath, rootDir, job, baseName, preset, strictGateway }) {
   const warnings = [];
-  const gatewayRemoval = await removeBackgroundWithGateway(normalizedPath);
+  const gatewayRemoval = await removeBackgroundWithGateway(normalizedPath, preset);
   const processingMode = gatewayRemoval.processingMode ?? "catalog_safe";
   const isGenerativeReview = processingMode === "premium";
   if (!gatewayRemoval.usedGateway) {
     warnings.push(BACKGROUND_FALLBACK_WARNING, BACKGROUND_FALLBACK_REVIEW_WARNING);
-    warnings.push(...gatewayRemoval.warnings);
-    if (strictGateway) warnings.push("review: hosted background removal was required but unavailable");
   }
+  // --strict-gateway requires a genuine hosted removal. Both the deterministic
+  // fallback (!usedGateway) AND the zero-cost local rembg fallback (usedGateway
+  // via local rembg) mean the hosted service was unavailable, so a strict run
+  // must still surface the hosted-removal-required warning (KEWL-2011 / Codex P2).
+  const usedHostedRemoval = gatewayRemoval.usedGateway && !gatewayRemoval.localRembg;
+  if (strictGateway && !usedHostedRemoval) {
+    warnings.push("review: hosted background removal was required but unavailable");
+  }
+  if (gatewayRemoval.warnings?.length) warnings.push(...gatewayRemoval.warnings);
   if (isGenerativeReview) warnings.push(GENERATIVE_REVIEW_WARNING);
 
   const subject = gatewayRemoval.subjectBuffer
@@ -414,7 +427,7 @@ async function processCatalogSafe({ normalizedPath, rootDir, job, baseName, pres
       thumbnail: relativeBlobPath(rootDir, thumbPath),
     },
     warnings,
-    requiresReview: !gatewayRemoval.usedGateway || isGenerativeReview,
+    requiresReview: !gatewayRemoval.usedGateway || isGenerativeReview || Boolean(gatewayRemoval.requiresReview),
     labelFidelityScore: gatewayRemoval.usedGateway && !isGenerativeReview ? 0.94 : 0.82,
     costCents: gatewayRemoval.usedGateway ? gatewayRemoval.costCents : 0,
     backgroundRemoval: gatewayRemoval.service,
@@ -422,7 +435,7 @@ async function processCatalogSafe({ normalizedPath, rootDir, job, baseName, pres
   };
 }
 
-async function removeBackgroundWithGateway(imagePath) {
+async function removeBackgroundWithGateway(imagePath, preset) {
   const endpoint = process.env.VERCEL_AI_GATEWAY_BACKGROUND_REMOVAL_URL;
   const key = process.env.AI_GATEWAY_API_KEY ?? process.env.VERCEL_AI_GATEWAY_API_KEY ?? process.env.VERCEL_TOKEN;
   const openRouterKey = process.env.OPENROUTER_API_KEY;
@@ -464,6 +477,16 @@ async function removeBackgroundWithGateway(imagePath) {
     warnings.push("background: AI_GATEWAY_API_KEY or VERCEL_AI_GATEWAY_API_KEY is not configured");
   }
 
+  // Zero-cost, catalog-safe local isolation via rembg/u2net. Preferred over the
+  // naive deterministic mask (which retains the lightbox rectangle) whenever a
+  // local Python + rembg runtime is available. Produces a MASK only — the worker
+  // joins it to the untouched original, so label pixels are never modified.
+  const localRembg = await removeBackgroundWithLocalRembg(imagePath, preset);
+  if (localRembg.usedGateway) {
+    return { ...localRembg, warnings: uniqueStrings([...warnings, ...localRembg.warnings]) };
+  }
+  warnings.push(...localRembg.warnings);
+
   return {
     usedGateway: false,
     maskBuffer: null,
@@ -473,6 +496,80 @@ async function removeBackgroundWithGateway(imagePath) {
     service: hostedService("local-fallback", "deterministic-sharp-mask", 0, null),
     processingMode: "catalog_safe",
   };
+}
+
+export function rembgEnabled() {
+  const flag = (process.env.PHOTO_PIPELINE_REMBG ?? "auto").toLowerCase();
+  return flag !== "0" && flag !== "off" && flag !== "false" && flag !== "no";
+}
+
+export function buildRembgArgs(preset, inputPath, outputPath) {
+  const mask = preset?.mask ?? {};
+  const args = [
+    REMBG_SCRIPT,
+    "--input",
+    inputPath,
+    "--output",
+    outputPath,
+    "--model",
+    String(mask.model ?? "u2net"),
+    "--fg-threshold",
+    String(mask.fg_threshold ?? 240),
+    "--bg-threshold",
+    String(mask.bg_threshold ?? 10),
+    "--erode",
+    String(mask.erode ?? 5),
+  ];
+  if (mask.alpha_matting) args.push("--alpha-matting");
+  return args;
+}
+
+async function removeBackgroundWithLocalRembg(imagePath, preset) {
+  if (!rembgEnabled()) {
+    return { usedGateway: false, warnings: [] };
+  }
+  const python = process.env.PHOTO_PIPELINE_PYTHON ?? "python3";
+  const maskPath = path.join(tmpdir(), `tripdar-rembg-${randomUUID()}.png`);
+  const args = buildRembgArgs(preset, imagePath, maskPath);
+  try {
+    const { code, stderr } = await runProcess(python, args);
+    if (code !== 0) {
+      const detail = stderr.trim().split("\n").pop() || `exit ${code}`;
+      return { usedGateway: false, warnings: [`background: local rembg/u2net unavailable (${detail})`] };
+    }
+    const maskBuffer = await readFile(maskPath);
+    return {
+      usedGateway: true,
+      // Zero-cost local fallback — NOT the hosted removal service. Strict-gateway
+      // runs use this marker to still surface that the hosted requirement was
+      // unmet (KEWL-2011 / Codex P2).
+      localRembg: true,
+      maskBuffer,
+      subjectBuffer: null,
+      costCents: 0,
+      requiresReview: true,
+      warnings: [REMBG_REVIEW_WARNING],
+      service: hostedService("local-rembg", String(preset?.mask?.model ?? "u2net"), 0, null),
+      processingMode: "catalog_safe",
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return { usedGateway: false, warnings: [`background: local rembg/u2net failed: ${message}`] };
+  } finally {
+    await rm(maskPath, { force: true }).catch(() => {});
+  }
+}
+
+function runProcess(command, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", reject);
+    child.on("close", (code) => resolve({ code: code ?? 1, stderr }));
+  });
 }
 
 export function classifyHostedEndpointPayload(payload) {
@@ -662,7 +759,7 @@ function summarizeGatewayError(responseText) {
   }
 }
 
-async function isolateSubject(imagePath, maskBuffer) {
+export async function isolateSubject(imagePath, maskBuffer) {
   const source = sharp(imagePath).rotate().removeAlpha();
   const metadata = await source.metadata();
   const width = metadata.width ?? 1;
@@ -673,7 +770,11 @@ async function isolateSubject(imagePath, maskBuffer) {
   } else {
     alpha = await buildLocalMask(imagePath, width, height);
   }
-  const rgba = await cleanAlphaBoundary(await sharp(imagePath).rotate().removeAlpha().joinChannel(alpha).png().toBuffer());
+  // sharp 0.34.5 silently drops a joined alpha when .removeAlpha() and .joinChannel()
+  // share one pipeline (output stays 3ch/opaque). Materialize the rotated RGB to a
+  // buffer first so joinChannel applies to a fresh 3ch source and yields real 4ch RGBA. (KEWL-2011)
+  const baseRgb = await sharp(imagePath).rotate().removeAlpha().png().toBuffer();
+  const rgba = await cleanAlphaBoundary(await sharp(baseRgb).joinChannel(alpha).png().toBuffer());
   const bbox = await findAlphaBoundingBox(rgba);
   const left = Math.max(0, bbox.left - 8);
   const top = Math.max(0, bbox.top - 8);
