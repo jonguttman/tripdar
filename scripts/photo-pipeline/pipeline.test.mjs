@@ -34,22 +34,20 @@ describe("photo pipeline hosted endpoint policy", () => {
     expect(cutout?.subjectBuffer?.toString()).toBe("cutout");
   });
 
-  it("classifies full image payloads as premium review artifacts", () => {
+  it("rejects accidental full-image payloads from the catalog-safe endpoint", () => {
     const result = classifyHostedEndpointPayload({
       image_base64: Buffer.from("full-image").toString("base64"),
       usage: { total_tokens: 56 },
     });
 
-    expect(result?.processingMode).toBe("premium");
-    expect(result?.service.output_kind).toBe("generative_image");
-    expect(result?.subjectBuffer?.toString()).toBe("full-image");
-    expect(result?.maskBuffer).toBeNull();
+    expect(result).toBeNull();
   });
 
-  it("forces generated full-image runs into AI-enhanced needs-review outputs", async () => {
+  it("runs premium only when requested and always writes a measured, human-gated artifact", async () => {
     const workDir = await mkdtemp(path.join(tmpdir(), "tripdar-photo-pipeline-"));
     const inputPath = path.join(workDir, "source.png");
     const rootDir = path.join(workDir, "blob");
+    const catalogSafeRootDir = path.join(workDir, "catalog-safe-blob");
     const generatedSubject = await sharp({
       create: { width: 1000, height: 1400, channels: 4, background: "#00000000" },
     })
@@ -75,21 +73,8 @@ describe("photo pipeline hosted endpoint policy", () => {
       .png()
       .toFile(inputPath);
 
-    process.env.VERCEL_AI_GATEWAY_BACKGROUND_REMOVAL_URL = "https://example.test/remove-background";
-    process.env.AI_GATEWAY_API_KEY = "test-key";
-    delete process.env.OPENROUTER_API_KEY;
-    delete process.env.ANTHROPIC_API_KEY;
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        image_base64: generatedSubject.toString("base64"),
-        usage: { total_tokens: 56 },
-      }),
-    });
-
-    const result = await runSingle({
+    const common = {
       inputPath,
-      rootDir,
       ledger: "filesystem",
       sku: "NF-BM-20",
       brand: "Nocturnal Farms",
@@ -97,21 +82,65 @@ describe("photo pipeline hosted endpoint policy", () => {
       variant: "20mg",
       view: "front",
       operator: "qa",
+    };
+    const catalogSafeResult = await runSingle({ ...common, rootDir: catalogSafeRootDir });
+    const catalogSafeManifest = JSON.parse(
+      await readFile(path.join(repoRoot, catalogSafeResult.manifestPath), "utf8"),
+    );
+
+    delete process.env.VERCEL_AI_GATEWAY_BACKGROUND_REMOVAL_URL;
+    process.env.OPENROUTER_API_KEY = "test-key";
+    delete process.env.ANTHROPIC_API_KEY;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify({
+        choices: [{ message: { images: [{ image_url: { url: `data:image/png;base64,${generatedSubject.toString("base64")}` } }] } }],
+        usage: { total_tokens: 56, cost: 0.127 },
+      }),
+    });
+
+    const result = await runSingle({
+      ...common,
+      rootDir,
+      mode: "premium",
+      productFormat: "capsule bottle",
     });
     const manifest = JSON.parse(await readFile(path.join(repoRoot, result.manifestPath), "utf8"));
+    const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body);
 
     expect(result.job.status).toBe("needs_review");
     expect(result.job.processingMode).toBe("premium");
     expect(result.job.approvedBy).toBeNull();
     expect(manifest.status).toBe("needs_review");
     expect(manifest.processing_mode).toBe("premium");
+    expect(manifest.requires_review).toBe(true);
     expect(manifest.approved_by).toBeNull();
     expect(manifest.background_removal.output_kind).toBe("generative_image");
     expect(manifest.outputs.white_master).toContain("premium-enhanced/");
-    expect(manifest.outputs.white_master).toContain("_ai-enhanced_v01.png");
-    expect(manifest.outputs.transparent_master).toContain("_ai-enhanced_v01.png");
+    expect(manifest.outputs.white_master).toContain("_premium_v01.png");
+    expect(manifest.outputs.transparent_master).toBeNull();
+    expect(manifest.catalog_safe_outputs.white_master).toContain("catalog-safe/");
+    expect(manifest.label_fidelity_score).toBeTypeOf("number");
+    expect(manifest.label_validation.score).toBe(manifest.label_fidelity_score);
+    expect(manifest.label_validation.warnings).toContain(
+      "label fidelity: source OCR unavailable; configure PHOTO_PIPELINE_OCR_URL or ANTHROPIC_API_KEY",
+    );
+    expect(result.job.costCents).toBe(13);
+    expect(requestBody.messages[0].content[0].text).toContain("Studio product photograph of Blue Moon");
+    expect(requestBody.messages[0].content[0].text).not.toContain("STORED ONLY, NOT EXECUTED IN MVP");
+    expect(requestBody.messages[0].content[0].text).toContain("Blue Moon");
+    expect(requestBody.messages[0].content[0].text).toContain("capsule bottle");
+    for (const outputKey of ["transparent_master", "white_master", "web", "thumbnail"]) {
+      const before = await readFile(path.join(repoRoot, catalogSafeManifest.outputs[outputKey]));
+      const duringPremium = await readFile(path.join(repoRoot, manifest.catalog_safe_outputs[outputKey]));
+      expect(duringPremium.equals(before), `${outputKey} changed in premium mode`).toBe(true);
+    }
     expect(manifest.warnings).toContain(
       "review: AI-enhanced generative output is non-catalog-safe; human label verification required",
     );
-  });
+    // This test synthesises and processes real images through sharp end-to-end.
+    // It lands ~3.3s on a dev machine, which fits under vitest's 5s default but
+    // exceeds it on a slower CI runner. The timeout is generous on purpose: a
+    // real hang should still fail rather than stall the job.
+  }, 30000);
 });

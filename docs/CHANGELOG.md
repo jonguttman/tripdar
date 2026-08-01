@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.18.0] - 2026-08-01
+
+### Added
+- **Human-gated premium photo generation** (KEWL-2674): `photo:pipeline single|batch --mode premium` now sends the source through OpenRouter or Vercel AI Gateway with the locked v1 premium prompt, writes `premium-enhanced/` artifacts, retains byte-identical catalog-safe outputs for comparison, records provider-reported per-image cost, and surfaces a batch total.
+- **Measured label-fidelity validation** (KEWL-2674): premium frames are compared with the source using structural/perceptual label-region analysis, OCR text diff, and container/cap geometry. Number, dosage, quantity, ingredient, warning, and product-name changes are hard flags; missing OCR fails closed instead of manufacturing confidence.
+- **Minimal premium approval gate** (KEWL-2674): super admins can compare source, catalog-safe, and premium frames at `/admin/photo-jobs`, zoom the measured label area, inspect the score and warnings, and explicitly approve or reject with reviewer identity and timestamp persisted on `PhotoJob`.
+
+### Fixed
+- Full-image responses from background-removal endpoints no longer enter the catalog-safe lane accidentally, and the hardcoded `0.94`/`0.82` label-fidelity values have been removed.
+
 ## [1.17.0] - 2026-07-31
 
 ### Added

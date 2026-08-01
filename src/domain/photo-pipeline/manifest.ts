@@ -36,4 +36,22 @@ export interface PhotoManifest {
   warnings: string[];
   approved_by: string | null;
   approved_at: string | null;
+  requires_review?: boolean;
+  catalog_safe_outputs?: PhotoManifestOutputs;
+  label_validation?: {
+    score: number;
+    passed: boolean;
+    hardFlagged: boolean;
+    requiresReview: boolean;
+    criticalDeltas: Array<{
+      category: string;
+      source: string[];
+      premium: string[];
+      reason: string;
+    }>;
+    issues: string[];
+    warnings?: string[];
+    signals: Record<string, unknown>;
+    regions: Record<string, unknown>;
+  };
 }

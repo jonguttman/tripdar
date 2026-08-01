@@ -12,5 +12,11 @@
     "clipped_highlight_frac_max": 0.25,
     "clipped_shadow_frac_max": 0.25
   },
-  "quality_score_min_auto_approve": 0.70
+  "quality_score_min_auto_approve": 0.70,
+  "premium_label_fidelity": {
+    "score_min_review": 0.90,
+    "structural_similarity_min": 0.86,
+    "geometry_similarity_min": 0.90,
+    "ocr_similarity_min": 0.92
+  }
 }
