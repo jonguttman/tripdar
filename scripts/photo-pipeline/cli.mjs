@@ -26,13 +26,15 @@ function usage() {
   return `Tripdar catalog-safe photo pipeline
 
 Commands:
-  single --input <file> --sku <sku> --product <name> [--brand <brand>] [--variant <variant>] [--view front]
-  batch --input-dir <dir> --sku <sku> --product <name> [--brand <brand>] [--variant <variant>] [--view front]
+  single --input <file> --sku <sku> --product <name> [--mode catalog_safe|premium] [--brand <brand>] [--variant <variant>] [--view front]
+  batch --input-dir <dir> --sku <sku> --product <name> [--mode catalog_safe|premium] [--brand <brand>] [--variant <variant>] [--view front]
   make-fixtures --out <dir>
 
 Options:
   --ledger prisma|filesystem   Default: prisma when DATABASE_URL is set, otherwise filesystem.
   --root <dir>                 Blob root directory. Default: tripdar-product-images.
+  --mode <mode>                catalog_safe (default) or premium. Premium is always human-gated.
+  --format <description>       Product format substituted into the locked premium prompt.
   --operator <name>            Manifest approved_by value for auto-approved jobs.
   --strict-gateway             Route to needs_review when Vercel AI Gateway background removal is unavailable.
   --proof <file>               Write a compact JSON run proof.
@@ -119,6 +121,8 @@ async function main() {
     view: args.view ?? "front",
     operator: args.operator ?? "photo-pipeline",
     strictGateway: Boolean(args["strict-gateway"]),
+    mode: args.mode ?? "catalog_safe",
+    productFormat: args.format ?? null,
   };
 
   if (!common.sku || !common.productName) {
@@ -156,6 +160,7 @@ async function main() {
       ].join(" "),
     );
   }
+  console.log(`batch_total_cost_cents=${results.reduce((sum, result) => sum + Number(result.job.costCents ?? 0), 0)}`);
 }
 
 main().catch((error) => {

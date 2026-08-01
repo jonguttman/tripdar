@@ -65,6 +65,36 @@
       "items": { "type": "string" }
     },
     "approved_by": { "type": ["string", "null"] },
-    "approved_at": { "type": ["string", "null"], "format": "date-time" }
+    "approved_at": { "type": ["string", "null"], "format": "date-time" },
+    "requires_review": { "type": "boolean" },
+    "catalog_safe_outputs": { "$ref": "#/$defs/outputs" },
+    "label_validation": {
+      "type": "object",
+      "required": ["score", "passed", "hardFlagged", "criticalDeltas", "issues", "signals", "regions"],
+      "properties": {
+        "score": { "type": "number", "minimum": 0, "maximum": 1 },
+        "passed": { "type": "boolean" },
+        "hardFlagged": { "type": "boolean" },
+        "requiresReview": { "type": "boolean" },
+        "criticalDeltas": { "type": "array", "items": { "type": "object" } },
+        "issues": { "type": "array", "items": { "type": "string" } },
+        "warnings": { "type": "array", "items": { "type": "string" } },
+        "signals": { "type": "object" },
+        "regions": { "type": "object" }
+      }
+    }
+  },
+  "$defs": {
+    "outputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transparent_master", "white_master", "web", "thumbnail"],
+      "properties": {
+        "transparent_master": { "type": ["string", "null"] },
+        "white_master": { "type": ["string", "null"] },
+        "web": { "type": ["string", "null"] },
+        "thumbnail": { "type": ["string", "null"] }
+      }
+    }
   }
 }

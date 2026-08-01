@@ -14,7 +14,7 @@ How you use this, Jon. One page. Drop in phone photos, get consistent, catalog-s
 4. **Anything it isn't sure about** is set aside with a plain-English reason.
 5. **Read the manifest** to see what happened to any image and where its files went.
 
-That's the whole loop for Phase 1.
+That remains the default catalog-safe loop. Premium is an explicit, human-gated option described below.
 
 ---
 
@@ -78,6 +78,7 @@ NF-BM20_nocturnal-farms_blue-meanies-lions-mane_front_catalog-safe_v01.webp
 - `incoming/` — where you drop new photos
 - `originals/` — the untouched source, kept forever
 - `working/` — in-progress intermediates
+- `premium-enhanced/` — generated premium candidates; never primary without human approval
 - `needs-review/` — images set aside for you (see below)
 - `rejected/` — images that failed outright, with a reason
 - `manifests/` — one JSON record per image
@@ -116,20 +117,19 @@ What to look at:
 - **`quality_score`** — the pipeline's confidence, 0 to 1. It auto-approves at **0.70 and above**; below that it routes to review.
 - **`warnings`** — the specific things it noticed. An empty list is a clean pass. If an image was set aside, the retake reason lives here, in plain language.
 - **`outputs`** — the exact paths to each finished file.
-- **`label_fidelity_score`** — `null` in Phase 1, and that's correct. It only carries a number when the premium generative pass runs later and its result is checked against the source. Catalog-safe never regenerates a label, so there's nothing to score.
-- **`approved_by`** — `null` on an auto-approved image. Phase 1 approves by score, with no manual sign-off; a name lands here once the review queue ships and someone approves by hand.
+- **`label_fidelity_score`** — `null` for catalog-safe and a measured 0-to-1 score for premium. The premium score combines structural/perceptual label comparison, package geometry, and OCR. Never treat the score alone as approval; critical text changes are separate hard flags.
+- **`approved_by`** — always `null` on a newly generated premium candidate. It is written with `approved_at` only after a super admin approves in `/admin/photo-jobs`.
 - **`source_file` + `job_id`** — your thread back to the untouched original in `originals/`. Nothing is ever a dead end.
 
 ---
 
-## 5. What's coming later (not in Phase 1)
+## 5. Premium mode and approval
 
-Two things are designed but arrive in later phases — so you know what you're *not* seeing yet:
+Run premium deliberately with `--mode premium`. The worker uses the locked v1 prompt, records the provider-reported cost, preserves catalog-safe outputs, measures label fidelity, and stops at `needs_review` even on a clean result.
 
-- **Review queue** — a side-by-side interface to compare original, catalog-safe, and (when generated) premium versions, with a zoomed label view, and to approve, reject, reprocess, or request a retake in one place. For now, review items wait in `needs-review/` with their reason in the manifest.
-- **Premium mode** — an optional, higher-polish generative pass. It will **never** silently replace a catalog-safe image, and any premium result will be marked *AI-enhanced — visual approval required* and checked against the source before it can become a catalog image.
+Open `/admin/photo-jobs` and compare the source, catalog-safe, and premium images. Zoom the detected label area and read every warning. A number, dosage, quantity, ingredient, warning, or product-name delta is a hard flag. Approve only after the label-verification checkbox is true; rejection and approval both persist on the job.
 
-Until those ship, Phase 1 gives you the dependable core: clean, consistent, honest catalog-safe images, fully automatic, every one traceable to its original.
+The full Phase 3 bulk queue, retake requests, and stage-specific reprocessing remain out of scope.
 
 ---
 

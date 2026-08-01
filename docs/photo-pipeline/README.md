@@ -2,7 +2,7 @@
 
 *Psilly by Nature, Enchanted by Choice.*
 
-The guides here are for the people, not the machine. They sit alongside the pipeline (KEWL-1947) and cover shooting, retakes, and day-to-day operation of the catalog-safe core (Phase 1).
+The guides here are for the people, not the machine. They cover shooting, retakes, catalog-safe operation, and the minimal human gate for Phase 2 premium candidates.
 
 | Doc | Who it's for | What it covers |
 |---|---|---|
@@ -10,6 +10,4 @@ The guides here are for the people, not the machine. They sit alongside the pipe
 | [photographer-checklist.md](./photographer-checklist.md) | Jon at the camera | A printable phone-capture checklist for shots that pass catalog-safe first try |
 | [retake-reasons.md](./retake-reasons.md) | Pipeline / operator | The approved retake-reason strings the quality stage surfaces when an image can't be safely repaired |
 
-**The through-line:** the pipeline cleans, straightens, lights, and grounds a product — but it never rewrites a label. Every guide here serves that promise. A sharp, honest, fully-in-frame label goes in; a consistent, traceable catalog image comes out.
-
-Out of scope for these docs (later phases): the review UI and premium generative-mode copy.
+**The through-line:** catalog-safe never rewrites a label. Premium may generate surrounding studio polish, but a measured label comparison and explicit human approval are mandatory before that candidate can be approved.

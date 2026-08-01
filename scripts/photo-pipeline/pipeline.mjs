@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaClient } from "@prisma/client";
 import sharp from "sharp";
+import { validateLabelFidelity } from "./label-fidelity.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CONFIG_ROOT = path.join(REPO_ROOT, "photo-pipeline/config");
@@ -31,6 +32,7 @@ const HEURISTIC_QA_REVIEW_WARNING =
   "review: Claude Vision unavailable; heuristic QA requires human catalog approval";
 const GENERATIVE_REVIEW_WARNING =
   "review: AI-enhanced generative output is non-catalog-safe; human label verification required";
+const PREMIUM_PROMPT_PATH = path.join(CONFIG_ROOT, "premium_prompt.v1.txt");
 
 let prisma;
 
@@ -46,6 +48,11 @@ export async function runSingle(options) {
   const configs = await loadConfigs();
   await ensureBlobDirs(options.rootDir);
 
+  const requestedMode = options.mode ?? "catalog_safe";
+  if (!new Set(["catalog_safe", "premium"]).has(requestedMode)) {
+    throw new Error(`Unsupported processing mode: ${requestedMode}`);
+  }
+
   const inputPath = options.inputPath;
   const ext = path.extname(inputPath).toLowerCase();
   if (!SUPPORTED_EXTENSIONS.has(ext)) {
@@ -57,6 +64,7 @@ export async function runSingle(options) {
   const ledger = await createLedger(options);
   const existing = await ledger.findByHash(sourceContentHash);
   if (
+    requestedMode === "catalog_safe" &&
     existing?.status === "approved" &&
     existing.processingMode === "catalog_safe" &&
     !hasBackgroundFallbackWarning(existing) &&
@@ -99,7 +107,7 @@ export async function runSingle(options) {
     sourceFile: path.basename(inputPath),
     originalBlobUrl,
     sourceContentHash,
-    processingMode: "catalog_safe",
+    processingMode: requestedMode,
     status: "uploaded",
     qualityScore: null,
     labelFidelityScore: null,
@@ -117,7 +125,13 @@ export async function runSingle(options) {
   let costCents = job.costCents ?? 0;
 
   try {
-    job = await ledger.update(job.jobId, { status: "analyzing" });
+    job = await ledger.update(job.jobId, {
+      status: "analyzing",
+      processingMode: requestedMode,
+      labelFidelityScore: null,
+      approvedBy: null,
+      approvedAt: null,
+    });
     const normalizedPath = blobPath(options.rootDir, "working", `${job.jobId}_normalized.png`);
     await sharp(originalBytes).rotate().png().toFile(normalizedPath);
 
@@ -135,6 +149,7 @@ export async function runSingle(options) {
         warnings: uniqueStrings([...warnings, quality.retake_reason]),
         approvedBy: null,
         approvedAt: null,
+        requiresReview: true,
       });
       const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
       job = await ledger.update(job.jobId, {
@@ -155,7 +170,7 @@ export async function runSingle(options) {
       costCents,
     });
 
-    const processed = await processCatalogSafe({
+    const catalogSafe = await processCatalogSafe({
       normalizedPath,
       rootDir: options.rootDir,
       job,
@@ -163,17 +178,44 @@ export async function runSingle(options) {
       preset: configs.preset,
       strictGateway: options.strictGateway,
     });
-    outputs = processed.outputs;
-    warnings.push(...processed.warnings);
-    costCents += processed.costCents;
+    outputs = catalogSafe.outputs;
+    warnings.push(...catalogSafe.warnings);
+    costCents += catalogSafe.costCents;
+
+    let processed = catalogSafe;
+    let labelValidation = null;
+    if (requestedMode === "premium") {
+      const premium = await processPremium({
+        normalizedPath,
+        rootDir: options.rootDir,
+        job,
+        baseName,
+        preset: configs.preset,
+        prompt: configs.premiumPrompt,
+        productFormat: options.productFormat ?? options.variant ?? "product",
+      });
+      costCents += premium.costCents;
+      labelValidation = await validateLabelFidelity({
+        sourcePath: normalizedPath,
+        candidatePath: path.join(REPO_ROOT, premium.outputs.white_master),
+        productName: options.productName,
+        variant: options.variant,
+        thresholds: configs.thresholds.premium_label_fidelity,
+      });
+      warnings.push(...premium.warnings, ...labelValidation.warnings);
+      processed = { ...premium, labelFidelityScore: labelValidation.score };
+      outputs = premium.outputs;
+    }
 
     job = await ledger.update(job.jobId, { status: "validating", warnings, costCents });
-    const validation = await validateOutputs(outputs, configs.preset);
+    const validation = await validateOutputs(outputs, configs.preset, {
+      allowMissingTransparent: requestedMode === "premium",
+    });
     warnings.push(...validation.warnings);
 
     const usedHeuristicQa = hasHeuristicQaWarning(warnings);
     if (usedHeuristicQa) warnings.push(HEURISTIC_QA_REVIEW_WARNING);
-    const requiresReview =
+    const requiresReview = requestedMode === "premium" ||
       quality.requires_review ||
       processed.requiresReview ||
       validation.requiresReview ||
@@ -193,6 +235,9 @@ export async function runSingle(options) {
       warnings: uniqueStrings(warnings),
       approvedBy,
       approvedAt,
+      requiresReview,
+      catalogSafeOutputs: requestedMode === "premium" ? catalogSafe.outputs : null,
+      labelValidation,
     });
     const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
     job = await ledger.update(job.jobId, {
@@ -218,6 +263,7 @@ export async function runSingle(options) {
       warnings: uniqueStrings([...warnings, message]),
       approvedBy: null,
       approvedAt: null,
+      requiresReview: requestedMode === "premium",
     });
     const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
     job = await ledger.update(job.jobId, {
@@ -232,11 +278,20 @@ export async function runSingle(options) {
 }
 
 async function loadConfigs() {
-  const [preset, thresholds] = await Promise.all([
+  const [preset, thresholds, premiumPromptFile] = await Promise.all([
     readJson(path.join(CONFIG_ROOT, "catalog_safe_preset.v1.json")),
     readJson(path.join(CONFIG_ROOT, "thresholds.json")),
+    readFile(PREMIUM_PROMPT_PATH, "utf8"),
   ]);
-  return { preset, thresholds };
+  return { preset, thresholds, premiumPrompt: extractLockedPremiumPrompt(premiumPromptFile) };
+}
+
+function extractLockedPremiumPrompt(fileContents) {
+  const match = fileContents.match(/--- PROMPT ---\s*([\s\S]*?)\s*--- END PROMPT ---/u);
+  if (!match?.[1]?.trim()) {
+    throw new Error(`Locked premium prompt is missing PROMPT markers: ${PREMIUM_PROMPT_PATH}`);
+  }
+  return match[1].trim();
 }
 
 async function readJson(filePath) {
@@ -381,23 +436,19 @@ async function assessQualityWithClaude(imagePath) {
 async function processCatalogSafe({ normalizedPath, rootDir, job, baseName, preset, strictGateway }) {
   const warnings = [];
   const gatewayRemoval = await removeBackgroundWithGateway(normalizedPath);
-  const processingMode = gatewayRemoval.processingMode ?? "catalog_safe";
-  const isGenerativeReview = processingMode === "premium";
   if (!gatewayRemoval.usedGateway) {
     warnings.push(BACKGROUND_FALLBACK_WARNING, BACKGROUND_FALLBACK_REVIEW_WARNING);
     warnings.push(...gatewayRemoval.warnings);
     if (strictGateway) warnings.push("review: hosted background removal was required but unavailable");
   }
-  if (isGenerativeReview) warnings.push(GENERATIVE_REVIEW_WARNING);
-
   const subject = gatewayRemoval.subjectBuffer
     ? await normalizeHostedSubject(gatewayRemoval.subjectBuffer)
     : await isolateSubject(normalizedPath, gatewayRemoval.maskBuffer);
   const composed = await composeMasters(subject, preset);
-  const outputModeSlug = isGenerativeReview ? "ai-enhanced" : "catalog-safe";
+  const outputModeSlug = "catalog-safe";
   const outputBaseName = `${baseName}_${sanitizeField(job.jobId)}_${outputModeSlug}_v01`;
   const transparentPath = blobPath(rootDir, "transparent", `${outputBaseName}.png`);
-  const whitePath = blobPath(rootDir, isGenerativeReview ? "premiumEnhanced" : "catalogSafe", `${outputBaseName}.png`);
+  const whitePath = blobPath(rootDir, "catalogSafe", `${outputBaseName}.png`);
   const webPath = blobPath(rootDir, "web", `${outputBaseName}.webp`);
   const thumbPath = blobPath(rootDir, "thumbnails", `${outputBaseName}.webp`);
 
@@ -414,24 +465,58 @@ async function processCatalogSafe({ normalizedPath, rootDir, job, baseName, pres
       thumbnail: relativeBlobPath(rootDir, thumbPath),
     },
     warnings,
-    requiresReview: !gatewayRemoval.usedGateway || isGenerativeReview,
-    labelFidelityScore: gatewayRemoval.usedGateway && !isGenerativeReview ? 0.94 : 0.82,
+    requiresReview: !gatewayRemoval.usedGateway,
+    labelFidelityScore: null,
     costCents: gatewayRemoval.usedGateway ? gatewayRemoval.costCents : 0,
     backgroundRemoval: gatewayRemoval.service,
-    processingMode,
+    processingMode: "catalog_safe",
+  };
+}
+
+async function processPremium({ normalizedPath, rootDir, job, baseName, preset, prompt, productFormat }) {
+  const renderedPrompt = prompt
+    .replaceAll("{product_name}", job.productName)
+    .replaceAll("{brand}", job.brand ?? "unknown brand")
+    .replaceAll("{format}", productFormat);
+  const generated = await generatePremiumWithGateway(normalizedPath, renderedPrompt);
+  if (!generated.imageBuffer) {
+    throw new Error(`Premium generation failed: ${generated.warnings.join("; ")}`);
+  }
+
+  const canvas = preset.outputs.white_master.width;
+  const premiumPng = await sharp(generated.imageBuffer)
+    .rotate()
+    .resize(canvas, canvas, { fit: "contain", background: preset.background_hex })
+    .png()
+    .toBuffer();
+  const outputBaseName = `${baseName}_${sanitizeField(job.jobId)}_premium_v01`;
+  const whitePath = blobPath(rootDir, "premiumEnhanced", `${outputBaseName}.png`);
+  const webPath = blobPath(rootDir, "web", `${outputBaseName}.webp`);
+  const thumbPath = blobPath(rootDir, "thumbnails", `${outputBaseName}.webp`);
+  await writeFile(whitePath, premiumPng);
+  await sharp(premiumPng).resize(1200, 1200).webp({ quality: preset.outputs.web.quality }).toFile(webPath);
+  await sharp(premiumPng).resize(600, 600).webp({ quality: preset.outputs.thumbnail.quality }).toFile(thumbPath);
+
+  return {
+    outputs: {
+      transparent_master: null,
+      white_master: relativeBlobPath(rootDir, whitePath),
+      web: relativeBlobPath(rootDir, webPath),
+      thumbnail: relativeBlobPath(rootDir, thumbPath),
+    },
+    warnings: [GENERATIVE_REVIEW_WARNING, ...generated.warnings],
+    requiresReview: true,
+    labelFidelityScore: null,
+    costCents: generated.costCents,
+    backgroundRemoval: generated.service,
+    processingMode: "premium",
   };
 }
 
 async function removeBackgroundWithGateway(imagePath) {
   const endpoint = process.env.VERCEL_AI_GATEWAY_BACKGROUND_REMOVAL_URL;
-  const key = process.env.AI_GATEWAY_API_KEY ?? process.env.VERCEL_AI_GATEWAY_API_KEY ?? process.env.VERCEL_TOKEN;
-  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const key = process.env.AI_GATEWAY_API_KEY ?? process.env.VERCEL_AI_GATEWAY_API_KEY;
   const warnings = [];
-  if (openRouterKey) {
-    const openRouterResult = await removeBackgroundWithOpenRouter(imagePath, openRouterKey);
-    if (openRouterResult.usedGateway) return openRouterResult;
-    warnings.push(...openRouterResult.warnings);
-  }
   if (endpoint && key) {
     const image = await readFile(imagePath);
     try {
@@ -456,13 +541,8 @@ async function removeBackgroundWithGateway(imagePath) {
     }
   }
 
-  if (key) {
-    const gatewayResult = await removeBackgroundWithGatewayChat(imagePath, key);
-    if (gatewayResult.usedGateway) return gatewayResult;
-    warnings.push(...gatewayResult.warnings);
-  } else {
-    warnings.push("background: AI_GATEWAY_API_KEY or VERCEL_AI_GATEWAY_API_KEY is not configured");
-  }
+  if (!endpoint) warnings.push("background: hosted mask/cutout endpoint is not configured");
+  if (endpoint && !key) warnings.push("background: AI_GATEWAY_API_KEY or VERCEL_AI_GATEWAY_API_KEY is not configured");
 
   return {
     usedGateway: false,
@@ -498,53 +578,52 @@ export function classifyHostedEndpointPayload(payload) {
       processingMode: "catalog_safe",
     };
   }
-  if (payload.image_base64) {
-    return {
-      usedGateway: true,
-      maskBuffer: null,
-      subjectBuffer: Buffer.from(payload.image_base64, "base64"),
-      costCents: 4,
-      warnings: [],
-      service: hostedService("vercel-custom", "custom-background-removal", 0.04, payload.usage, "generative_image"),
-      processingMode: "premium",
-    };
-  }
+  // A whole generated image is never a background-removal result. Premium
+  // generation is invoked deliberately through generatePremiumWithGateway().
   return null;
 }
 
-async function removeBackgroundWithOpenRouter(imagePath, key) {
-  const model = process.env.OPENROUTER_BACKGROUND_MODEL ?? process.env.PHOTO_PIPELINE_BACKGROUND_MODEL ?? "google/gemini-3.1-flash-image-preview";
-  return removeBackgroundWithChatProvider({
-    imagePath,
-    key,
-    provider: "openrouter",
-    model,
-    url: "https://openrouter.ai/api/v1/chat/completions",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": process.env.OPENROUTER_SITE_URL ?? "https://tripdar.local",
-      "X-Title": process.env.OPENROUTER_APP_TITLE ?? "Tripdar Photo Pipeline",
-    },
-  });
+async function generatePremiumWithGateway(imagePath, prompt) {
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  if (openRouterKey) {
+    return generateImageWithChatProvider({
+      imagePath,
+      prompt,
+      key: openRouterKey,
+      provider: "openrouter",
+      model: process.env.OPENROUTER_PREMIUM_MODEL ?? process.env.PHOTO_PIPELINE_PREMIUM_MODEL ?? "google/gemini-3.1-flash-image-preview",
+      url: "https://openrouter.ai/api/v1/chat/completions",
+      headers: {
+        Authorization: `Bearer ${openRouterKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": process.env.OPENROUTER_SITE_URL ?? "https://tripdar.local",
+        "X-Title": process.env.OPENROUTER_APP_TITLE ?? "Tripdar Photo Pipeline",
+      },
+    });
+  }
+
+  const gatewayKey = process.env.AI_GATEWAY_API_KEY ?? process.env.VERCEL_AI_GATEWAY_API_KEY;
+  if (gatewayKey) {
+    return generateImageWithChatProvider({
+      imagePath,
+      prompt,
+      key: gatewayKey,
+      provider: "vercel-ai-gateway",
+      model: process.env.PHOTO_PIPELINE_PREMIUM_MODEL ?? "google/gemini-3.1-flash-image-preview",
+      url: "https://ai-gateway.vercel.sh/v1/chat/completions",
+      headers: { Authorization: `Bearer ${gatewayKey}`, "Content-Type": "application/json" },
+    });
+  }
+
+  return {
+    imageBuffer: null,
+    costCents: 0,
+    warnings: ["premium: OPENROUTER_API_KEY or AI_GATEWAY_API_KEY is not configured"],
+    service: null,
+  };
 }
 
-async function removeBackgroundWithGatewayChat(imagePath, key) {
-  const model = process.env.PHOTO_PIPELINE_BACKGROUND_MODEL ?? "google/gemini-3.1-flash-image-preview";
-  return removeBackgroundWithChatProvider({
-    imagePath,
-    key,
-    provider: "vercel-ai-gateway",
-    model,
-    url: "https://ai-gateway.vercel.sh/v1/chat/completions",
-    headers: {
-      Authorization: `Bearer ${key}`,
-      "Content-Type": "application/json",
-    },
-  });
-}
-
-async function removeBackgroundWithChatProvider({ imagePath, provider, model, url, headers }) {
+async function generateImageWithChatProvider({ imagePath, prompt, provider, model, url, headers }) {
   const image = await readFile(imagePath);
   try {
     const response = await fetch(url, {
@@ -552,64 +631,51 @@ async function removeBackgroundWithChatProvider({ imagePath, provider, model, ur
       headers,
       body: JSON.stringify({
         model,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text:
-                  "Remove the background only and return one PNG image with transparent background. Preserve the product exactly, including label text, logo, dosage, warnings, cap, colors, edges, and proportions. Do not repaint, redraw, retouch, add shadows, or change product pixels.",
-              },
-              {
-                type: "image_url",
-                image_url: { url: `data:image/png;base64,${image.toString("base64")}` },
-              },
-            ],
-          },
-        ],
+        messages: [{
+          role: "user",
+          content: [
+            { type: "text", text: prompt },
+            { type: "image_url", image_url: { url: `data:image/png;base64,${image.toString("base64")}` } },
+          ],
+        }],
         stream: false,
       }),
     });
     const responseText = await response.text();
     if (!response.ok) {
       return {
-        usedGateway: false,
-        maskBuffer: null,
-        subjectBuffer: null,
+        imageBuffer: null,
         costCents: 0,
-        warnings: [`background: ${provider} ${model} returned HTTP ${response.status}: ${summarizeGatewayError(responseText)}`],
+        warnings: [`premium: ${provider} ${model} returned HTTP ${response.status}: ${summarizeGatewayError(responseText)}`],
+        service: null,
       };
     }
     const payload = JSON.parse(responseText);
     const imageUrl = extractImageUrl(payload);
-    if (typeof imageUrl === "string" && imageUrl.startsWith("data:image/")) {
-      const base64 = imageUrl.slice(imageUrl.indexOf(",") + 1);
-      const costUsd = extractCostUsd(payload, provider);
+    if (typeof imageUrl !== "string" || !imageUrl.startsWith("data:image/")) {
       return {
-        usedGateway: true,
-        maskBuffer: null,
-        subjectBuffer: Buffer.from(base64, "base64"),
-        costCents: dollarsToCents(costUsd),
-        warnings: [],
-        service: hostedService(provider, model, costUsd, payload.usage, "generative_image"),
-        processingMode: "premium",
+        imageBuffer: null,
+        costCents: 0,
+        warnings: [`premium: ${provider} ${model} did not return an image payload`],
+        service: null,
       };
     }
+    const costUsd = extractCostUsd(payload);
+    const costWarnings = costUsd === null
+      ? [`premium: ${provider} did not report per-image cost; recorded 0 cents instead of guessing`]
+      : [];
     return {
-      usedGateway: false,
-      maskBuffer: null,
-      subjectBuffer: null,
-      costCents: 0,
-      warnings: [`background: ${provider} ${model} did not return an image payload`],
+      imageBuffer: Buffer.from(imageUrl.slice(imageUrl.indexOf(",") + 1), "base64"),
+      costCents: dollarsToCents(costUsd ?? 0),
+      warnings: costWarnings,
+      service: hostedService(provider, model, costUsd ?? 0, payload.usage, "generative_image"),
     };
   } catch (error) {
     return {
-      usedGateway: false,
-      maskBuffer: null,
-      subjectBuffer: null,
+      imageBuffer: null,
       costCents: 0,
-      warnings: [`background: ${provider} ${model} failed: ${error instanceof Error ? error.message : String(error)}`],
+      warnings: [`premium: ${provider} ${model} failed: ${error instanceof Error ? error.message : String(error)}`],
+      service: null,
     };
   }
 }
@@ -631,12 +697,12 @@ function extractImageUrl(payload) {
   return null;
 }
 
-function extractCostUsd(payload, provider) {
+function extractCostUsd(payload) {
   const usage = payload.usage ?? {};
   const value = usage.cost_usd ?? usage.total_cost_usd ?? usage.cost ?? payload.cost_usd ?? payload.total_cost_usd;
   const number = Number(value);
-  if (Number.isFinite(number)) return provider === "openrouter" && number > 1 ? number / 1_000_000 : number;
-  return provider === "openrouter" ? 0 : 0.04;
+  if (Number.isFinite(number)) return number;
+  return null;
 }
 
 function dollarsToCents(costUsd) {
@@ -949,7 +1015,7 @@ async function buildShadow(subjectBuffer, width, height, opacity) {
     .toBuffer();
 }
 
-async function validateOutputs(outputs, preset) {
+async function validateOutputs(outputs, preset, { allowMissingTransparent = false } = {}) {
   const warnings = [];
   const checks = [
     ["transparent_master", preset.outputs.transparent_master],
@@ -960,6 +1026,7 @@ async function validateOutputs(outputs, preset) {
   for (const [key, expected] of checks) {
     const output = outputs[key];
     if (!output) {
+      if (allowMissingTransparent && key === "transparent_master") continue;
       warnings.push(`validation: missing ${key}`);
       continue;
     }
@@ -993,7 +1060,7 @@ async function writeReviewCopy(rootDir, job, normalizedPath, stage) {
 }
 
 function buildManifest(job, data) {
-  return {
+  const manifest = {
     job_id: job.jobId,
     sku: job.sku,
     source_file: job.sourceFile,
@@ -1007,6 +1074,10 @@ function buildManifest(job, data) {
     approved_by: data.approvedBy,
     approved_at: data.approvedAt,
   };
+  if (typeof data.requiresReview === "boolean") manifest.requires_review = data.requiresReview;
+  if (data.catalogSafeOutputs) manifest.catalog_safe_outputs = data.catalogSafeOutputs;
+  if (data.labelValidation) manifest.label_validation = data.labelValidation;
+  return manifest;
 }
 
 async function writeManifest(rootDir, jobId, manifest) {
@@ -1046,8 +1117,9 @@ export async function writeRunProof(filePath, results) {
       warnings: manifest?.warnings ?? result.job.warnings,
     });
   }
+  const totalCostCents = proof.reduce((sum, result) => sum + Number(result.cost_cents ?? 0), 0);
   await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify({ generated_at: new Date().toISOString(), results: proof }, null, 2)}\n`);
+  await writeFile(filePath, `${JSON.stringify({ generated_at: new Date().toISOString(), total_cost_cents: totalCostCents, results: proof }, null, 2)}\n`);
 }
 
 function buildJobId(hash) {

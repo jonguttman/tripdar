@@ -4,6 +4,45 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-01-001: Photo pipeline reported unmeasured label fidelity and entered premium mode accidentally
+
+**Symptoms:**
+- Manifests reported a reassuring `0.94` or `0.82` label-fidelity score even though no label pixels or text had been compared.
+- A whole `image_base64` response from a background-removal provider silently changed a catalog-safe run into a generative premium run.
+- There was no CLI premium intent, no real negative control for dosage corruption, and no human approval surface writing `PhotoJob.approvedBy` / `approvedAt`.
+
+**Root Cause:**
+`processCatalogSafe()` assigned label fidelity from a ternary based on the provider response path. The shared hosted-response classifier treated a whole generated image as a valid background-removal result and assigned `processingMode: "premium"`, coupling mode selection to provider behavior rather than operator intent.
+
+**Fix:**
+- Catalog-safe accepts mask/cutout payloads only; whole-image payloads are rejected in that lane.
+- Added explicit `--mode premium`, which uses the locked v1 prompt through the existing OpenRouter/Vercel AI Gateway transport and always routes to `needs_review`.
+- Replaced the constant with measured label-region structural/perceptual similarity, OCR text diff, and container/cap geometry. Critical text deltas hard-flag, and missing OCR fails closed.
+- Added a super-admin three-way comparison and explicit approve/reject gate that persists reviewer identity and time.
+- Added positive, different-content, dosage-corruption, geometry-corruption, intentional-mode, cost, and catalog-safe byte-identity tests.
+
+**Files Modified:**
+- `scripts/photo-pipeline/cli.mjs`
+- `scripts/photo-pipeline/pipeline.mjs`
+- `scripts/photo-pipeline/label-fidelity.mjs`
+- `scripts/photo-pipeline/*.test.mjs`
+- `photo-pipeline/config/thresholds.json`
+- `photo-pipeline/config/manifest.schema.json`
+- `src/domain/photo-pipeline/manifest.ts`
+- `src/domain/photo-pipeline/review.ts`
+- `src/app/api/admin/photo-jobs/*`
+- `src/app/admin/photo-jobs/*`
+- `src/app/admin/layout.tsx`
+
+**Prevention:**
+- Processing mode must be explicit input, never inferred from a provider response shape.
+- A semantic confidence field must be produced by a measurement of that semantic property; code-path constants may not be labeled as validation scores.
+- Generative outputs always remain review-required, with hard critical-text signals visible to the human approver.
+- Preserve Mode 1 output bytes in a cross-mode regression test whenever premium plumbing changes.
+
+**Lesson Learned:**
+A plausible confidence number is more dangerous than a missing one. Provider capability and operator intent are separate contracts: an endpoint returning a generated image does not authorize generative processing or prove label fidelity.
+
 ## BUG-2026-07-31-003: admin impersonation could write as the target or mutate an unbound target on read
 
 **Symptoms:**
