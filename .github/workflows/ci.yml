@@ -31,5 +31,8 @@ jobs:
           # connect; a placeholder keeps it from failing on a bare runner.
           DATABASE_URL: postgresql://placeholder:placeholder@localhost:5432/placeholder
 
+      - name: Typecheck
+        run: npx tsc --noEmit
+
       - name: Run test suite
         run: npm test
