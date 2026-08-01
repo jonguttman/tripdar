@@ -4,6 +4,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const putMock = vi.hoisted(() => vi.fn());
+
+vi.mock("@vercel/blob", () => ({ put: putMock }));
+
 import { classifyHostedEndpointPayload, runSingle } from "./pipeline.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -11,6 +16,7 @@ const originalEnv = { ...process.env };
 
 afterEach(() => {
   vi.restoreAllMocks();
+  putMock.mockReset();
   process.env = { ...originalEnv };
 });
 
@@ -44,6 +50,7 @@ describe("photo pipeline hosted endpoint policy", () => {
   });
 
   it("runs premium only when requested and always writes a measured, human-gated artifact", async () => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
     const workDir = await mkdtemp(path.join(tmpdir(), "tripdar-photo-pipeline-"));
     const inputPath = path.join(workDir, "source.png");
     const rootDir = path.join(workDir, "blob");
@@ -143,4 +150,64 @@ describe("photo pipeline hosted endpoint policy", () => {
     // exceeds it on a slower CI runner. The timeout is generous on purpose: a
     // real hang should still fail rather than stall the job.
   }, 30000);
+
+  it("uploads persisted review assets to Vercel Blob when a Blob token is configured", async () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_test_token";
+    let uploadIndex = 0;
+    putMock.mockImplementation(async (pathname, _body, options) => {
+      uploadIndex += 1;
+      return {
+        url: `https://blob.test/${pathname}?mock=${uploadIndex}`,
+        downloadUrl: `https://blob.test/${pathname}?download=1&mock=${uploadIndex}`,
+        pathname,
+        contentType: options.contentType,
+        contentDisposition: "inline",
+      };
+    });
+
+    const workDir = await mkdtemp(path.join(tmpdir(), "tripdar-photo-pipeline-"));
+    const inputPath = path.join(workDir, "source.png");
+    const rootDir = path.join(workDir, "blob");
+    await sharp({
+      create: { width: 1800, height: 1800, channels: 4, background: "#ece7dc" },
+    })
+      .composite([
+        {
+          input: Buffer.from(
+            `<svg width="1800" height="1800" xmlns="http://www.w3.org/2000/svg">
+              <rect x="560" y="240" width="680" height="1260" rx="90" fill="#ffffff" stroke="#202020" stroke-width="18"/>
+              <rect x="640" y="720" width="520" height="430" rx="24" fill="#f5edcf" stroke="#222" stroke-width="8"/>
+              <text x="900" y="875" text-anchor="middle" font-family="Arial" font-size="82" fill="#111" font-weight="700">NOCTURNAL</text>
+              <text x="900" y="1000" text-anchor="middle" font-family="Arial" font-size="66" fill="#245f7b">BLUE MOON</text>
+            </svg>`,
+          ),
+        },
+      ])
+      .png()
+      .toFile(inputPath);
+
+    const result = await runSingle({
+      inputPath,
+      rootDir,
+      ledger: "filesystem",
+      sku: "NF-BM-20",
+      brand: "Nocturnal Farms",
+      productName: "Blue Moon",
+      variant: "20mg",
+      view: "front",
+      operator: "qa",
+    });
+    const manifest = JSON.parse(await readFile(path.join(repoRoot, result.manifestPath), "utf8"));
+
+    expect(result.job.originalBlobUrl).toMatch(/^https:\/\/blob\.test\/Photo_Pipeline\/originals\//);
+    expect(manifest.outputs.transparent_master).toMatch(/^https:\/\/blob\.test\/Photo_Pipeline\/transparent\//);
+    expect(manifest.outputs.white_master).toMatch(/^https:\/\/blob\.test\/Photo_Pipeline\/catalog-safe\//);
+    expect(manifest.outputs.web).toMatch(/^https:\/\/blob\.test\/Photo_Pipeline\/web\//);
+    expect(manifest.outputs.thumbnail).toMatch(/^https:\/\/blob\.test\/Photo_Pipeline\/thumbnails\//);
+    expect(putMock).toHaveBeenCalledTimes(5);
+    for (const call of putMock.mock.calls) {
+      expect(call[2]).toMatchObject({ access: "public", addRandomSuffix: true });
+      await expect(readFile(path.join(rootDir, call[0].replace(/^Photo_Pipeline\//, "")))).resolves.toBeInstanceOf(Buffer);
+    }
+  });
 });

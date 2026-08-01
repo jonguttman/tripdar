@@ -4,6 +4,37 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-01-002: Hosted premium photo review images 404 because pipeline stored local paths
+
+**Symptoms:**
+- `/admin/photo-jobs` listed premium review jobs correctly in the hosted admin, but original, catalog-safe, and premium comparison images returned 404.
+- The image proxy route worked only on the machine that had run the photo pipeline because the referenced files existed only in that local checkout.
+
+**Root Cause:**
+The photo pipeline wrote output files under the local `tripdar-product-images/` tree, then persisted `path.relative(REPO_ROOT, fullPath)` values in `PhotoJob.originalBlobUrl` and manifest output keys. The review image route already redirected `https://` references, but pipeline rows never contained URLs. In Vercel, `.gitignore` excludes the generated image tree, so the route fell through to `readFile()` and could not find the assets.
+
+**Fix:**
+- Added Vercel Blob uploads for original and generated review assets when `BLOB_READ_WRITE_TOKEN` is configured.
+- Persisted returned public Blob URLs in `PhotoJob.originalBlobUrl`, `manifest.outputs`, and `manifest.catalog_safe_outputs` while preserving local files for operator working copies, validation, and local fallback rows.
+- Required Blob upload capability before writing Prisma-backed `PhotoJob` rows, so hosted-admin rows do not silently regress to relative filesystem paths.
+- Updated proof generation to report remote asset URLs instead of treating every manifest output as a local file.
+
+**Files Modified:**
+- `scripts/photo-pipeline/pipeline.mjs`
+- `scripts/photo-pipeline/pipeline.test.mjs`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Any persisted field with `BlobUrl` in its name must contain an actual URL in DB-backed production paths.
+- Keep local processing paths separate from persisted review references; validation can use local files, but hosted UI manifests must not.
+- If a production route has both redirect and filesystem branches, tests must cover the branch intended for hosted deployment, not only local fallback.
+
+**Lesson Learned:**
+Blob-shaped naming is not Blob storage. A local path can pass pipeline and UI review locally while guaranteeing a hosted 404 once ignored artifacts are absent from the deployment.
+
+---
+
 ## BUG-2026-08-01-001: Photo pipeline reported unmeasured label fidelity and entered premium mode accidentally
 
 **Symptoms:**
