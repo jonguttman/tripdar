@@ -11,6 +11,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { checkPublicWriteRateLimit } from "@/domain/myco/publicWriteRateLimit";
+import {
+  isViewAsWriteBlocked,
+  VIEW_AS_COOKIE,
+} from "@/domain/auth/viewAs";
 
 // =============================================================================
 // Configuration
@@ -18,6 +22,7 @@ import { checkPublicWriteRateLimit } from "@/domain/myco/publicWriteRateLimit";
 
 const PARTNER_API_PREFIX = "/api/v1";
 const BRAND_PUBLIC_WRITE_PREFIX = "/api/myco/brand-portal";
+const ADMIN_API_PREFIX = "/api/admin";
 // Advertised on both the CORS preflight and the 405 `Allow` header.
 const BRAND_PORTAL_ALLOWED_METHODS = "GET, POST, OPTIONS";
 
@@ -115,6 +120,27 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   const isBrandPublicWritePath = pathname.startsWith(BRAND_PUBLIC_WRITE_PREFIX);
+  const isAdminApiPath = pathname.startsWith(ADMIN_API_PREFIX);
+
+  if (
+    isAdminApiPath &&
+    (await isViewAsWriteBlocked({
+      method: request.method,
+      cookieValue: request.cookies.get(VIEW_AS_COOKIE)?.value,
+      secret: process.env.NEXTAUTH_SECRET,
+    }))
+  ) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          code: "VIEW_AS_READ_ONLY",
+          message: "View as is read-only. Exit View as before making changes.",
+        },
+      },
+      { status: 403 }
+    );
+  }
 
   // Only process partner API routes and unauthenticated brand write routes.
   if (!pathname.startsWith(PARTNER_API_PREFIX) && !isBrandPublicWritePath) {
@@ -340,5 +366,6 @@ export const config = {
     // Match all /api/v1/* routes
     "/api/v1/:path*",
     "/api/myco/brand-portal/:path*",
+    "/api/admin/:path*",
   ],
 };

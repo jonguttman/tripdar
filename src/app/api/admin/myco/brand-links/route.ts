@@ -20,8 +20,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/domain/auth/config";
+import { getAdminSession } from "@/domain/auth/adminSession";
 import { prisma } from "@/lib/prisma";
 import {
   buildRegeneratedTokenInput,
@@ -32,7 +31,7 @@ import {
 export const dynamic = "force-dynamic";
 
 async function requireAdmin() {
-  const session = await getServerSession(authOptions);
+  const session = await getAdminSession();
   if (!session?.user?.email) {
     return NextResponse.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
   }

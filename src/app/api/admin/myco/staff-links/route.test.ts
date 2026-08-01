@@ -43,8 +43,7 @@ vi.mock("@/lib/prisma", async () => {
   return { prisma: createPrismaMock(prismaMock) };
 });
 
-vi.mock("next-auth", () => ({ getServerSession: getServerSessionMock }));
-vi.mock("@/domain/auth/config", () => ({ authOptions: {} }));
+vi.mock("@/domain/auth/adminSession", () => ({ getAdminSession: getServerSessionMock }));
 vi.mock("@/domain/myco/staffReviewService", () => ({ ensureFieldRules: ensureFieldRulesMock }));
 
 /** Everything the route's transaction callback touches, with every call recorded in order. */

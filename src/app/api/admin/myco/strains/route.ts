@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/domain/auth/config";
+import { getAdminSession } from "@/domain/auth/adminSession";
 import { getAllStrains } from "@/domain/strain/data";
 
 export async function GET() {
-  const session = await getServerSession(authOptions);
+  const session = await getAdminSession();
   if (!session?.user?.email) {
     return NextResponse.json(
       { success: false, error: { message: "Unauthorized" } },

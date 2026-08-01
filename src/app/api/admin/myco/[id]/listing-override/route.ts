@@ -9,9 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getAdminSession } from "@/domain/auth/adminSession";
 import { Prisma } from "@prisma/client";
-import { authOptions } from "@/domain/auth/config";
 import { prisma } from "@/lib/prisma";
 import { getUserRole } from "@/domain/auth/role";
 import { loadGateForProduct } from "@/domain/myco/staffReviewService";
@@ -22,7 +21,7 @@ export const dynamic = "force-dynamic";
 const MIN_REASON_LENGTH = 12;
 
 async function requireSuperAdmin() {
-  const session = await getServerSession(authOptions);
+  const session = await getAdminSession();
   if (!session?.user?.email) {
     return NextResponse.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
   }

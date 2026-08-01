@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
+import { getAdminSession } from "@/domain/auth/adminSession";
 import { put } from "@vercel/blob";
-import { authOptions } from "@/domain/auth/config";
 
 async function requireAuth() {
-  const session = await getServerSession(authOptions);
+  const session = await getAdminSession();
 
   if (!session?.user?.email) {
     return NextResponse.json(
