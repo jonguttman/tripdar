@@ -138,5 +138,9 @@ describe("photo pipeline hosted endpoint policy", () => {
     expect(manifest.warnings).toContain(
       "review: AI-enhanced generative output is non-catalog-safe; human label verification required",
     );
-  });
+    // This test synthesises and processes real images through sharp end-to-end.
+    // It lands ~3.3s on a dev machine, which fits under vitest's 5s default but
+    // exceeds it on a slower CI runner. The timeout is generous on purpose: a
+    // real hang should still fail rather than stall the job.
+  }, 30000);
 });
