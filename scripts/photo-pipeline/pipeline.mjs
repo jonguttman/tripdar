@@ -35,6 +35,8 @@ const GENERATIVE_REVIEW_WARNING =
   "review: AI-enhanced generative output is non-catalog-safe; human label verification required";
 const PREMIUM_PROMPT_PATH = path.join(CONFIG_ROOT, "premium_prompt.v1.txt");
 const PHOTO_PIPELINE_BLOB_PREFIX = "Photo_Pipeline";
+export const PHOTO_ASSET_LOCAL_WARNING =
+  "photo-pipeline: BLOB_READ_WRITE_TOKEN is not set; review asset references will remain local filesystem paths. Hosted /admin/photo-jobs cannot render those local-only images. For hosted review jobs, load DATABASE_URL and BLOB_READ_WRITE_TOKEN, for example: node --env-file=.env.local scripts/photo-pipeline/cli.mjs ...";
 
 let prisma;
 
@@ -329,6 +331,10 @@ function resolveLedgerMode(options) {
 function shouldUploadPhotoAssets(options) {
   if (options.uploadAssets === false) return false;
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+export function warnIfPhotoAssetsRemainLocal(options = {}, warn = console.warn) {
+  if (!shouldUploadPhotoAssets(options)) warn(PHOTO_ASSET_LOCAL_WARNING);
 }
 
 async function createLedger(options) {

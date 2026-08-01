@@ -17,21 +17,25 @@ The photo pipeline wrote output files under the local `tripdar-product-images/` 
 - Added Vercel Blob uploads for original and generated review assets when `BLOB_READ_WRITE_TOKEN` is configured.
 - Persisted returned public Blob URLs in `PhotoJob.originalBlobUrl`, `manifest.outputs`, and `manifest.catalog_safe_outputs` while preserving local files for operator working copies, validation, and local fallback rows.
 - Required Blob upload capability before writing Prisma-backed `PhotoJob` rows, so hosted-admin rows do not silently regress to relative filesystem paths.
+- Documented the env-file CLI invocation operators need for hosted review jobs and added a no-upload warning so filesystem/local runs announce that their image references will not render in hosted admin.
 - Updated proof generation to report remote asset URLs instead of treating every manifest output as a local file.
 
 **Files Modified:**
 - `scripts/photo-pipeline/pipeline.mjs`
+- `scripts/photo-pipeline/cli.mjs`
 - `scripts/photo-pipeline/pipeline.test.mjs`
+- `docs/photo-pipeline/operator-guide.md`
 - `docs/CHANGELOG.md`
 - `docs/BUG_LOG.md`
 
 **Prevention:**
 - Any persisted field with `BlobUrl` in its name must contain an actual URL in DB-backed production paths.
 - Keep local processing paths separate from persisted review references; validation can use local files, but hosted UI manifests must not.
+- Operator docs must include the exact env-loading command for any CLI path that depends on production-like environment variables; package scripts alone do not load `.env.local`.
 - If a production route has both redirect and filesystem branches, tests must cover the branch intended for hosted deployment, not only local fallback.
 
 **Lesson Learned:**
-Blob-shaped naming is not Blob storage. A local path can pass pipeline and UI review locally while guaranteeing a hosted 404 once ignored artifacts are absent from the deployment.
+Blob-shaped naming is not Blob storage. A local path can pass pipeline and UI review locally while guaranteeing a hosted 404 once ignored artifacts are absent from the deployment. A correct code path is still incomplete if the documented operator command never supplies the environment needed to trigger it.
 
 ---
 

@@ -18,6 +18,32 @@ That remains the default catalog-safe loop. Premium is an explicit, human-gated 
 
 ---
 
+## Run the worker
+
+For a hosted review job, run the CLI with the same local env file that contains both `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN`:
+
+```bash
+node --env-file=.env.local scripts/photo-pipeline/cli.mjs single \
+  --input tripdar-product-images/incoming/example.png \
+  --sku EXAMPLE-SKU \
+  --product "Example Product" \
+  --mode premium
+```
+
+Batch runs use the same env loading:
+
+```bash
+node --env-file=.env.local scripts/photo-pipeline/cli.mjs batch \
+  --input-dir tripdar-product-images/incoming \
+  --sku EXAMPLE-SKU \
+  --product "Example Product" \
+  --mode premium
+```
+
+`BLOB_READ_WRITE_TOKEN` is what uploads the original, catalog-safe, premium, web, and thumbnail review assets to Vercel Blob. If it is missing, the CLI prints a warning and writes local filesystem paths only; those are useful for local dry-runs, but hosted `/admin/photo-jobs` cannot render them. When `DATABASE_URL` is loaded, the worker writes Prisma `PhotoJob` rows and requires Blob upload capability before it will persist hosted-review jobs.
+
+---
+
 ## 1. Upload a folder
 
 Put your shots — JPG, JPEG, PNG, or HEIC straight off the iPhone — into:

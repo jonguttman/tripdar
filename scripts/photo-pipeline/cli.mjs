@@ -3,7 +3,7 @@ import { mkdir, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
 import sharp from "sharp";
-import { runBatch, runSingle, writeRunProof } from "./pipeline.mjs";
+import { runBatch, runSingle, warnIfPhotoAssetsRemainLocal, writeRunProof } from "./pipeline.mjs";
 
 function parseArgs(argv) {
   const args = { command: argv[2] ?? "help" };
@@ -128,6 +128,8 @@ async function main() {
   if (!common.sku || !common.productName) {
     throw new Error("--sku and --product are required");
   }
+
+  warnIfPhotoAssetsRemainLocal(common);
 
   let results;
   if (args.command === "single") {

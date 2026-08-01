@@ -9,7 +9,7 @@ const putMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@vercel/blob", () => ({ put: putMock }));
 
-import { classifyHostedEndpointPayload, runSingle } from "./pipeline.mjs";
+import { PHOTO_ASSET_LOCAL_WARNING, classifyHostedEndpointPayload, runSingle, warnIfPhotoAssetsRemainLocal } from "./pipeline.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const originalEnv = { ...process.env };
@@ -21,6 +21,24 @@ afterEach(() => {
 });
 
 describe("photo pipeline hosted endpoint policy", () => {
+  it("warns operators when review assets will remain local-only", () => {
+    delete process.env.BLOB_READ_WRITE_TOKEN;
+    const warn = vi.fn();
+
+    warnIfPhotoAssetsRemainLocal({}, warn);
+
+    expect(warn).toHaveBeenCalledWith(PHOTO_ASSET_LOCAL_WARNING);
+  });
+
+  it("does not warn when a Blob token enables hosted review asset references", () => {
+    process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_test_token";
+    const warn = vi.fn();
+
+    warnIfPhotoAssetsRemainLocal({}, warn);
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
   it("keeps mask and cutout endpoint payloads in catalog-safe mode", () => {
     const mask = classifyHostedEndpointPayload({
       mask_base64: Buffer.from("mask").toString("base64"),

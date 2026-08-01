@@ -4,6 +4,7 @@
 
 ### Fixed
 - **Hosted premium photo review images** (KEWL-2711): the photo pipeline now uploads original, catalog-safe, premium, web, and thumbnail review assets to Vercel Blob when `BLOB_READ_WRITE_TOKEN` is configured, then stores the returned `https://` URLs in `PhotoJob.originalBlobUrl` and manifest asset keys so `/admin/photo-jobs` can render from hosted admin. Local working copies and the existing relative-path fallback remain intact.
+- **Photo pipeline operator path** (KEWL-2711): documented the `node --env-file=.env.local scripts/photo-pipeline/cli.mjs ...` invocation required to load `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN`, and added a CLI warning when a run will write local-only asset references that hosted admin cannot render.
 
 ## [1.18.0] - 2026-08-01
 
