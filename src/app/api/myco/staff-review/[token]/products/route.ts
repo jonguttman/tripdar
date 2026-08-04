@@ -56,10 +56,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   });
 
   const reviewableRules = rules.filter((rule) => rule.tier !== "D");
+  const actorIds = [
+    ...new Set(
+      items.flatMap((item) =>
+        item.catalogFieldChanges
+          .filter((change) => change.actorType === "staff")
+          .map((change) => change.actorIdentity)
+      )
+    ),
+  ];
+  const identityAliases =
+    actorIds.length === 0
+      ? []
+      : await prisma.staffReviewerIdentityAlias.findMany({
+          where: {
+            partnerId: reviewer.partnerId,
+            OR: [{ legacyEmployeeId: { in: actorIds } }, { employeeId: { in: actorIds } }],
+          },
+          select: { legacyEmployeeId: true, employeeId: true },
+        });
   let fullyReviewed = 0;
 
   const products = items.map((item) => {
-    const fieldStates = computeFieldStates(rules, item.catalogFieldChanges);
+    const fieldStates = computeFieldStates(rules, item.catalogFieldChanges, identityAliases);
     const gate = evaluateGateForItem({
       item,
       extras: {

@@ -22,6 +22,7 @@ import {
   reviewerStillOwesField,
   type StaffFieldState,
   type StaffFieldSubmission,
+  type StaffReviewerIdentityAliasInput,
 } from "./staffFieldVerification";
 import { evaluateListingGate, type GateFieldRule, type ListingGateResult } from "./listingGate";
 import { APPROVED_PHOTO_WHERE } from "./photoVisibility";
@@ -125,7 +126,8 @@ export interface CatalogChangeRow {
 /** Replays the append-only log into per-field state. Rejected changes are skipped. */
 export function computeFieldStates(
   rules: FieldRuleRow[],
-  changes: CatalogChangeRow[]
+  changes: CatalogChangeRow[],
+  identityAliases: StaffReviewerIdentityAliasInput[] = []
 ): Record<string, StaffFieldState> {
   const byField = new Map<string, StaffFieldSubmission[]>();
   for (const change of changes) {
@@ -148,6 +150,7 @@ export function computeFieldStates(
         requiredConfirmations: rule.requiredConfirmations,
         requiresDistinctReviewers: rule.requiresDistinctReviewers,
       },
+      identityAliases,
     });
   }
   return states;

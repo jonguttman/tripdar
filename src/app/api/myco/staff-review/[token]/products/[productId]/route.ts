@@ -118,7 +118,24 @@ export async function GET(
     );
   }
 
-  const fieldStates = computeFieldStates(rules, item.catalogFieldChanges);
+  const actorIds = [
+    ...new Set(
+      item.catalogFieldChanges
+        .filter((change) => change.actorType === "staff")
+        .map((change) => change.actorIdentity)
+    ),
+  ];
+  const identityAliases =
+    actorIds.length === 0
+      ? []
+      : await prisma.staffReviewerIdentityAlias.findMany({
+          where: {
+            partnerId: reviewer.partnerId,
+            OR: [{ legacyEmployeeId: { in: actorIds } }, { employeeId: { in: actorIds } }],
+          },
+          select: { legacyEmployeeId: true, employeeId: true },
+        });
+  const fieldStates = computeFieldStates(rules, item.catalogFieldChanges, identityAliases);
   const gate = evaluateGateForItem({
     item,
     extras: {
@@ -258,7 +275,24 @@ export async function POST(
   }
 
   const itemRecord = item as unknown as Record<string, unknown>;
-  const priorStates = computeFieldStates(rules, item.catalogFieldChanges);
+  const priorActorIds = [
+    ...new Set(
+      item.catalogFieldChanges
+        .filter((change) => change.actorType === "staff")
+        .map((change) => change.actorIdentity)
+    ),
+  ];
+  const priorIdentityAliases =
+    priorActorIds.length === 0
+      ? []
+      : await prisma.staffReviewerIdentityAlias.findMany({
+          where: {
+            partnerId: reviewer.partnerId,
+            OR: [{ legacyEmployeeId: { in: priorActorIds } }, { employeeId: { in: priorActorIds } }],
+          },
+          select: { legacyEmployeeId: true, employeeId: true },
+        });
+  const priorStates = computeFieldStates(rules, item.catalogFieldChanges, priorIdentityAliases);
   const changeRows: ReturnType<typeof buildCatalogFieldChange>[] = [];
 
   for (const answer of answers) {
@@ -376,7 +410,27 @@ export async function POST(
       where: { id: item.id },
       include: PRODUCT_INCLUDE,
     });
-    const states = computeFieldStates(rules, refreshedItem.catalogFieldChanges);
+    const refreshedActorIds = [
+      ...new Set(
+        refreshedItem.catalogFieldChanges
+          .filter((change) => change.actorType === "staff")
+          .map((change) => change.actorIdentity)
+      ),
+    ];
+    const refreshedIdentityAliases =
+      refreshedActorIds.length === 0
+        ? []
+        : await tx.staffReviewerIdentityAlias.findMany({
+            where: {
+              partnerId: reviewer.partnerId,
+              OR: [
+                { legacyEmployeeId: { in: refreshedActorIds } },
+                { employeeId: { in: refreshedActorIds } },
+              ],
+            },
+            select: { legacyEmployeeId: true, employeeId: true },
+          });
+    const states = computeFieldStates(rules, refreshedItem.catalogFieldChanges, refreshedIdentityAliases);
     const updates: Record<string, unknown> = {};
 
     for (const fieldName of touched) {

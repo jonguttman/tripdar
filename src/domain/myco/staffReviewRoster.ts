@@ -26,6 +26,21 @@ export const STAFF_REVIEWER_EMAILS = [
   "eddie@themushroomtop.internal",
 ] as const;
 
+/**
+ * KEWL-2912 — forward-looking direct-invitation roster.
+ *
+ * These real-email identities are additive and intentionally separate from the legacy
+ * shared-link allowlist above. Do not use them to widen the old roster picker.
+ */
+export const TMT_DIRECT_STAFF_REVIEWERS = [
+  { displayName: "Sage", email: "sage@thegreenroomonventura.com" },
+  { displayName: "Dani", email: "dani@thehigherpath.com" },
+  { displayName: "Eddie", email: "eddie@thehigherpath.com" },
+  { displayName: "Devon", email: "devinmandley@yahoo.com" },
+  { displayName: "Clay", email: "clayton@thehigherpath.com" },
+  { displayName: "Audrey", email: "audrey@theotherpathcbd.com" },
+] as const;
+
 /** Roster size the enrollment auto-close counts against ("six of six"). */
 export const STAFF_REVIEWER_COUNT = STAFF_REVIEWER_EMAILS.length;
 

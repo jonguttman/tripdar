@@ -26,6 +26,10 @@ import { evaluateCatalogAccessToken, hashCatalogAccessToken } from "./catalogTok
 import { verifyReviewerSession } from "./reviewerPin";
 import { isEnrollmentOpen, isReviewerSessionStale } from "./reviewerEnrollment";
 import { staffReviewerWhere } from "./staffReviewRoster";
+import {
+  STAFF_REVIEW_SESSION_ROUTE_TOKEN,
+  validateStaffReviewSessionCookie,
+} from "./staffReviewInvitations";
 
 export const REVIEWER_SESSION_COOKIE = "tmt_reviewer";
 
@@ -39,6 +43,7 @@ export type StaffLinkResult =
   | {
       ok: true;
       tokenId: string;
+      kind: "catalog_token" | "staff_session";
       partnerId: string;
       issuedToId: string | null;
       enrollmentOpen: boolean;
@@ -63,6 +68,7 @@ export async function resolveStaffLink(token: string): Promise<StaffLinkResult> 
   return {
     ok: true,
     tokenId: record!.id,
+    kind: "catalog_token",
     partnerId: state.partnerId,
     issuedToId: record!.issuedToId ?? null,
     enrollmentOpen: isEnrollmentOpen({
@@ -88,6 +94,7 @@ export type RosterResult =
   | {
       ok: true;
       tokenId: string;
+      kind: "catalog_token" | "staff_session";
       partnerId: string;
       enrollmentOpen: boolean;
       enrollmentClosesAt: Date | null;
@@ -109,7 +116,35 @@ export type RosterResult =
  * claimable by anyone holding the link — so it stays pinned to the six addresses Jon
  * approved rather than to whatever a future employee import happens to mark active.
  */
-export async function resolveReviewerRoster(token: string): Promise<RosterResult> {
+export async function resolveReviewerRoster(
+  token: string,
+  cookieValue?: string
+): Promise<RosterResult> {
+  if (token === STAFF_REVIEW_SESSION_ROUTE_TOKEN) {
+    const session = await validateStaffReviewSessionCookie(cookieValue);
+    if (!session.ok) return { ok: false, response: pinRequired("Open your personal invite link again.") };
+    return {
+      ok: true,
+      tokenId: session.sessionId,
+      kind: "staff_session",
+      partnerId: session.partnerId,
+      enrollmentOpen: false,
+      enrollmentClosesAt: null,
+      reviewers: [
+        {
+          id: session.employeeId,
+          name: session.employeeName,
+          email: session.employeeEmail,
+          hasPin: true,
+          pinHash: null,
+          pinSetAt: null,
+          pinFailedAttempts: 0,
+          pinLockedUntil: null,
+        },
+      ],
+    };
+  }
+
   const link = await resolveStaffLink(token);
   if (!link.ok) return link;
 
@@ -143,6 +178,7 @@ export async function resolveReviewerRoster(token: string): Promise<RosterResult
   return {
     ok: true,
     tokenId: link.tokenId,
+    kind: link.kind,
     partnerId: link.partnerId,
     enrollmentOpen: link.enrollmentOpen,
     enrollmentClosesAt: link.enrollmentClosesAt,
@@ -173,6 +209,18 @@ export async function requireReviewer(
   token: string,
   cookieValue: string | undefined
 ): Promise<ReviewerResult> {
+  if (token === STAFF_REVIEW_SESSION_ROUTE_TOKEN) {
+    const session = await validateStaffReviewSessionCookie(cookieValue);
+    if (!session.ok) return { ok: false, response: pinRequired("Open your personal invite link again.") };
+    return {
+      ok: true,
+      tokenId: session.sessionId,
+      partnerId: session.partnerId,
+      employeeId: session.employeeId,
+      employeeName: session.employeeName,
+    };
+  }
+
   const roster = await resolveReviewerRoster(token);
   if (!roster.ok) return roster;
 
