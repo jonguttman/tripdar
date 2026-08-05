@@ -7,8 +7,12 @@ const prismaMock = vi.hoisted(() => ({
   mycoEmployee: { upsert: vi.fn() },
   staffReviewInvitation: {
     findUnique: vi.fn(),
+    findMany: vi.fn(),
     updateMany: vi.fn(),
     create: vi.fn(),
+  },
+  staffReviewInviteBatchRecipient: {
+    updateMany: vi.fn(),
   },
   staffReviewSession: {
     create: vi.fn(),
@@ -69,6 +73,7 @@ describe("staff review invitations", () => {
       optedOut: false,
     });
     prismaMock.staffReviewInvitation.findUnique.mockResolvedValue(invitation());
+    prismaMock.staffReviewInvitation.findMany.mockResolvedValue([]);
     prismaMock.staffReviewInvitation.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.staffReviewInvitation.create.mockResolvedValue({
       id: INVITATION_ID,
@@ -198,6 +203,32 @@ describe("staff review invitations", () => {
       emailNormalized: "qa-reviewer@tripdar-qa.invalid",
     });
     expect(prismaMock.staffReviewInvitation.create.mock.calls[0][0].data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("invalidates approved unsent batch recipients when a pending direct invitation is revoked on reissue", async () => {
+    prismaMock.staffReviewInvitation.findMany.mockResolvedValue([{ id: "old-invitation" }]);
+
+    const { prepareCanonicalStaffReviewInvitationBatch } = await import("./staffReviewInvitations");
+    await prepareCanonicalStaffReviewInvitationBatch({
+      partnerId: QA_PARTNER_ID,
+      issuedBy: "admin@example.com",
+      requestOrigin: "https://tripdar.test",
+      qaOnly: true,
+    });
+
+    expect(prismaMock.staffReviewInviteBatchRecipient.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          invitationId: { in: ["old-invitation"] },
+          sendStatus: { in: ["pending", "claimed", "provider_failed"] },
+          batch: { status: { in: ["approved", "sending", "partially_sent"] } },
+        }),
+        data: expect.objectContaining({
+          sendStatus: "validation_failed",
+          validationFailureCode: "revoked",
+        }),
+      })
+    );
   });
 
   it("refuses TMT qaOnly before any transaction-backed invitation mutation", async () => {

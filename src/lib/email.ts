@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import crypto from "crypto";
 
 let client: Resend | null = null;
 
@@ -10,8 +11,8 @@ function resendClient(): Resend {
   return client;
 }
 
-const FROM_ADDRESS = "Tripdar <noreply@tripd.ar>";
-const REPLY_TO_ADDRESS = "scottyclaw@gmail.com";
+export const DEFAULT_EMAIL_FROM_ADDRESS = "Tripdar <noreply@tripd.ar>";
+export const DEFAULT_EMAIL_REPLY_TO_ADDRESS = "scottyclaw@gmail.com";
 
 export interface SendEmailOptions {
   to: string | string[];
@@ -20,26 +21,53 @@ export interface SendEmailOptions {
   text?: string;
   from?: string;
   replyTo?: string;
+  idempotencyKey?: string;
 }
 
-export async function sendEmail(options: SendEmailOptions) {
-  const { to, subject, html, text, from = FROM_ADDRESS, replyTo = REPLY_TO_ADDRESS } = options;
+export interface SendEmailResult {
+  messageId: string;
+  provider: "resend";
+}
 
-  const { data, error } = await resendClient().emails.send({
-    from,
-    to: Array.isArray(to) ? to : [to],
+export function providerCredentialFingerprint(provider = "resend"): string {
+  const credential = process.env.RESEND_API_KEY;
+  if (!credential) throw new Error("RESEND_API_KEY is required for provider fingerprinting");
+  return crypto
+    .createHash("sha256")
+    .update(`${provider}:${credential}`, "utf8")
+    .digest("hex");
+}
+
+export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+  const {
+    to,
     subject,
     html,
-    replyTo,
-    ...(text ? { text } : {}),
-  });
+    text,
+    from = DEFAULT_EMAIL_FROM_ADDRESS,
+    replyTo = DEFAULT_EMAIL_REPLY_TO_ADDRESS,
+    idempotencyKey,
+  } = options;
+
+  const { data, error } = await resendClient().emails.send(
+    {
+      from,
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      html,
+      replyTo,
+      ...(text ? { text } : {}),
+    },
+    idempotencyKey ? { idempotencyKey } : undefined
+  );
 
   if (error) {
     console.error("[email] Failed to send email:", error);
     throw new Error(`Email send failed: ${error.message}`);
   }
 
-  return data;
+  if (!data?.id) throw new Error("Email send failed: missing provider message id");
+  return { messageId: data.id, provider: "resend" };
 }
 
 export async function sendMagicLink(email: string, url: string) {

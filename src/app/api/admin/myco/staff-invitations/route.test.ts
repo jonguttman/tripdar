@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const prepareMock = vi.hoisted(() => vi.fn());
+const prepareBatchMock = vi.hoisted(() => vi.fn());
+const approveBatchMock = vi.hoisted(() => vi.fn());
 const isQaStaffReviewPartnerMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/domain/auth/adminSession", () => ({
@@ -24,6 +26,11 @@ vi.mock("@/domain/myco/staffReviewRoster", () => ({
   isQaStaffReviewPartner: isQaStaffReviewPartnerMock,
 }));
 
+vi.mock("@/domain/myco/staffReviewInviteBatches", () => ({
+  prepareStaffReviewInviteBatch: prepareBatchMock,
+  approveStaffReviewInviteBatch: approveBatchMock,
+}));
+
 async function post(body: Record<string, unknown>) {
   const { POST } = await import("./route");
   const request = new NextRequest("https://tripdar.test/api/admin/myco/staff-invitations", {
@@ -39,6 +46,12 @@ describe("admin staff invitation preview route", () => {
     vi.clearAllMocks();
     isQaStaffReviewPartnerMock.mockReturnValue(false);
     prepareMock.mockResolvedValue({ status: "UNSENT DRAFT", send: false, recipients: [] });
+    prepareBatchMock.mockResolvedValue({ id: "batch-1", status: "draft" });
+    approveBatchMock.mockResolvedValue({
+      id: "batch-1",
+      status: "approved",
+      approvedInteractionId: "interaction-1",
+    });
   });
 
   it("refuses send=true before preparing anything", async () => {
@@ -92,5 +105,60 @@ describe("admin staff invitation preview route", () => {
         qaOnly: true,
       })
     );
+  });
+
+  it("prepares a frozen batch only through explicit prepare_batch action", async () => {
+    const response = await post({
+      action: "prepare_batch",
+      partnerId: "partner-tmt",
+      sourceIssueId: "KEWL-2950",
+      messages: [
+        {
+          email: "sage@thegreenroomonventura.com",
+          subject: "Subject",
+          html: "<p>{{INVITE_URL}}</p>",
+          text: "{{INVITE_URL}}",
+        },
+      ],
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(json.data).toMatchObject({ id: "batch-1", status: "draft" });
+    expect(prepareBatchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partnerId: "partner-tmt",
+        renderedBy: "admin@example.com",
+        sourceIssueId: "KEWL-2950",
+      })
+    );
+    expect(prepareMock).not.toHaveBeenCalled();
+  });
+
+  it("records approval evidence only through explicit record_approval action", async () => {
+    const response = await post({
+      action: "record_approval",
+      partnerId: "partner-tmt",
+      batchId: "batch-1",
+      approvedInteractionId: "interaction-1",
+      sourceCommentId: "comment-1",
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.data).toMatchObject({
+      id: "batch-1",
+      status: "approved",
+      approvedInteractionId: "interaction-1",
+    });
+    expect(approveBatchMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        batchId: "batch-1",
+        approvedInteractionId: "interaction-1",
+        approvedBy: "admin@example.com",
+        sourceCommentId: "comment-1",
+      })
+    );
+    expect(prepareMock).not.toHaveBeenCalled();
   });
 });

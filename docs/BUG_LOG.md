@@ -4,6 +4,40 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-05-001: staff invite-batch release blockers left the approved-send path unreleasable
+
+**Symptoms:**
+- The invite-batch branch carried schema metadata that did not match production's existing index and constraint names, making the release look like it could produce unintended index churn.
+- The documented direct executor path depended on a TypeScript runner that this repository explicitly does not use, so the send command could fail before reaching the checked-in resolver path.
+- A provider outage or transient provider error marked the whole approved batch as `validation_failed`, which made a retry look like a human or data-validation refusal instead of a retryable delivery failure.
+
+**Root Cause:**
+Three separate release assumptions were too loose. The Prisma schema named logical indexes without preserving the concrete production names. The script used a direct TypeScript entrypoint and static domain import instead of the repo-local `vite-node` npm script that handles Tripdar's bundler-style imports. The batch final-status aggregation treated every failure as validation failure, even when the only failure class came from the email provider after validation had passed.
+
+**Fix:**
+- Mapped the Prisma index/constraint names that need to match production, without running a production migration or changing live data.
+- Added the canonical `staff-review:send-invite-batch` npm script, documented it in `CLAUDE.md`, changed the executable to validate required identity arguments before importing domain code, and covered the refusal path with a test that runs without runtime secrets.
+- Kept provider-only failures retryable: failed provider rows can be reclaimed, already-sent rows are skipped, provider idempotency keys are preserved, and only non-provider validation failures move the batch to `validation_failed`.
+
+**Files Modified:**
+- `CLAUDE.md`
+- `package.json`
+- `prisma/schema.prisma`
+- `scripts/send-staff-review-invite-batch.mts`
+- `scripts/send-staff-review-invite-batch.test.mjs`
+- `src/domain/myco/staffReviewInviteBatches.ts`
+- `src/domain/myco/staffReviewInviteBatches.test.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Reconcile Prisma metadata against production before treating a schema-only drift report as harmless, and do not use a documentation entry or ticket note as proof that a migration path is safe.
+- Operational scripts must be invoked through checked-in package scripts when they import non-leaf project modules; test the refusal path through that real command with secrets absent.
+- Keep validation failures and provider failures separate in state transitions. A provider send can fail after all approval and data checks pass, and that failure must preserve a retry path without resending completed recipients.
+
+**Lesson Learned:**
+Release readiness is not just green unit tests. The command an operator runs, the schema names production already has, and the state a retry will see are all part of the real path; if any one is only asserted indirectly, the approval gate can be satisfied while the send path remains unreleasable.
+
 ## BUG-2026-08-01-001: Photo pipeline reported unmeasured label fidelity and entered premium mode accidentally
 
 **Symptoms:**
