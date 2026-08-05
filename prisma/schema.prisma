@@ -465,6 +465,9 @@ model Partner {
   fieldVerificationRules CatalogFieldVerificationRule[]
   brandSubmissions BrandSubmission[]
   enrollmentEvents ReviewerEnrollmentEvent[]
+  staffReviewInvitations StaffReviewInvitation[]
+  staffReviewSessions StaffReviewSession[]
+  staffReviewerIdentityAliases StaffReviewerIdentityAlias[]
 
   @@index([apiKeyHash])
   @@index([active])
@@ -878,9 +881,93 @@ model MycoEmployee {
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   assignments MycoEmployeeReviewAssignment[]
   enrollmentEvents ReviewerEnrollmentEvent[]
+  staffReviewInvitations StaffReviewInvitation[]
+  staffReviewSessions StaffReviewSession[]
+  staffReviewerIdentityAliases StaffReviewerIdentityAlias[] @relation("StaffReviewerIdentityAliasEmployee")
+  legacyStaffReviewerIdentityAliases StaffReviewerIdentityAlias[] @relation("StaffReviewerIdentityAliasLegacyEmployee")
 
   @@unique([partnerId, email])
   @@index([partnerId, active])
+}
+
+/// KEWL-2912 — per-person staff catalog invitations.
+///
+/// Raw invitation tokens are returned only at prepare time and are never stored. GET is
+/// intentionally inert; confirmation/session state changes only happen on the CSRF POST.
+model StaffReviewInvitation {
+  id                    String   @id @default(cuid())
+  partnerId             String
+  employeeId            String
+  emailNormalized       String
+  tokenHash             String   @unique
+  status                String   @default("pending") // pending, confirmed, revoked, expired
+  expiresAt             DateTime
+  confirmedAt           DateTime?
+  openedAt              DateTime?
+  lastOpenedAt          DateTime?
+  revokedAt             DateTime?
+  revokedBy             String?
+  revocationReason      String?
+  issuedBy              String?
+  issuedAt              DateTime @default(now())
+  scannerOpenedAt       DateTime?
+  scannerUserAgentHash  String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  employee MycoEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  sessions StaffReviewSession[]
+
+  @@index([partnerId, status])
+  @@index([employeeId, status])
+  @@index([expiresAt])
+}
+
+/// KEWL-2912 — server-verifiable staff catalog session minted by a confirmed invitation.
+model StaffReviewSession {
+  id            String   @id @default(cuid())
+  partnerId     String
+  employeeId    String
+  invitationId  String?
+  sessionHash   String   @unique
+  issuedAt      DateTime @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  lastSeenAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  employee MycoEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  invitation StaffReviewInvitation? @relation(fields: [invitationId], references: [id], onDelete: SetNull)
+
+  @@index([partnerId, employeeId])
+  @@index([employeeId, expiresAt])
+  @@index([invitationId])
+  @@index([expiresAt])
+}
+
+/// KEWL-2912 — no-rewrite bridge from legacy seeded reviewers to real-email reviewers.
+model StaffReviewerIdentityAlias {
+  id               String   @id @default(cuid())
+  partnerId        String
+  legacyEmployeeId String
+  employeeId       String
+  legacyEmail      String
+  emailNormalized  String
+  createdAt        DateTime @default(now())
+  createdBy        String?
+  reason           String
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  legacyEmployee MycoEmployee @relation("StaffReviewerIdentityAliasLegacyEmployee", fields: [legacyEmployeeId], references: [id], onDelete: Cascade)
+  employee MycoEmployee @relation("StaffReviewerIdentityAliasEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, legacyEmployeeId, employeeId])
+  @@index([partnerId, legacyEmployeeId])
+  @@index([partnerId, employeeId])
+  @@index([emailNormalized])
 }
 
 model MycoEmployeeReviewAssignment {

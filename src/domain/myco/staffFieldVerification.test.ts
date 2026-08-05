@@ -54,6 +54,17 @@ describe("computeStaffFieldState — counting rules", () => {
     expect(state.confirmedValue).toBe(250);
   });
 
+  it("does NOT count a legacy id and its real-email alias as two distinct reviewers", () => {
+    const state = computeStaffFieldState({
+      submissions: [sub(250, "legacy-clay"), sub(250, "real-clay")],
+      rule: TIER_B,
+      identityAliases: [{ legacyEmployeeId: "legacy-clay", employeeId: "real-clay" }],
+    });
+    expect(state.confirmationsCount).toBe(1);
+    expect(state.state).not.toBe("confirmed");
+    expect(state.answeredReviewers).toEqual(["real-clay"]);
+  });
+
   it("never counts 'I don't know', and stops nagging only that reviewer", () => {
     const state = computeStaffFieldState({
       submissions: [sub(DONT_KNOW_VALUE, "eddie")],

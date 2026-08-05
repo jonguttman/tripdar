@@ -36,6 +36,11 @@ export interface StaffFieldRule {
   requiresDistinctReviewers: boolean;
 }
 
+export interface StaffReviewerIdentityAliasInput {
+  legacyEmployeeId: string;
+  employeeId: string;
+}
+
 export interface StaffFieldState {
   state: CatalogFieldState;
   /** Distinct reviewers backing the currently live value. */
@@ -104,9 +109,17 @@ export function requiredAfterConflict(rule: StaffFieldRule): number {
 export function computeStaffFieldState(input: {
   submissions: StaffFieldSubmission[];
   rule: StaffFieldRule;
+  identityAliases?: StaffReviewerIdentityAliasInput[];
 }): StaffFieldState {
   const { rule } = input;
   const requiredConfirmations = Math.max(1, rule.requiredConfirmations);
+  const canonicalReviewerById = new Map<string, string>();
+  for (const alias of input.identityAliases ?? []) {
+    canonicalReviewerById.set(alias.legacyEmployeeId, alias.employeeId);
+    canonicalReviewerById.set(alias.employeeId, alias.employeeId);
+  }
+  const canonicalReviewerId = (actorIdentity: string) =>
+    canonicalReviewerById.get(actorIdentity) ?? actorIdentity;
 
   // Brand and import submissions never count toward the gate.
   const staffSubmissions = input.submissions
@@ -127,15 +140,16 @@ export function computeStaffFieldState(input: {
   let sawCountingAnswer = false;
 
   for (const submission of staffSubmissions) {
-    if (!answeredReviewers.includes(submission.actorIdentity)) {
-      answeredReviewers.push(submission.actorIdentity);
+    const reviewerId = canonicalReviewerId(submission.actorIdentity);
+    if (!answeredReviewers.includes(reviewerId)) {
+      answeredReviewers.push(reviewerId);
     }
 
     if (isDontKnow(submission.value)) {
       // Reviewed, unknown. Does not satisfy the gate, but must stop nagging THIS
       // reviewer about THIS field.
-      if (!dontKnowReviewers.includes(submission.actorIdentity)) {
-        dontKnowReviewers.push(submission.actorIdentity);
+      if (!dontKnowReviewers.includes(reviewerId)) {
+        dontKnowReviewers.push(reviewerId);
       }
       continue;
     }
@@ -151,13 +165,13 @@ export function computeStaffFieldState(input: {
     if (liveKey === null) {
       liveKey = key;
       liveValue = submission.value;
-      liveReviewers = new Set([submission.actorIdentity]);
+      liveReviewers = new Set([reviewerId]);
       continue;
     }
 
     if (key === liveKey) {
       // Agreement. A repeat from the same reviewer does not add a second confirmation.
-      liveReviewers.add(submission.actorIdentity);
+      liveReviewers.add(reviewerId);
       continue;
     }
 
@@ -166,7 +180,7 @@ export function computeStaffFieldState(input: {
     everConflicted = true;
     liveKey = key;
     liveValue = submission.value;
-    liveReviewers = new Set([submission.actorIdentity]);
+    liveReviewers = new Set([reviewerId]);
   }
 
   const effectiveRequired = everConflicted ? requiredAfterConflict(rule) : requiredConfirmations;
