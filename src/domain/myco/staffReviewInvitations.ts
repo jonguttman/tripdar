@@ -7,7 +7,7 @@ import {
   signReviewerSession,
   verifyReviewerSession,
 } from "./reviewerPin";
-import { TMT_DIRECT_STAFF_REVIEWERS } from "./staffReviewRoster";
+import { isQaStaffReviewPartner, TMT_DIRECT_STAFF_REVIEWERS } from "./staffReviewRoster";
 
 export const STAFF_REVIEW_INVITATION_COOKIE_PATH = "/";
 export const STAFF_REVIEW_SESSION_ROUTE_TOKEN = "session";
@@ -24,6 +24,16 @@ export const QA_STAFF_REVIEW_INVITE_RECIPIENT = {
   displayName: "QA Reviewer",
   email: "qa-reviewer@tripdar-qa.invalid",
 } as const;
+
+export class StaffReviewInvitationPartnerScopeError extends Error {
+  readonly code = "qa_partner_scope_refused";
+  readonly statusCode = 403;
+
+  constructor() {
+    super("qaOnly is only allowed for the QA staff review partner.");
+    this.name = "StaffReviewInvitationPartnerScopeError";
+  }
+}
 
 export type StaffInviteState =
   | "ready"
@@ -406,6 +416,10 @@ export async function prepareCanonicalStaffReviewInvitationBatch(input: {
   expiresInDays?: number;
   qaOnly?: boolean;
 }) {
+  if (input.qaOnly && !isQaStaffReviewPartner(input.partnerId)) {
+    throw new StaffReviewInvitationPartnerScopeError();
+  }
+
   const partner = await prisma.partner.findUnique({
     where: { id: input.partnerId },
     select: { id: true, name: true },

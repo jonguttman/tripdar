@@ -24,6 +24,7 @@ vi.mock("@/lib/prisma", async () => {
 
 const SECRET = "test-secret-for-staff-invites";
 const PARTNER_ID = "partner-tmt";
+const QA_PARTNER_ID = "partner-qa";
 const INVITATION_ID = "invite-1";
 const EMPLOYEE_ID = "employee-clay";
 
@@ -54,7 +55,11 @@ describe("staff review invitations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXTAUTH_SECRET = SECRET;
-    prismaMock.partner.findUnique.mockResolvedValue({ id: PARTNER_ID, name: "The Mushroom Top" });
+    process.env.QA_STAFF_REVIEW_PARTNER_ID = QA_PARTNER_ID;
+    prismaMock.partner.findUnique.mockImplementation(async (args: { where?: { id?: string } }) => ({
+      id: args.where?.id ?? PARTNER_ID,
+      name: args.where?.id === QA_PARTNER_ID ? "Tripdar QA" : "The Mushroom Top",
+    }));
     prismaMock.mycoEmployee.upsert.mockResolvedValue({
       id: EMPLOYEE_ID,
       name: "Clay",
@@ -152,7 +157,7 @@ describe("staff review invitations", () => {
   it("prepares an UNSENT DRAFT batch and stores only token hashes", async () => {
     const { prepareCanonicalStaffReviewInvitationBatch } = await import("./staffReviewInvitations");
     const batch = await prepareCanonicalStaffReviewInvitationBatch({
-      partnerId: PARTNER_ID,
+      partnerId: QA_PARTNER_ID,
       issuedBy: "admin@example.com",
       requestOrigin: "https://tripdar.test",
       qaOnly: true,
@@ -173,6 +178,29 @@ describe("staff review invitations", () => {
       })
     );
     expect(prismaMock.staffReviewInvitation.create.mock.calls[0][0].data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it("refuses TMT qaOnly before any transaction-backed invitation mutation", async () => {
+    const { prepareCanonicalStaffReviewInvitationBatch } = await import("./staffReviewInvitations");
+
+    await expect(
+      prepareCanonicalStaffReviewInvitationBatch({
+        partnerId: PARTNER_ID,
+        issuedBy: "admin@example.com",
+        requestOrigin: "https://tripdar.test",
+        qaOnly: true,
+      })
+    ).rejects.toMatchObject({
+      code: "qa_partner_scope_refused",
+      statusCode: 403,
+      message: "qaOnly is only allowed for the QA staff review partner.",
+    });
+
+    expect(prismaMock.partner.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(prismaMock.mycoEmployee.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInvitation.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInvitation.create).not.toHaveBeenCalled();
   });
 
   it("keeps non-QA canonical preview inert until Jon approves live token generation", async () => {
@@ -218,7 +246,7 @@ describe("staff review invitations", () => {
 
     const { prepareCanonicalStaffReviewInvitationBatch } = await import("./staffReviewInvitations");
     const batch = await prepareCanonicalStaffReviewInvitationBatch({
-      partnerId: PARTNER_ID,
+      partnerId: QA_PARTNER_ID,
       issuedBy: "admin@example.com",
       qaOnly: true,
     });

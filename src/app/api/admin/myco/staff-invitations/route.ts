@@ -54,6 +54,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true, data: batch }, { status: 201 });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to prepare staff invitations";
-    return NextResponse.json({ success: false, error: { message } }, { status: 400 });
+    const statusCode = typeof (error as { statusCode?: unknown }).statusCode === "number"
+      ? (error as { statusCode: number }).statusCode
+      : 400;
+    const code = typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : undefined;
+    return NextResponse.json(
+      { success: false, error: { message, ...(code ? { code } : {}) } },
+      { status: statusCode }
+    );
   }
 }

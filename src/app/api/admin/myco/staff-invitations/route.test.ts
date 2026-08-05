@@ -63,4 +63,28 @@ describe("admin staff invitation preview route", () => {
       })
     );
   });
+
+  it("returns an explicit refusal for TMT qaOnly without invitation material", async () => {
+    prepareMock.mockRejectedValue(
+      Object.assign(new Error("qaOnly is only allowed for the QA staff review partner."), {
+        code: "qa_partner_scope_refused",
+        statusCode: 403,
+      })
+    );
+
+    const response = await post({ partnerId: "partner-tmt", send: false, qaOnly: true });
+    const json = await response.json();
+    const serialized = JSON.stringify(json);
+
+    expect(response.status).toBe(403);
+    expect(json.success).toBe(false);
+    expect(json.data).toBeUndefined();
+    expect(json.error).toMatchObject({
+      code: "qa_partner_scope_refused",
+      message: "qaOnly is only allowed for the QA staff review partner.",
+    });
+    expect(serialized).not.toContain("/staff-review/invite/");
+    expect(serialized).not.toContain("qa-reviewer@tripdar-qa.invalid");
+    expect(serialized).not.toMatch(/rawToken|tokenPreview|tokenHash|url/i);
+  });
 });
