@@ -572,6 +572,7 @@ model StoreProductCatalog {
   brandSubmissions BrandSubmission[]
 
   @@index([partnerId, active])
+  @@index([researchOnly], map: "StoreProductCatalog_researchOnly_idx")
   @@index([strainSlug])
   @@index([brandId])
   @@index([partnerId, intakeStatus])
@@ -1055,7 +1056,7 @@ model StaffReviewerIdentityAlias {
   legacyEmployee MycoEmployee @relation("StaffReviewerIdentityAliasLegacyEmployee", fields: [legacyEmployeeId], references: [id], onDelete: Cascade)
   employee MycoEmployee @relation("StaffReviewerIdentityAliasEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
 
-  @@unique([partnerId, legacyEmployeeId, employeeId])
+  @@unique([partnerId, legacyEmployeeId, employeeId], map: "StaffReviewerIdentityAlias_partnerId_legacyEmployeeId_employeeI")
   @@index([partnerId, legacyEmployeeId])
   @@index([partnerId, employeeId])
   @@index([emailNormalized])

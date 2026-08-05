@@ -1018,7 +1018,8 @@ export async function sendApprovedStaffReviewInviteBatch(input: {
     });
   }
 
-  const finalStatus = failed.length > 0
+  const hasValidationFailure = failed.some((failure) => failure.code !== "provider_failed");
+  const finalStatus = hasValidationFailure
     ? "validation_failed"
     : await prisma.$transaction((tx) => aggregateBatchStatus(tx, batch.id));
   await prisma.staffReviewInviteBatch.update({

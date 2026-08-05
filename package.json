@@ -48,6 +48,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "staff-review:send-invite-batch": "node --env-file-if-exists=.env.local node_modules/vite-node/vite-node.mjs scripts/send-staff-review-invite-batch.mts --",
     "check:myco-strain-drift": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/check-myco-strain-slug-drift.mts"
   }
 }

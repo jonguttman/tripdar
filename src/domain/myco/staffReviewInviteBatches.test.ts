@@ -607,6 +607,46 @@ describe("staff review invite batches", () => {
     );
   });
 
+  it("keeps an all-provider-failed batch approved for retry without marking validation_failed", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch();
+    prismaMock.staffReviewInviteBatchRecipient.findMany.mockResolvedValueOnce([
+      { sendStatus: "provider_failed" },
+    ]);
+    sendSpy.mockRejectedValueOnce(new Error("resend unavailable"));
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+      idempotencyKey: "staff-review-invite:key-a",
+    }));
+    expect(prismaMock.staffReviewInviteBatchRecipient.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "recipient-1" },
+        data: expect.objectContaining({
+          sendStatus: "provider_failed",
+          providerError: "resend unavailable",
+        }),
+      })
+    );
+    expect(prismaMock.staffReviewInviteBatch.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "batch-a" },
+        data: { status: "approved" },
+      })
+    );
+    expect(result).toMatchObject({
+      batchId: "batch-a",
+      status: "approved",
+      failed: [{ recipientId: "recipient-1", code: "provider_failed" }],
+    });
+  });
+
   it("executor refuses an already-invalidated recipient row without attempting a new claim or provider send", async () => {
     const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch({
       recipient: {
@@ -636,7 +676,7 @@ describe("staff review invite batches", () => {
     ]);
   });
 
-  it("recovers a partial send by skipping provider-message rows and sending only pending rows", async () => {
+  it("retries a partial provider failure without resending already-sent rows or changing idempotency keys", async () => {
     const {
       sendApprovedStaffReviewInviteBatch,
       sealStaffInvitePayload,
@@ -652,7 +692,7 @@ describe("staff review invite batches", () => {
     const sealed = sealStaffInvitePayload({
       version: "staff-review-invite-payload-v1",
       batchId: "batch-partial",
-      recipientId: "recipient-pending",
+      recipientId: "recipient-provider-failed",
       invitationId: "invitation-pending",
       employeeId: "employee-1",
       partnerId: PARTNER_ID,
@@ -699,8 +739,8 @@ describe("staff review invite batches", () => {
       providerMessageId: "resend-already",
       sentAt: new Date("2026-08-05T05:35:00.000Z"),
     };
-    const pendingRecipient = {
-      id: "recipient-pending",
+    const failedRecipient = {
+      id: "recipient-provider-failed",
       batchId: "batch-partial",
       ordinal: 1,
       invitationId: "invitation-pending",
@@ -719,10 +759,11 @@ describe("staff review invite batches", () => {
       htmlDigest: digestText("<p>Dani</p>"),
       textDigest: digestText("Dani"),
       providerIdempotencyKey: "staff-review-invite:key-pending",
-      sendStatus: "pending",
+      sendStatus: "provider_failed",
       claimId: null,
       claimedAt: null,
-      sendAttemptCount: 0,
+      sendAttemptCount: 1,
+      providerError: "previous provider timeout",
       providerMessageId: null,
       sentAt: null,
       ...sealed,
@@ -743,7 +784,7 @@ describe("staff review invite batches", () => {
       sealKeyFingerprint: sealKeyFingerprint(),
     });
     prismaMock.staffReviewInviteBatchRecipient.findMany
-      .mockResolvedValueOnce([sentRecipient, pendingRecipient])
+      .mockResolvedValueOnce([sentRecipient, failedRecipient])
       .mockResolvedValueOnce([{ sendStatus: "sent" }, { sendStatus: "sent" }]);
     prismaMock.staffReviewInviteBatchRecipient.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.staffReviewInvitation.findUnique.mockResolvedValue(
@@ -776,7 +817,7 @@ describe("staff review invite batches", () => {
     expect(result.skipped).toEqual([{ recipientId: "recipient-sent", reason: "already_sent" }]);
     expect(result.sent).toEqual([
       {
-        recipientId: "recipient-pending",
+        recipientId: "recipient-provider-failed",
         emailMasked: "d***@thehigherpath.com",
         providerMessageId: "resend-new",
       },
@@ -786,5 +827,29 @@ describe("staff review invite batches", () => {
       to: "dani@thehigherpath.com",
       idempotencyKey: "staff-review-invite:key-pending",
     }));
+    expect(prismaMock.staffReviewInviteBatchRecipient.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "recipient-provider-failed",
+          providerMessageId: null,
+          sentAt: null,
+          sendStatus: { in: ["pending", "provider_failed"] },
+        }),
+        data: expect.objectContaining({
+          sendStatus: "claimed",
+          sendAttemptCount: { increment: 1 },
+        }),
+      })
+    );
+    expect(prismaMock.staffReviewInviteBatchRecipient.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "recipient-provider-failed" },
+        data: expect.objectContaining({
+          sendStatus: "sent",
+          providerMessageId: "resend-new",
+          providerError: null,
+        }),
+      })
+    );
   });
 });

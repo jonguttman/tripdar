@@ -1,6 +1,7 @@
-#!/usr/bin/env tsx
+#!/usr/bin/env node
 
-import { sendApprovedStaffReviewInviteBatch } from "../src/domain/myco/staffReviewInviteBatches";
+const USAGE =
+  "Usage: npm run staff-review:send-invite-batch -- --batch-id <id> --approved-interaction-id <id>";
 
 function arg(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -13,13 +14,12 @@ async function main() {
   const batchId = arg("--batch-id");
   const approvedInteractionId = arg("--approved-interaction-id");
   if (!batchId || !approvedInteractionId) {
-    console.error(
-      "Usage: npx tsx scripts/send-staff-review-invite-batch.mts --batch-id <id> --approved-interaction-id <id>"
-    );
+    console.error(USAGE);
     process.exitCode = 2;
     return;
   }
 
+  const { sendApprovedStaffReviewInviteBatch } = await import("../src/domain/myco/staffReviewInviteBatches");
   const result = await sendApprovedStaffReviewInviteBatch({ batchId, approvedInteractionId });
   console.log(JSON.stringify({
     batchId: result.batchId,
