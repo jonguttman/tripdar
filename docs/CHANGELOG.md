@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0] - 2026-08-05
+
+### Added
+- **Employee-review invite batch snapshots** (KEWL-2972): admin product-review assignments now freeze an approved `StaffReviewInviteBatch` with immutable per-recipient subject/body/link/token snapshots before any provider send is attempted.
+- **Fail-closed invite send validator** (KEWL-2972): every pending recipient is revalidated against current assignment, access token, catalog, employee, roster, sender, content digests, provider credential fingerprint, duplicate-send state, and opt-out state immediately before email provider access. Refusals persist `StaffReviewInviteNoSendEvidence` and require a new approved batch.
+- **Partial-send recovery audit** (KEWL-2972): approved batch sends store provider message ids per recipient, update assignment send counters only after a successful provider call, and can retry only unsent pending/failed rows by explicit `batchId`.
+
 ## [1.18.0] - 2026-08-01
 
 ### Added

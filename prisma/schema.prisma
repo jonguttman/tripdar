@@ -468,6 +468,8 @@ model Partner {
   staffReviewInvitations StaffReviewInvitation[]
   staffReviewSessions StaffReviewSession[]
   staffReviewerIdentityAliases StaffReviewerIdentityAlias[]
+  staffReviewInviteBatches StaffReviewInviteBatch[]
+  staffReviewInviteNoSendEvidence StaffReviewInviteNoSendEvidence[]
 
   @@index([apiKeyHash])
   @@index([active])
@@ -569,6 +571,7 @@ model StoreProductCatalog {
   catalogFieldChanges CatalogFieldChange[]
   fieldVerificationStates CatalogFieldVerificationState[]
   brandSubmissions BrandSubmission[]
+  staffReviewInviteBatches StaffReviewInviteBatch[]
 
   @@index([partnerId, active])
   @@index([strainSlug])
@@ -698,6 +701,8 @@ model CatalogAccessToken {
   brand Brand? @relation(fields: [brandId], references: [id], onDelete: Cascade)
   catalogItem StoreProductCatalog? @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
   employeeReviewAssignment MycoEmployeeReviewAssignment?
+  staffReviewInviteRecipients StaffReviewInviteRecipient[]
+  staffReviewInviteNoSendEvidence StaffReviewInviteNoSendEvidence[]
   regeneratedFrom CatalogAccessToken? @relation("CatalogTokenRegeneration", fields: [regeneratedFromId], references: [id], onDelete: SetNull)
   regenerations CatalogAccessToken[] @relation("CatalogTokenRegeneration")
   brandSubmissions BrandSubmission[]
@@ -885,6 +890,8 @@ model MycoEmployee {
   staffReviewSessions StaffReviewSession[]
   staffReviewerIdentityAliases StaffReviewerIdentityAlias[] @relation("StaffReviewerIdentityAliasEmployee")
   legacyStaffReviewerIdentityAliases StaffReviewerIdentityAlias[] @relation("StaffReviewerIdentityAliasLegacyEmployee")
+  staffReviewInviteRecipients StaffReviewInviteRecipient[]
+  staffReviewInviteNoSendEvidence StaffReviewInviteNoSendEvidence[]
 
   @@unique([partnerId, email])
   @@index([partnerId, active])
@@ -991,11 +998,129 @@ model MycoEmployeeReviewAssignment {
   employee MycoEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   accessToken CatalogAccessToken? @relation(fields: [accessTokenId], references: [id], onDelete: SetNull)
   response MycoEmployeeProductReview?
+  staffReviewInviteRecipients StaffReviewInviteRecipient[]
+  staffReviewInviteNoSendEvidence StaffReviewInviteNoSendEvidence[]
 
   @@unique([catalogItemId, employeeId])
   @@index([catalogItemId, status])
   @@index([employeeId, status])
   @@index([expiresAt])
+}
+
+/// KEWL-2972 / KEWL-2948 — immutable approved employee-review invite batch.
+///
+/// The batch is the approval-time freeze. Provider sends must validate every
+/// recipient snapshot against current assignment/token/catalog/employee state before
+/// calling Resend, and any no-send is recorded in StaffReviewInviteNoSendEvidence.
+model StaffReviewInviteBatch {
+  id                            String   @id @default(cuid())
+  partnerId                     String
+  catalogItemId                 String
+  status                        String   @default("approved") // approved, sending, partial, sent, blocked, superseded
+  approvedBy                    String
+  approvedAt                    DateTime @default(now())
+  expiresInDays                 Int
+  rosterDigest                  String
+  sender                        String
+  subjectDigest                 String
+  htmlDigest                    String
+  textDigest                    String
+  providerCredentialFingerprint String
+  totalRecipients               Int
+  sentCount                     Int      @default(0)
+  blockedCount                  Int      @default(0)
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  catalogItem StoreProductCatalog @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  recipients StaffReviewInviteRecipient[]
+  noSendEvidence StaffReviewInviteNoSendEvidence[]
+
+  @@index([partnerId, status])
+  @@index([catalogItemId, status])
+  @@index([approvedAt])
+}
+
+/// KEWL-2972 / KEWL-2948 — immutable per-recipient send snapshot and provider audit row.
+model StaffReviewInviteRecipient {
+  id                            String   @id @default(cuid())
+  batchId                       String
+  assignmentId                  String
+  employeeId                    String
+  accessTokenId                 String
+  catalogItemId                 String
+  partnerId                     String
+  tokenHash                     String
+  accessTokenHash               String
+  recipientEmail                String
+  recipientEmailNormalized      String
+  employeeName                  String
+  expiresAt                     DateTime
+  link                          String
+  subject                       String
+  html                          String
+  text                          String
+  linkDigest                    String
+  subjectDigest                 String
+  htmlDigest                    String
+  textDigest                    String
+  rosterDigest                  String
+  sender                        String
+  providerCredentialFingerprint String
+  status                        String   @default("pending") // pending, sending, sent, blocked, failed
+  provider                      String   @default("resend")
+  providerMessageId             String?
+  sentAt                        DateTime?
+  blockedAt                     DateTime?
+  failureCode                   String?
+  failureReason                 String?
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  batch StaffReviewInviteBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  assignment MycoEmployeeReviewAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  employee MycoEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  accessToken CatalogAccessToken @relation(fields: [accessTokenId], references: [id], onDelete: Cascade)
+  noSendEvidence StaffReviewInviteNoSendEvidence[]
+
+  @@unique([batchId, assignmentId])
+  @@unique([batchId, accessTokenId])
+  @@index([batchId, status])
+  @@index([assignmentId])
+  @@index([employeeId, status])
+  @@index([catalogItemId, status])
+  @@index([providerMessageId])
+}
+
+/// KEWL-2972 / KEWL-2948 — durable fail-closed no-send evidence.
+model StaffReviewInviteNoSendEvidence {
+  id             String   @id @default(cuid())
+  batchId        String
+  recipientId    String?
+  assignmentId   String?
+  employeeId     String?
+  accessTokenId  String?
+  partnerId      String
+  reason         String
+  detail         Json     @default("{}")
+  requiresApproval Boolean @default(true)
+  detectedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  batch StaffReviewInviteBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  recipient StaffReviewInviteRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+  assignment MycoEmployeeReviewAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  employee MycoEmployee? @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  accessToken CatalogAccessToken? @relation(fields: [accessTokenId], references: [id], onDelete: SetNull)
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([batchId, detectedAt])
+  @@index([recipientId])
+  @@index([assignmentId])
+  @@index([employeeId])
+  @@index([accessTokenId])
+  @@index([reason])
 }
 
 model MycoEmployeeProductReview {
