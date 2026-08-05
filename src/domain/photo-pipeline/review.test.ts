@@ -11,7 +11,7 @@ const prismaMock = vi.hoisted(() => ({
 
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-import { decidePhotoJob, listPremiumPhotoJobs } from "./review";
+import { decidePhotoJob, getPhotoJobAssetReference, listPremiumPhotoJobs } from "./review";
 
 const baseJob = {
   id: "photo-1",
@@ -186,6 +186,64 @@ describe("premium photo comparison listing", () => {
     expect(prismaMock.photoJob.findMany).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({ take: 25, skip: 0, where: { processingMode: "premium" } }),
+    );
+  });
+
+  it("uses the browser-renderable source preview when a premium manifest has one", async () => {
+    prismaMock.photoJob.findMany
+      .mockResolvedValueOnce([
+        {
+          ...baseJob,
+          originalBlobUrl: "https://assets.test/original.heic",
+          manifest: {
+            ...baseJob.manifest,
+            source_preview: "https://assets.test/source-preview.png",
+          },
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    prismaMock.photoJob.count.mockResolvedValue(1);
+
+    const result = await listPremiumPhotoJobs({ limit: 25, offset: 0 });
+
+    expect(result.jobs[0].sourceUrl).toBe("https://assets.test/source-preview.png");
+  });
+
+  it("falls back to the immutable original for legacy or browser-native rows without a preview", async () => {
+    prismaMock.photoJob.findMany
+      .mockResolvedValueOnce([
+        { ...baseJob, manifest: { ...baseJob.manifest, source_preview: "" } },
+      ])
+      .mockResolvedValueOnce([]);
+    prismaMock.photoJob.count.mockResolvedValue(1);
+
+    const result = await listPremiumPhotoJobs({ limit: 25, offset: 0 });
+
+    expect(result.jobs[0].sourceUrl).toBe("https://assets.test/original.png");
+  });
+});
+
+describe("premium photo review asset references", () => {
+  it("resolves source assets preview-first", async () => {
+    prismaMock.photoJob.findUnique.mockResolvedValue({
+      ...baseJob,
+      originalBlobUrl: "https://assets.test/original.tif",
+      manifest: {
+        ...baseJob.manifest,
+        source_preview: "tripdar-product-images/source-previews/job-1.png",
+      },
+    });
+
+    await expect(getPhotoJobAssetReference(baseJob.id, "source")).resolves.toBe(
+      "tripdar-product-images/source-previews/job-1.png",
+    );
+  });
+
+  it("resolves source assets to the immutable original when preview metadata is absent", async () => {
+    prismaMock.photoJob.findUnique.mockResolvedValue(baseJob);
+
+    await expect(getPhotoJobAssetReference(baseJob.id, "source")).resolves.toBe(
+      "https://assets.test/original.png",
     );
   });
 });

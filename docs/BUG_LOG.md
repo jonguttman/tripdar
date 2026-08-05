@@ -4,6 +4,45 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-05-001: Non-browser-native photo originals were selected directly for admin source preview
+
+**Symptoms:**
+- Premium photo review jobs kept immutable HEIC, HEIF, DNG, TIF, and TIFF uploads in `PhotoJob.originalBlobUrl`, but the admin source pane and `kind=source` image route selected that original directly.
+- Browser `<img>` rendering was unreliable because those originals are commonly uploaded as `application/octet-stream` and are not consistently browser-native image formats.
+- Repointing `originalBlobUrl` at a converted image would have fixed display by breaking audit lineage and byte-identical original retention.
+
+**Root Cause:**
+The hosted photo-job work stored originals and review outputs separately, but had no separate browser-renderable derivative for the source pane. The review domain serialized `PhotoReviewJob.sourceUrl` from `originalBlobUrl`, and `getPhotoJobAssetReference(id, "source")` used the same immutable-original field without checking manifest metadata.
+
+**Fix:**
+- The photo pipeline now classifies non-browser-native supported extensions with lowercase normalization, copies the immutable original first, then writes an orientation-correct PNG source preview under the dedicated `source-previews/` prefix.
+- The preview is persisted as optional `manifest.source_preview`, including needs-review and failed manifests when conversion has completed. JPG/JPEG/PNG sources continue without preview metadata.
+- Blob-backed preview uploads use `.png` paths and `contentType: image/png`; originals remain separate and keep their original extension/content-type behavior.
+- The review domain centralizes preview-first source selection so list serialization and direct authenticated image-route resolution cannot drift.
+- Existing approved catalog-safe dedupe rows with non-browser-native sources and no preview generate only the missing preview metadata instead of silently returning a non-renderable legacy source.
+
+**Files Modified:**
+- `scripts/photo-pipeline/pipeline.mjs`
+- `scripts/photo-pipeline/pipeline.test.mjs`
+- `src/domain/photo-pipeline/manifest.ts`
+- `src/domain/photo-pipeline/review.ts`
+- `src/domain/photo-pipeline/review.test.ts`
+- `src/app/api/admin/photo-jobs/[id]/route.test.ts`
+- `photo-pipeline/config/manifest.schema.json`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Keep immutable source storage and browser-renderable review assets as separate references; never reuse `originalBlobUrl` for a derivative.
+- Any converted derivative must make its bytes, extension, persisted pathname, and Blob `contentType` agree.
+- Source selection logic belongs in the review domain, not independently in the list API and image route.
+- Dedupe/skip paths must be checked for new manifest-derived assets so legacy rows do not bypass newly required review plumbing.
+
+**Lesson Learned:**
+An audit-safe original is not automatically a browser-safe preview. If a UI needs to render a source asset, store a derivative reference beside the immutable original and make the selection contract explicit.
+
+---
+
 ## BUG-2026-08-01-002: Hosted premium photo review images 404 because pipeline stored local paths
 
 **Symptoms:**

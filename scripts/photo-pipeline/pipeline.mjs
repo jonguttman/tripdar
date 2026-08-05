@@ -12,8 +12,10 @@ import { validateLabelFidelity } from "./label-fidelity.mjs";
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CONFIG_ROOT = path.join(REPO_ROOT, "photo-pipeline/config");
 const SUPPORTED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".heic", ".heif", ".dng", ".tif", ".tiff"]);
+const BROWSER_NATIVE_SOURCE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png"]);
 const PREFIXES = {
   originals: "originals",
+  sourcePreviews: "source-previews",
   working: "working",
   catalogSafe: "catalog-safe",
   premiumEnhanced: "premium-enhanced",
@@ -72,20 +74,13 @@ export async function runSingle(options) {
   const sourceContentHash = createHash("sha256").update(originalBytes).digest("hex");
   const ledger = await createLedger({ ...options, ledger: ledgerMode });
   const existing = await ledger.findByHash(sourceContentHash);
-  if (
+  const canReuseApprovedCatalogSafe =
     requestedMode === "catalog_safe" &&
     existing?.status === "approved" &&
     existing.processingMode === "catalog_safe" &&
     !hasBackgroundFallbackWarning(existing) &&
     !hasHeuristicQaWarning(jobWarnings(existing)) &&
-    !hasGenerativeReviewWarning(jobWarnings(existing))
-  ) {
-    return {
-      job: existing,
-      manifestPath: existing.manifestPath ?? existing.manifest?.manifest_path ?? null,
-      skipped: true,
-    };
-  }
+    !hasGenerativeReviewWarning(jobWarnings(existing));
 
   const jobId = existing?.jobId ?? buildJobId(sourceContentHash);
   const baseName = buildBaseName({
@@ -133,11 +128,41 @@ export async function runSingle(options) {
     job = await ledger.update(job.jobId, { originalBlobUrl });
   }
 
+  if (canReuseApprovedCatalogSafe) {
+    if (requiresSourcePreview(ext) && !manifestSourcePreview(job.manifest)) {
+      const localSourcePreview = await writeSourcePreview({
+        rootDir: options.rootDir,
+        job,
+        baseName,
+        ext,
+        inputPath,
+        originalBytes,
+      });
+      const sourcePreview = await persistedSourcePreviewReference(
+        options.rootDir,
+        localSourcePreview,
+        uploadAssets,
+      );
+      const manifest = withSourcePreview(job.manifest, sourcePreview);
+      const manifestPath = await writeManifest(options.rootDir, job.jobId, withoutManifestPath(manifest));
+      job = await ledger.update(job.jobId, {
+        manifest: { ...manifest, manifest_path: manifestPath },
+      });
+      return { job, manifestPath, skipped: true, sourcePreviewGenerated: true };
+    }
+    return {
+      job,
+      manifestPath: job.manifestPath ?? job.manifest?.manifest_path ?? null,
+      skipped: true,
+    };
+  }
+
   const startedAt = new Date();
   const warnings = [];
   let outputs = emptyOutputs();
   let quality = null;
   let costCents = job.costCents ?? 0;
+  let sourcePreviewReference = manifestSourcePreview(job.manifest);
 
   try {
     job = await ledger.update(job.jobId, {
@@ -148,7 +173,21 @@ export async function runSingle(options) {
       approvedAt: null,
     });
     const normalizedPath = blobPath(options.rootDir, "working", `${job.jobId}_normalized.png`);
-    await sharp(originalBytes).rotate().png().toFile(normalizedPath);
+    if (requiresSourcePreview(ext) && !sourcePreviewReference) {
+      sourcePreviewReference = await writeSourcePreview({
+        rootDir: options.rootDir,
+        job,
+        baseName,
+        ext,
+        inputPath,
+        originalBytes,
+      });
+    }
+    if (sourcePreviewReference && !isHttpReference(sourcePreviewReference)) {
+      await copyFile(path.join(REPO_ROOT, sourcePreviewReference), normalizedPath);
+    } else {
+      await sharp(originalBytes).rotate().png().toFile(normalizedPath);
+    }
 
     quality = await assessQuality(normalizedPath, configs.thresholds);
     costCents += quality.costCents;
@@ -157,6 +196,11 @@ export async function runSingle(options) {
     if (!quality.usable) {
       outputs = await writeReviewCopy(options.rootDir, job, normalizedPath, "needsReview");
       const persistedOutputs = await outputReferences(options.rootDir, outputs, uploadAssets);
+      const persistedSourcePreview = await persistedSourcePreviewReference(
+        options.rootDir,
+        sourcePreviewReference,
+        uploadAssets,
+      );
       const manifest = buildManifest(job, {
         status: "needs_review",
         outputs: persistedOutputs,
@@ -166,6 +210,7 @@ export async function runSingle(options) {
         approvedBy: null,
         approvedAt: null,
         requiresReview: true,
+        sourcePreview: persistedSourcePreview,
       });
       const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
       job = await ledger.update(job.jobId, {
@@ -244,6 +289,11 @@ export async function runSingle(options) {
     const persistedCatalogSafeOutputs = requestedMode === "premium"
       ? await outputReferences(options.rootDir, catalogSafe.outputs, uploadAssets)
       : null;
+    const persistedSourcePreview = await persistedSourcePreviewReference(
+      options.rootDir,
+      sourcePreviewReference,
+      uploadAssets,
+    );
 
     const manifest = buildManifest(job, {
       status,
@@ -256,6 +306,7 @@ export async function runSingle(options) {
       approvedBy,
       approvedAt,
       requiresReview,
+      sourcePreview: persistedSourcePreview,
       catalogSafeOutputs: persistedCatalogSafeOutputs,
       labelValidation,
     });
@@ -276,15 +327,27 @@ export async function runSingle(options) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failedOutputs = await failedOutputReferences(options.rootDir, outputs, uploadAssets);
+    const failedSourcePreview = await failedSourcePreviewReference(
+      options.rootDir,
+      sourcePreviewReference,
+      uploadAssets,
+    );
+    const failedWarnings = uniqueStrings([
+      ...warnings,
+      message,
+      ...failedOutputs.warnings,
+      ...failedSourcePreview.warnings,
+    ]);
     const manifest = buildManifest(job, {
       status: "failed",
       outputs: failedOutputs.outputs,
       qualityScore: quality?.confidence ?? null,
       labelFidelityScore: null,
-      warnings: uniqueStrings([...warnings, message, ...failedOutputs.warnings]),
+      warnings: failedWarnings,
       approvedBy: null,
       approvedAt: null,
       requiresReview: requestedMode === "premium",
+      sourcePreview: failedSourcePreview.reference,
     });
     const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
     job = await ledger.update(job.jobId, {
@@ -418,6 +481,30 @@ async function assetReference(rootDir, localReference, uploadAssets) {
     contentType: contentTypeForPath(localPath),
   });
   return blob.url;
+}
+
+async function persistedSourcePreviewReference(rootDir, sourcePreviewReference, uploadAssets) {
+  if (!sourcePreviewReference) return null;
+  return assetReference(rootDir, sourcePreviewReference, uploadAssets);
+}
+
+async function failedSourcePreviewReference(rootDir, sourcePreviewReference, uploadAssets) {
+  if (!sourcePreviewReference) return { reference: null, warnings: [] };
+  if (!uploadAssets || isHttpReference(sourcePreviewReference)) {
+    return { reference: sourcePreviewReference, warnings: [] };
+  }
+  try {
+    return {
+      reference: await assetReference(rootDir, sourcePreviewReference, uploadAssets),
+      warnings: [],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      reference: null,
+      warnings: [`blob upload failed; omitted source preview reference from failed manifest: ${message}`],
+    };
+  }
 }
 
 function blobObjectPath(rootDir, localPath) {
@@ -1149,6 +1236,23 @@ async function writeReviewCopy(rootDir, job, normalizedPath, stage) {
   return { ...emptyOutputs(), white_master: relativeBlobPath(rootDir, reviewPath) };
 }
 
+async function writeSourcePreview({ rootDir, job, baseName, ext, inputPath, originalBytes }) {
+  const sourcePreviewPath = blobPath(
+    rootDir,
+    "sourcePreviews",
+    `${baseName}_${sanitizeField(job.jobId)}_source-preview.png`,
+  );
+  try {
+    await sharp(originalBytes).rotate().png().toFile(sourcePreviewPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Source preview conversion failed for ${path.basename(inputPath)} (${ext.slice(1).toUpperCase()}): ${message}`,
+    );
+  }
+  return relativeBlobPath(rootDir, sourcePreviewPath);
+}
+
 function buildManifest(job, data) {
   const manifest = {
     job_id: job.jobId,
@@ -1165,9 +1269,25 @@ function buildManifest(job, data) {
     approved_at: data.approvedAt,
   };
   if (typeof data.requiresReview === "boolean") manifest.requires_review = data.requiresReview;
+  if (typeof data.sourcePreview === "string" && data.sourcePreview.trim()) {
+    manifest.source_preview = data.sourcePreview;
+  }
   if (data.catalogSafeOutputs) manifest.catalog_safe_outputs = data.catalogSafeOutputs;
   if (data.labelValidation) manifest.label_validation = data.labelValidation;
   return manifest;
+}
+
+function withSourcePreview(manifest, sourcePreview) {
+  return {
+    ...(manifest && typeof manifest === "object" && !Array.isArray(manifest) ? manifest : {}),
+    source_preview: sourcePreview,
+  };
+}
+
+function withoutManifestPath(manifest) {
+  const copy = { ...manifest };
+  delete copy.manifest_path;
+  return copy;
 }
 
 async function writeManifest(rootDir, jobId, manifest) {
@@ -1249,6 +1369,11 @@ function normalOutputExt(ext) {
   return ext;
 }
 
+export function requiresSourcePreview(ext) {
+  const normalized = String(ext ?? "").toLowerCase();
+  return SUPPORTED_EXTENSIONS.has(normalized) && !BROWSER_NATIVE_SOURCE_EXTENSIONS.has(normalized);
+}
+
 function blobPath(rootDir, stage, filename) {
   return path.join(rootDir, PREFIXES[stage], filename);
 }
@@ -1259,6 +1384,11 @@ function relativeBlobPath(rootDir, fullPath) {
 
 function isHttpReference(value) {
   return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
+function manifestSourcePreview(manifest) {
+  const value = manifest?.source_preview;
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function emptyOutputs() {

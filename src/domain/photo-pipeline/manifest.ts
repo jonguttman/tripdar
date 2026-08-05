@@ -23,6 +23,7 @@ export interface PhotoManifest {
   source_file: string;
   processing_mode: PhotoProcessingMode;
   status: PhotoJobStatus;
+  source_preview?: string;
   outputs: PhotoManifestOutputs;
   quality_score: number | null;
   label_fidelity_score: number | null;

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.18.2] - 2026-08-05
+
+### Fixed
+- **Browser-renderable source previews** (KEWL-2968): non-browser-native premium photo sources now keep `PhotoJob.originalBlobUrl` pointed at the immutable HEIC/HEIF/DNG/TIF/TIFF original while writing a distinct orientation-correct PNG under `source-previews/` and storing it as `manifest.source_preview`. Admin review source panes and authenticated source image routes select that preview first, with legacy JPG/JPEG/PNG rows still falling back to the original.
+
 ## [1.18.1] - 2026-08-01
 
 ### Fixed

@@ -66,6 +66,7 @@
     },
     "approved_by": { "type": ["string", "null"] },
     "approved_at": { "type": ["string", "null"], "format": "date-time" },
+    "source_preview": { "type": "string", "minLength": 1 },
     "requires_review": { "type": "boolean" },
     "catalog_safe_outputs": { "$ref": "#/$defs/outputs" },
     "label_validation": {

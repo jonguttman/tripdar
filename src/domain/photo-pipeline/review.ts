@@ -96,6 +96,16 @@ function manifestOutput(manifest: unknown, key: string): string | null {
   return preferredOutput(readOutputs(manifest[key]));
 }
 
+function manifestString(manifest: unknown, key: string): string | null {
+  if (!isRecord(manifest)) return null;
+  const value = manifest[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function sourceReference(job: NonNullable<SelectedPhotoJob>): string {
+  return manifestString(job.manifest, "source_preview") ?? job.originalBlobUrl;
+}
+
 function parseWarnings(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((warning): warning is string => typeof warning === "string");
@@ -177,7 +187,7 @@ function serializeJob(
     view: job.view,
     status: job.status,
     processingMode: job.processingMode,
-    sourceUrl: job.originalBlobUrl,
+    sourceUrl: sourceReference(job),
     catalogSafeUrl,
     premiumUrl: manifestOutput(job.manifest, "outputs"),
     qualityScore: job.qualityScore,
@@ -201,7 +211,7 @@ export async function getPhotoJobAssetReference(
   if (job.processingMode !== "premium") {
     throw new PhotoReviewError("Photo job is not a premium review candidate", "premium_required");
   }
-  if (kind === "source") return job.originalBlobUrl;
+  if (kind === "source") return sourceReference(job);
   if (kind === "premium") return manifestOutput(job.manifest, "outputs");
   return (
     manifestOutput(job.manifest, "catalog_safe_outputs") ??
