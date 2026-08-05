@@ -9,7 +9,9 @@ const prismaMock = vi.hoisted(() => ({
   mycoEmployee: { findMany: vi.fn() },
   staffReviewInvitation: {
     create: vi.fn(),
+    findMany: vi.fn(),
     findUnique: vi.fn(),
+    updateMany: vi.fn(),
   },
   staffReviewInviteBatch: {
     create: vi.fn(),
@@ -81,6 +83,222 @@ function liveInvitation(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function digestText(value: string) {
+  return crypto.createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+async function arrangeApprovedBatch(overrides: {
+  batch?: Record<string, unknown>;
+  recipient?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
+  invitation?: Record<string, unknown> | null;
+} = {}) {
+  const {
+    sendApprovedStaffReviewInviteBatch,
+    sealStaffInvitePayload,
+    sealKeyFingerprint,
+  } = await import("./staffReviewInviteBatches");
+  const { providerCredentialFingerprint } = await import("@/lib/email");
+  const { resolveDirectStaffReviewRoster, hashDirectStaffReviewRoster } = await import("./staffReviewRoster");
+  const token = "token-a";
+  const tokenHash = hashStaffReviewInvitationToken(token);
+  const payload = {
+    version: "staff-review-invite-payload-v1" as const,
+    batchId: "batch-a",
+    recipientId: "recipient-1",
+    invitationId: "invitation-1",
+    employeeId: "employee-0",
+    partnerId: PARTNER_ID,
+    displayName: "Sage",
+    emailNormalized: "sage@thegreenroomonventura.com",
+    tokenHash,
+    inviteUrl: `https://tripdar.test/staff-review/invite/${token}`,
+    subject: "Subject A",
+    html: "<p>A</p>",
+    text: "A",
+    fromAddress: "Tripdar <noreply@tripd.ar>",
+    replyToAddress: "scottyclaw@gmail.com",
+    provider: "resend",
+    rendererVersion: "staff-review-invite-batch-v1",
+    expiresAt: "2026-08-20T05:30:00.000Z",
+    ...overrides.payload,
+  };
+  const sealed = sealStaffInvitePayload(payload);
+  const recipient = {
+    id: "recipient-1",
+    batchId: "batch-a",
+    ordinal: 0,
+    invitationId: "invitation-1",
+    employeeId: "employee-0",
+    displayName: "Sage",
+    emailNormalized: "sage@thegreenroomonventura.com",
+    invitationTokenHash: tokenHash,
+    invitationStatusAtApproval: "pending",
+    invitationIssuedAt: NOW,
+    invitationExpiresAt: new Date("2026-08-20T05:30:00.000Z"),
+    invitationRevokedAt: null,
+    partnerScopeId: PARTNER_ID,
+    recipientIdentityDigest: "identity-digest",
+    linkDigest: digestText(payload.inviteUrl),
+    subjectDigest: digestText(payload.subject),
+    htmlDigest: digestText(payload.html),
+    textDigest: digestText(payload.text),
+    providerIdempotencyKey: "staff-review-invite:key-a",
+    sendStatus: "pending",
+    claimId: null,
+    claimedAt: null,
+    sendAttemptCount: 0,
+    validationFailureCode: null,
+    validationFailureEvidence: null,
+    providerMessageId: null,
+    sentAt: null,
+    ...sealed,
+    ...overrides.recipient,
+  };
+  const resolved = resolveDirectStaffReviewRoster(PARTNER_ID, roster());
+  prismaMock.staffReviewInviteBatch.findUnique.mockResolvedValue({
+    id: "batch-a",
+    partnerId: PARTNER_ID,
+    status: "approved",
+    approvedInteractionId: "interaction-a",
+    provider: "resend",
+    providerCredentialFingerprint: providerCredentialFingerprint("resend"),
+    fromAddress: "Tripdar <noreply@tripd.ar>",
+    replyToAddress: "scottyclaw@gmail.com",
+    rendererVersion: "staff-review-invite-batch-v1",
+    rosterDigest: hashDirectStaffReviewRoster(resolved.reviewers),
+    batchDigest: "batch-digest",
+    sealKeyFingerprint: sealKeyFingerprint(),
+    ...overrides.batch,
+  });
+  prismaMock.staffReviewInviteBatchRecipient.findMany.mockResolvedValueOnce([recipient]);
+  prismaMock.staffReviewInviteBatchRecipient.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.staffReviewInvitation.findUnique.mockResolvedValue(
+    overrides.invitation === null
+      ? null
+      : liveInvitation({
+          tokenHash,
+          ...overrides.invitation,
+        })
+  );
+  prismaMock.staffReviewInviteBatch.update.mockResolvedValue({});
+  prismaMock.staffReviewInviteBatchRecipient.update.mockResolvedValue({});
+  const sendSpy = vi.fn();
+
+  return { sendApprovedStaffReviewInviteBatch, sendSpy };
+}
+
+interface ValidationFailureCase {
+  name: string;
+  code: string;
+  approvedInteractionId?: string;
+  batch?: Record<string, unknown>;
+  recipient?: Record<string, unknown>;
+  payload?: Record<string, unknown>;
+  invitation?: Record<string, unknown> | null;
+}
+
+const validationFailureCases: ValidationFailureCase[] = [
+  {
+    name: "wrong approval interaction",
+    code: "approval_evidence_mismatch",
+    approvedInteractionId: "interaction-b",
+  },
+  {
+    name: "missing invitation",
+    code: "missing_invitation",
+    invitation: null,
+  },
+  {
+    name: "expired invitation",
+    code: "expired",
+    invitation: { expiresAt: new Date("2026-08-05T05:29:59.000Z") },
+  },
+  {
+    name: "replaced live token",
+    code: "replaced_token",
+    invitation: { tokenHash: "different-token-hash" },
+  },
+  {
+    name: "confirmed invitation status",
+    code: "invitation_status_mismatch",
+    invitation: { status: "confirmed" },
+  },
+  {
+    name: "wrong partner/catalog scope",
+    code: "partner_scope_mismatch",
+    invitation: {
+      partnerId: "partner-other",
+      employee: {
+        id: "employee-0",
+        partnerId: "partner-other",
+        name: "Sage",
+        email: "sage@thegreenroomonventura.com",
+        active: true,
+        optedOut: false,
+      },
+    },
+  },
+  {
+    name: "wrong employee identity",
+    code: "employee_mismatch",
+    invitation: { employeeId: "employee-other" },
+  },
+  {
+    name: "wrong recipient email",
+    code: "recipient_email_mismatch",
+    invitation: { emailNormalized: "sage.changed@example.com" },
+  },
+  {
+    name: "inactive employee",
+    code: "employee_inactive",
+    invitation: {
+      employee: {
+        id: "employee-0",
+        partnerId: PARTNER_ID,
+        name: "Sage",
+        email: "sage@thegreenroomonventura.com",
+        active: false,
+        optedOut: false,
+      },
+    },
+  },
+  {
+    name: "opted-out employee",
+    code: "employee_opted_out",
+    invitation: {
+      employee: {
+        id: "employee-0",
+        partnerId: PARTNER_ID,
+        name: "Sage",
+        email: "sage@thegreenroomonventura.com",
+        active: true,
+        optedOut: true,
+      },
+    },
+  },
+  {
+    name: "link digest mismatch",
+    code: "link_digest_mismatch",
+    recipient: { linkDigest: digestText("https://tripdar.test/changed") },
+  },
+  {
+    name: "subject digest mismatch",
+    code: "subject_digest_mismatch",
+    recipient: { subjectDigest: digestText("Changed subject") },
+  },
+  {
+    name: "body digest mismatch",
+    code: "body_digest_mismatch",
+    recipient: { htmlDigest: digestText("<p>Changed</p>") },
+  },
+  {
+    name: "sender mismatch",
+    code: "sender_mismatch",
+    payload: { fromAddress: "Tripdar <changed@tripd.ar>" },
+  },
+];
+
 describe("staff review invite batches", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -96,6 +314,8 @@ describe("staff review invite batches", () => {
       status: data.status,
       revokedAt: null,
     }));
+    prismaMock.staffReviewInvitation.findMany.mockResolvedValue([]);
+    prismaMock.staffReviewInvitation.updateMany.mockResolvedValue({ count: 0 });
     prismaMock.staffReviewInviteBatch.create.mockResolvedValue({});
     prismaMock.staffReviewInviteBatchRecipient.create.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
       id: data.id,
@@ -143,6 +363,51 @@ describe("staff review invite batches", () => {
     expect(recipientData.sealedPayloadCiphertext).toEqual(expect.any(String));
     expect(JSON.stringify(recipientData)).not.toContain("staff-review/invite");
     expect(JSON.stringify(recipientData)).not.toContain("Open review");
+  });
+
+  it("generation B revokes prior pending invitations and records durable no-send evidence for approved batch A rows", async () => {
+    const { prepareStaffReviewInviteBatch } = await import("./staffReviewInviteBatches");
+    prismaMock.staffReviewInvitation.findMany
+      .mockResolvedValueOnce([{ id: "old-invitation-sage" }])
+      .mockResolvedValue([]);
+
+    await prepareStaffReviewInviteBatch({
+      partnerId: PARTNER_ID,
+      renderedBy: "admin@example.com",
+      requestOrigin: "https://tripdar.test",
+      messages: messages(),
+      now: NOW,
+      sourceIssueId: "KEWL-2950",
+      sourceCommentId: "comment-1",
+    });
+
+    expect(prismaMock.staffReviewInvitation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          partnerId: PARTNER_ID,
+          employeeId: "employee-0",
+          status: "pending",
+          revokedAt: null,
+        }),
+        data: expect.objectContaining({
+          status: "revoked",
+          revokedBy: "admin@example.com",
+          revocationReason: "reissued by staff invite batch render",
+        }),
+      })
+    );
+    expect(prismaMock.staffReviewInviteBatchRecipient.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          invitationId: { in: ["old-invitation-sage"] },
+          sendStatus: { in: ["pending", "claimed", "provider_failed"] },
+        }),
+        data: expect.objectContaining({
+          sendStatus: "validation_failed",
+          validationFailureCode: "revoked",
+        }),
+      })
+    );
   });
 
   it("refuses approved batch A after generation B replaces its invitation token before provider send", async () => {
@@ -249,6 +514,126 @@ describe("staff review invite batches", () => {
         }),
       })
     );
+  });
+
+  it.each(validationFailureCases)(
+    "fails closed before provider send on $name and persists no-send evidence",
+    async ({ code, approvedInteractionId, batch, recipient, payload, invitation }) => {
+      const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch({
+        batch,
+        recipient,
+        payload,
+        invitation,
+      });
+
+      const result = await sendApprovedStaffReviewInviteBatch({
+        batchId: "batch-a",
+        approvedInteractionId: approvedInteractionId ?? "interaction-a",
+        now: NOW,
+        send: sendSpy,
+      });
+
+      expect(sendSpy).not.toHaveBeenCalled();
+      expect(result.failed[0]).toMatchObject({ recipientId: "recipient-1", code });
+      expect(prismaMock.staffReviewInviteBatchRecipient.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "recipient-1" },
+          data: expect.objectContaining({
+            sendStatus: "validation_failed",
+            validationFailureCode: code,
+            validationFailureEvidence: expect.any(Object),
+          }),
+        })
+      );
+      expect(prismaMock.staffReviewInviteBatch.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "batch-a" },
+          data: expect.objectContaining({ status: "validation_failed" }),
+        })
+      );
+    }
+  );
+
+  it("fails closed on roster drift before provider send", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch();
+    prismaMock.mycoEmployee.findMany.mockResolvedValue(
+      roster().map((employee, index) =>
+        index === 0 ? { ...employee, name: "Changed Sage" } : employee
+      )
+    );
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(result.failed[0]).toMatchObject({ recipientId: "recipient-1", code: "roster_mismatch" });
+    expect(prismaMock.staffReviewInviteBatchRecipient.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sendStatus: "validation_failed",
+          validationFailureCode: "roster_mismatch",
+        }),
+      })
+    );
+  });
+
+  it("fails closed on provider credential drift before provider send", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch();
+    process.env.RESEND_API_KEY = "re_changed";
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(result.failed[0]).toMatchObject({
+      recipientId: "recipient-1",
+      code: "provider_credential_mismatch",
+    });
+    expect(prismaMock.staffReviewInviteBatchRecipient.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sendStatus: "validation_failed",
+          validationFailureCode: "provider_credential_mismatch",
+        }),
+      })
+    );
+  });
+
+  it("executor refuses an already-invalidated recipient row without attempting a new claim or provider send", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch({
+      recipient: {
+        sendStatus: "validation_failed",
+        validationFailureCode: "revoked",
+        validationFailureEvidence: {
+          reason: "invitation reissued by staff invite batch render",
+        },
+      },
+    });
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInviteBatchRecipient.updateMany).not.toHaveBeenCalled();
+    expect(result.failed).toEqual([
+      {
+        recipientId: "recipient-1",
+        code: "revoked",
+        evidence: { reason: "invitation reissued by staff invite batch render" },
+      },
+    ]);
   });
 
   it("recovers a partial send by skipping provider-message rows and sending only pending rows", async () => {

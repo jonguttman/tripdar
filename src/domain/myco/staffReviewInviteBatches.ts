@@ -181,6 +181,8 @@ interface RecipientRecord {
   claimId: string | null;
   claimedAt: Date | null;
   sendAttemptCount: number;
+  validationFailureCode: string | null;
+  validationFailureEvidence: Prisma.JsonValue | null;
   providerMessageId: string | null;
   sentAt: Date | null;
 }
@@ -438,6 +440,35 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
     for (const reviewer of reviewers) {
       const rawToken = createStaffReviewInvitationToken();
       const tokenHash = hashStaffReviewInvitationToken(rawToken);
+      const pendingInvitations = await tx.staffReviewInvitation.findMany({
+        where: {
+          partnerId: partner.id,
+          employeeId: reviewer.employeeId,
+          status: "pending",
+          revokedAt: null,
+        },
+        select: { id: true },
+      });
+      await tx.staffReviewInvitation.updateMany({
+        where: {
+          partnerId: partner.id,
+          employeeId: reviewer.employeeId,
+          status: "pending",
+          revokedAt: null,
+        },
+        data: {
+          status: "revoked",
+          revokedAt: now,
+          revokedBy: input.renderedBy,
+          revocationReason: "reissued by staff invite batch render",
+        },
+      });
+      await invalidateApprovedStaffInviteRecipientsForInvitations({
+        tx,
+        invitationIds: pendingInvitations.map((invitation) => invitation.id),
+        code: "revoked",
+        reason: "invitation reissued by staff invite batch render",
+      });
       const invitation = await tx.staffReviewInvitation.create({
         data: {
           partnerId: partner.id,
@@ -880,6 +911,16 @@ export async function sendApprovedStaffReviewInviteBatch(input: {
     if (recipient.providerMessageId || recipient.sentAt || recipient.sendStatus === "sent") {
       skipped.push({ recipientId: recipient.id, reason: "already_sent" });
       continue;
+    }
+    if (recipient.sendStatus === "validation_failed" && recipient.validationFailureCode) {
+      failed.push({
+        recipientId: recipient.id,
+        code: recipient.validationFailureCode as StaffInviteValidationFailureCode,
+        evidence: typeof recipient.validationFailureEvidence === "object" && recipient.validationFailureEvidence !== null
+          ? recipient.validationFailureEvidence as Record<string, unknown>
+          : undefined,
+      });
+      break;
     }
 
     const claimed = await prisma.staffReviewInviteBatchRecipient.updateMany({
