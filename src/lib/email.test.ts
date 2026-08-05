@@ -43,6 +43,7 @@ describe("sendEmail", () => {
 
     const result = await sendEmail({
       to: "recipient@example.com",
+      cc: ["copy@example.com"],
       subject: "Test email",
       html: "<p>Hello</p>",
       text: "Hello",
@@ -54,6 +55,7 @@ describe("sendEmail", () => {
     expect(sendMock).toHaveBeenCalledWith(
       expect.objectContaining({
         to: ["recipient@example.com"],
+        cc: ["copy@example.com"],
         replyTo: "scottyclaw@gmail.com",
       }),
       { idempotencyKey: "staff-review-invite:key-1" }

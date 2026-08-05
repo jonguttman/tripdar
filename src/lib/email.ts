@@ -16,6 +16,7 @@ export const DEFAULT_EMAIL_REPLY_TO_ADDRESS = "scottyclaw@gmail.com";
 
 export interface SendEmailOptions {
   to: string | string[];
+  cc?: string | string[];
   subject: string;
   html: string;
   text?: string;
@@ -41,6 +42,7 @@ export function providerCredentialFingerprint(provider = "resend"): string {
 export async function sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
   const {
     to,
+    cc,
     subject,
     html,
     text,
@@ -53,6 +55,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     {
       from,
       to: Array.isArray(to) ? to : [to],
+      ...(cc ? { cc: Array.isArray(cc) ? cc : [cc] } : {}),
       subject,
       html,
       replyTo,

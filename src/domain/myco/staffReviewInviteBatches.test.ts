@@ -87,6 +87,12 @@ function digestText(value: string) {
   return crypto.createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function digestCc(cc: string[] | undefined) {
+  return cc && cc.length > 0
+    ? crypto.createHash("sha256").update(JSON.stringify(cc), "utf8").digest("hex")
+    : null;
+}
+
 async function arrangeApprovedBatch(overrides: {
   batch?: Record<string, unknown>;
   recipient?: Record<string, unknown>;
@@ -140,6 +146,7 @@ async function arrangeApprovedBatch(overrides: {
     partnerScopeId: PARTNER_ID,
     recipientIdentityDigest: "identity-digest",
     linkDigest: digestText(payload.inviteUrl),
+    ccDigest: digestCc((payload as { cc?: string[] }).cc),
     subjectDigest: digestText(payload.subject),
     htmlDigest: digestText(payload.html),
     textDigest: digestText(payload.text),
@@ -283,6 +290,12 @@ const validationFailureCases: ValidationFailureCase[] = [
     recipient: { linkDigest: digestText("https://tripdar.test/changed") },
   },
   {
+    name: "cc digest mismatch",
+    code: "cc_mismatch",
+    recipient: { ccDigest: digestCc(["approved@example.com"]) },
+    payload: { cc: ["changed@example.com"] },
+  },
+  {
     name: "subject digest mismatch",
     code: "subject_digest_mismatch",
     recipient: { subjectDigest: digestText("Changed subject") },
@@ -363,6 +376,93 @@ describe("staff review invite batches", () => {
     expect(recipientData.sealedPayloadCiphertext).toEqual(expect.any(String));
     expect(JSON.stringify(recipientData)).not.toContain("staff-review/invite");
     expect(JSON.stringify(recipientData)).not.toContain("Open review");
+  });
+
+  it("preserves sealed cc through prepare, validation, and provider send", async () => {
+    const {
+      digestCanonical,
+      prepareStaffReviewInviteBatch,
+      unsealStaffInvitePayload,
+      sealKeyFingerprint,
+    } = await import("./staffReviewInviteBatches");
+    const { providerCredentialFingerprint } = await import("@/lib/email");
+    const { hashDirectStaffReviewRoster, resolveDirectStaffReviewRoster } = await import("./staffReviewRoster");
+    const cc = ["adrienne@theotherpathcbd.com"];
+
+    const batch = await prepareStaffReviewInviteBatch({
+      partnerId: PARTNER_ID,
+      renderedBy: "admin@example.com",
+      requestOrigin: "https://tripdar.test",
+      messages: messages().map((message) => (
+        message.email === "dani@thehigherpath.com" ? message : { ...message, cc }
+      )),
+      now: NOW,
+      sourceIssueId: "KEWL-3075",
+    });
+
+    const batchData = prismaMock.staffReviewInviteBatch.create.mock.calls[0][0].data;
+    const recipientData = prismaMock.staffReviewInviteBatchRecipient.create.mock.calls[0][0].data;
+    expect(recipientData.ccDigest).toBe(digestCanonical(cc));
+    expect(batch.recipients[0]).toMatchObject({
+      emailMasked: "s***@thegreenroomonventura.com",
+      inviteUrl: expect.stringContaining("https://tripdar.test/staff-review/invite/"),
+    });
+    expect(JSON.stringify(recipientData)).not.toContain("adrienne@theotherpathcbd.com");
+    expect(unsealStaffInvitePayload(recipientData).cc).toEqual(cc);
+
+    const resolved = resolveDirectStaffReviewRoster(PARTNER_ID, roster());
+    prismaMock.staffReviewInviteBatch.findUnique.mockResolvedValue({
+      ...batchData,
+      status: "approved",
+      approvedInteractionId: "interaction-a",
+      approvedBy: "jon@example.com",
+      approvedAt: NOW,
+      providerCredentialFingerprint: providerCredentialFingerprint("resend"),
+      rosterDigest: hashDirectStaffReviewRoster(resolved.reviewers),
+      sealKeyFingerprint: sealKeyFingerprint(),
+    });
+    prismaMock.staffReviewInviteBatchRecipient.findMany
+      .mockResolvedValueOnce([{
+        ...recipientData,
+        sendStatus: "pending",
+        claimId: null,
+        claimedAt: null,
+        sendAttemptCount: 0,
+        validationFailureCode: null,
+        validationFailureEvidence: null,
+        providerMessageId: null,
+        sentAt: null,
+      }])
+      .mockResolvedValueOnce([{ sendStatus: "sent" }]);
+    prismaMock.staffReviewInviteBatchRecipient.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.staffReviewInvitation.findUnique.mockResolvedValue(
+      liveInvitation({
+        id: recipientData.invitationId,
+        employeeId: recipientData.employeeId,
+        emailNormalized: recipientData.emailNormalized,
+        tokenHash: recipientData.invitationTokenHash,
+      })
+    );
+    const sendSpy = vi.fn().mockResolvedValue({ messageId: "resend-cc", provider: "resend" });
+
+    const result = await (await import("./staffReviewInviteBatches")).sendApprovedStaffReviewInviteBatch({
+      batchId: batch.id,
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(result.sent).toEqual([
+      {
+        recipientId: recipientData.id,
+        emailMasked: "s***@thegreenroomonventura.com",
+        providerMessageId: "resend-cc",
+      },
+    ]);
+    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+      to: "sage@thegreenroomonventura.com",
+      cc,
+    }));
   });
 
   it("generation B revokes prior pending invitations and records durable no-send evidence for approved batch A rows", async () => {
@@ -455,6 +555,7 @@ describe("staff review invite batches", () => {
       partnerScopeId: PARTNER_ID,
       recipientIdentityDigest: "identity-digest",
       linkDigest: digestText(`https://tripdar.test/staff-review/invite/${tokenA}`),
+      ccDigest: null,
       subjectDigest: digestText("Subject A"),
       htmlDigest: digestText("<p>A</p>"),
       textDigest: digestText("A"),
@@ -725,6 +826,7 @@ describe("staff review invite batches", () => {
       partnerScopeId: PARTNER_ID,
       recipientIdentityDigest: "sent",
       linkDigest: "sent",
+      ccDigest: null,
       subjectDigest: "sent",
       htmlDigest: "sent",
       textDigest: "sent",
@@ -755,6 +857,7 @@ describe("staff review invite batches", () => {
       partnerScopeId: PARTNER_ID,
       recipientIdentityDigest: "identity-dani",
       linkDigest: digestText(inviteUrl),
+      ccDigest: null,
       subjectDigest: digestText("Subject Dani"),
       htmlDigest: digestText("<p>Dani</p>"),
       textDigest: digestText("Dani"),
@@ -827,6 +930,7 @@ describe("staff review invite batches", () => {
       to: "dani@thehigherpath.com",
       idempotencyKey: "staff-review-invite:key-pending",
     }));
+    expect(sendSpy.mock.calls[0][0]).not.toHaveProperty("cc");
     expect(prismaMock.staffReviewInviteBatchRecipient.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({

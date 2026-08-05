@@ -65,6 +65,7 @@ export const STAFF_INVITE_VALIDATION_FAILURE_CODES = [
   "roster_mismatch",
   "payload_unseal_failed",
   "link_digest_mismatch",
+  "cc_mismatch",
   "subject_digest_mismatch",
   "body_digest_mismatch",
   "sender_mismatch",
@@ -77,6 +78,7 @@ export type StaffInviteValidationFailureCode =
 
 export interface StaffInviteBatchMessageInput {
   email: string;
+  cc?: string[];
   subject: string;
   html: string;
   text: string;
@@ -117,6 +119,7 @@ export interface SealedStaffInvitePayload {
   emailNormalized: string;
   tokenHash: string;
   inviteUrl: string;
+  cc?: string[];
   subject: string;
   html: string;
   text: string;
@@ -170,6 +173,7 @@ interface RecipientRecord {
   partnerScopeId: string;
   recipientIdentityDigest: string;
   linkDigest: string;
+  ccDigest: string | null;
   subjectDigest: string;
   htmlDigest: string;
   textDigest: string;
@@ -229,6 +233,17 @@ export function digestCanonical(value: unknown): string {
 
 function digestText(value: string): string {
   return crypto.createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function normalizeCc(cc: string[] | undefined): string[] | undefined {
+  if (!cc) return undefined;
+  const normalized = cc.map((email) => email.trim()).filter(Boolean);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function digestCc(cc: string[] | undefined): string | null {
+  const normalized = normalizeCc(cc);
+  return normalized ? digestCanonical(normalized) : null;
 }
 
 function requireSealingKey(): Buffer {
@@ -342,6 +357,7 @@ function batchDigest(input: {
     invitationTokenHash: string;
     invitationExpiresAt: Date;
     linkDigest: string;
+    ccDigest: string | null;
     subjectDigest: string;
     htmlDigest: string;
     textDigest: string;
@@ -427,10 +443,12 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
       invitation: { id: string; tokenHash: string; issuedAt: Date; expiresAt: Date; status: string; revokedAt: Date | null };
       rawToken: string;
       inviteUrl: string;
+      cc: string[] | undefined;
       subject: string;
       html: string;
       text: string;
       linkDigest: string;
+      ccDigest: string | null;
       subjectDigest: string;
       htmlDigest: string;
       textDigest: string;
@@ -491,6 +509,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
       });
       const url = inviteUrl(rawToken, input.requestOrigin);
       const message = messagesByEmail.get(reviewer.emailNormalized)!;
+      const cc = normalizeCc(message.cc);
       const subject = message.subject;
       const html = replaceInviteUrlPlaceholder(message.html, url);
       const text = replaceInviteUrlPlaceholder(message.text, url);
@@ -499,10 +518,12 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
         invitation,
         rawToken,
         inviteUrl: url,
+        cc,
         subject,
         html,
         text,
         linkDigest: digestText(url),
+        ccDigest: digestCc(cc),
         subjectDigest: digestText(subject),
         htmlDigest: digestText(html),
         textDigest: digestText(text),
@@ -533,6 +554,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
         invitationTokenHash: recipient.invitation.tokenHash,
         invitationExpiresAt: recipient.invitation.expiresAt,
         linkDigest: recipient.linkDigest,
+        ccDigest: recipient.ccDigest,
         subjectDigest: recipient.subjectDigest,
         htmlDigest: recipient.htmlDigest,
         textDigest: recipient.textDigest,
@@ -574,6 +596,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
         emailNormalized: prepared.reviewer.emailNormalized,
         tokenHash: prepared.invitation.tokenHash,
         inviteUrl: prepared.inviteUrl,
+        ...(prepared.cc ? { cc: prepared.cc } : {}),
         subject: prepared.subject,
         html: prepared.html,
         text: prepared.text,
@@ -606,6 +629,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
           partnerScopeId: partner.id,
           recipientIdentityDigest: prepared.recipientIdentityDigest,
           linkDigest: prepared.linkDigest,
+          ccDigest: prepared.ccDigest,
           subjectDigest: prepared.subjectDigest,
           htmlDigest: prepared.htmlDigest,
           textDigest: prepared.textDigest,
@@ -622,7 +646,11 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
           invitationExpiresAt: true,
         },
       });
-      recipients.push({ ...row, emailMasked: maskEmail(row.emailNormalized) });
+      recipients.push({
+        ...row,
+        emailMasked: maskEmail(row.emailNormalized),
+        inviteUrl: prepared.inviteUrl,
+      });
     }
 
     return {
@@ -778,6 +806,9 @@ async function validateRecipientForSend(
   }
   if (digestText(payload.inviteUrl) !== recipient.linkDigest) {
     return failValidation("link_digest_mismatch", { recipientId: recipient.id });
+  }
+  if (digestCc(payload.cc) !== recipient.ccDigest) {
+    return failValidation("cc_mismatch", { recipientId: recipient.id });
   }
   if (digestText(payload.subject) !== recipient.subjectDigest) {
     return failValidation("subject_digest_mismatch", { recipientId: recipient.id });
@@ -982,6 +1013,7 @@ export async function sendApprovedStaffReviewInviteBatch(input: {
     try {
       result = await send({
         to: validation.payload.emailNormalized,
+        ...(validation.payload.cc ? { cc: validation.payload.cc } : {}),
         from: validation.payload.fromAddress,
         replyTo: validation.payload.replyToAddress ?? undefined,
         subject: validation.payload.subject,

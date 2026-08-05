@@ -115,6 +115,7 @@ describe("admin staff invitation preview route", () => {
       messages: [
         {
           email: "sage@thegreenroomonventura.com",
+          cc: ["adrienne@theotherpathcbd.com"],
           subject: "Subject",
           html: "<p>{{INVITE_URL}}</p>",
           text: "{{INVITE_URL}}",
@@ -130,9 +131,36 @@ describe("admin staff invitation preview route", () => {
         partnerId: "partner-tmt",
         renderedBy: "admin@example.com",
         sourceIssueId: "KEWL-2950",
+        messages: [
+          expect.objectContaining({
+            email: "sage@thegreenroomonventura.com",
+            cc: ["adrienne@theotherpathcbd.com"],
+          }),
+        ],
       })
     );
     expect(prepareMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses malformed cc on frozen batch messages", async () => {
+    const response = await post({
+      action: "prepare_batch",
+      partnerId: "partner-tmt",
+      messages: [
+        {
+          email: "sage@thegreenroomonventura.com",
+          cc: "adrienne@theotherpathcbd.com",
+          subject: "Subject",
+          html: "<p>{{INVITE_URL}}</p>",
+          text: "{{INVITE_URL}}",
+        },
+      ],
+    });
+    const json = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(json.error.message).toContain("optional cc string array");
+    expect(prepareBatchMock).not.toHaveBeenCalled();
   });
 
   it("records approval evidence only through explicit record_approval action", async () => {
