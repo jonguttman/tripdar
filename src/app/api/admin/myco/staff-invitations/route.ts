@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/domain/auth/adminSession";
-import { prepareCanonicalStaffReviewInvitationBatch } from "@/domain/myco/staffReviewInvitations";
+import {
+  prepareCanonicalStaffReviewInvitationBatch,
+  StaffReviewInvitationPartnerScopeError,
+} from "@/domain/myco/staffReviewInvitations";
+import { isQaStaffReviewPartner } from "@/domain/myco/staffReviewRoster";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +44,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { success: false, error: { message: "partnerId is required" } },
       { status: 400 }
+    );
+  }
+  if (body.qaOnly === true && !isQaStaffReviewPartner(partnerId)) {
+    const error = new StaffReviewInvitationPartnerScopeError();
+    return NextResponse.json(
+      {
+        success: false,
+        error: {
+          message: error.message,
+          code: error.code,
+        },
+      },
+      { status: error.statusCode }
     );
   }
 

@@ -7,7 +7,11 @@ import {
   signReviewerSession,
   verifyReviewerSession,
 } from "./reviewerPin";
-import { isQaStaffReviewPartner, TMT_DIRECT_STAFF_REVIEWERS } from "./staffReviewRoster";
+import {
+  isQaStaffReviewPartner,
+  QA_STAFF_REVIEWER_EMAIL,
+  TMT_DIRECT_STAFF_REVIEWERS,
+} from "./staffReviewRoster";
 
 export const STAFF_REVIEW_INVITATION_COOKIE_PATH = "/";
 export const STAFF_REVIEW_SESSION_ROUTE_TOKEN = "session";
@@ -22,7 +26,7 @@ export const CANONICAL_TMT_STAFF_INVITE_RECIPIENTS = [
 
 export const QA_STAFF_REVIEW_INVITE_RECIPIENT = {
   displayName: "QA Reviewer",
-  email: "qa-reviewer@tripdar-qa.invalid",
+  email: QA_STAFF_REVIEWER_EMAIL,
 } as const;
 
 export class StaffReviewInvitationPartnerScopeError extends Error {

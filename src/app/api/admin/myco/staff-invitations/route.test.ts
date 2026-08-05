@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const prepareMock = vi.hoisted(() => vi.fn());
+const isQaStaffReviewPartnerMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/domain/auth/adminSession", () => ({
   getAdminSession: vi.fn(async () => ({ user: { email: "admin@example.com" } })),
@@ -9,6 +10,18 @@ vi.mock("@/domain/auth/adminSession", () => ({
 
 vi.mock("@/domain/myco/staffReviewInvitations", () => ({
   prepareCanonicalStaffReviewInvitationBatch: prepareMock,
+  StaffReviewInvitationPartnerScopeError: class StaffReviewInvitationPartnerScopeError extends Error {
+    readonly code = "qa_partner_scope_refused";
+    readonly statusCode = 403;
+
+    constructor() {
+      super("qaOnly is only allowed for the QA staff review partner.");
+    }
+  },
+}));
+
+vi.mock("@/domain/myco/staffReviewRoster", () => ({
+  isQaStaffReviewPartner: isQaStaffReviewPartnerMock,
 }));
 
 async function post(body: Record<string, unknown>) {
@@ -24,6 +37,7 @@ async function post(body: Record<string, unknown>) {
 describe("admin staff invitation preview route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    isQaStaffReviewPartnerMock.mockReturnValue(false);
     prepareMock.mockResolvedValue({ status: "UNSENT DRAFT", send: false, recipients: [] });
   });
 
@@ -51,10 +65,26 @@ describe("admin staff invitation preview route", () => {
     );
   });
 
-  it("passes qaOnly through for sink-address QA invitation generation", async () => {
+  it("refuses qaOnly for non-QA partners before preparing anything", async () => {
+    const response = await post({ partnerId: "partner-tmt", send: false, qaOnly: true });
+    const json = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(json.error).toMatchObject({
+      code: "qa_partner_scope_refused",
+      message: "qaOnly is only allowed for the QA staff review partner.",
+    });
+    expect(isQaStaffReviewPartnerMock).toHaveBeenCalledWith("partner-tmt");
+    expect(prepareMock).not.toHaveBeenCalled();
+  });
+
+  it("passes qaOnly through only for sink-address QA invitation generation", async () => {
+    isQaStaffReviewPartnerMock.mockReturnValue(true);
+
     const response = await post({ partnerId: "partner-qa", send: false, qaOnly: true });
 
     expect(response.status).toBe(201);
+    expect(isQaStaffReviewPartnerMock).toHaveBeenCalledWith("partner-qa");
     expect(prepareMock).toHaveBeenCalledWith(
       expect.objectContaining({
         partnerId: "partner-qa",
@@ -62,29 +92,5 @@ describe("admin staff invitation preview route", () => {
         qaOnly: true,
       })
     );
-  });
-
-  it("returns an explicit refusal for TMT qaOnly without invitation material", async () => {
-    prepareMock.mockRejectedValue(
-      Object.assign(new Error("qaOnly is only allowed for the QA staff review partner."), {
-        code: "qa_partner_scope_refused",
-        statusCode: 403,
-      })
-    );
-
-    const response = await post({ partnerId: "partner-tmt", send: false, qaOnly: true });
-    const json = await response.json();
-    const serialized = JSON.stringify(json);
-
-    expect(response.status).toBe(403);
-    expect(json.success).toBe(false);
-    expect(json.data).toBeUndefined();
-    expect(json.error).toMatchObject({
-      code: "qa_partner_scope_refused",
-      message: "qaOnly is only allowed for the QA staff review partner.",
-    });
-    expect(serialized).not.toContain("/staff-review/invite/");
-    expect(serialized).not.toContain("qa-reviewer@tripdar-qa.invalid");
-    expect(serialized).not.toMatch(/rawToken|tokenPreview|tokenHash|url/i);
   });
 });

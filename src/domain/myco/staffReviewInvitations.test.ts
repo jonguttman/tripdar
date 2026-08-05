@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { verifyReviewerSession } from "./reviewerPin";
+import { QA_STAFF_REVIEW_PARTNER_ID_ENV } from "./staffReviewRoster";
 
 const prismaMock = vi.hoisted(() => ({
   partner: { findUnique: vi.fn() },
@@ -55,10 +56,10 @@ describe("staff review invitations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.NEXTAUTH_SECRET = SECRET;
-    process.env.QA_STAFF_REVIEW_PARTNER_ID = QA_PARTNER_ID;
-    prismaMock.partner.findUnique.mockImplementation(async (args: { where?: { id?: string } }) => ({
-      id: args.where?.id ?? PARTNER_ID,
-      name: args.where?.id === QA_PARTNER_ID ? "Tripdar QA" : "The Mushroom Top",
+    process.env[QA_STAFF_REVIEW_PARTNER_ID_ENV] = QA_PARTNER_ID;
+    prismaMock.partner.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) => ({
+      id: where.id,
+      name: where.id === QA_PARTNER_ID ? "Tripdar QA" : "The Mushroom Top",
     }));
     prismaMock.mycoEmployee.upsert.mockResolvedValue({
       id: EMPLOYEE_ID,
@@ -76,6 +77,10 @@ describe("staff review invitations", () => {
     prismaMock.staffReviewSession.create.mockResolvedValue({ id: "session-1" });
     prismaMock.staffReviewSession.findMany.mockResolvedValue([]);
     prismaMock.staffReviewSession.findUnique.mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    delete process.env[QA_STAFF_REVIEW_PARTNER_ID_ENV];
   });
 
   it("GET preview is read-only and returns one identity with a CSRF nonce", async () => {
@@ -154,7 +159,7 @@ describe("staff review invitations", () => {
     );
   });
 
-  it("prepares an UNSENT DRAFT batch and stores only token hashes", async () => {
+  it("prepares a QA-sandbox UNSENT DRAFT batch and stores only token hashes", async () => {
     const { prepareCanonicalStaffReviewInvitationBatch } = await import("./staffReviewInvitations");
     const batch = await prepareCanonicalStaffReviewInvitationBatch({
       partnerId: QA_PARTNER_ID,
@@ -163,6 +168,7 @@ describe("staff review invitations", () => {
       qaOnly: true,
     });
 
+    expect(batch.partner.id).toBe(QA_PARTNER_ID);
     expect(batch.status).toBe("UNSENT DRAFT");
     expect(batch.send).toBe(false);
     expect(batch.recipients).toHaveLength(1);
@@ -172,11 +178,25 @@ describe("staff review invitations", () => {
       status: "UNSENT DRAFT",
     });
     expect(batch.recipients[0].url).toContain("/staff-review/invite/");
+    expect(prismaMock.mycoEmployee.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          partnerId_email: {
+            partnerId: QA_PARTNER_ID,
+            email: "qa-reviewer@tripdar-qa.invalid",
+          },
+        },
+      })
+    );
     expect(prismaMock.staffReviewInvitation.create).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.not.objectContaining({ token: expect.any(String) }),
       })
     );
+    expect(prismaMock.staffReviewInvitation.create.mock.calls[0][0].data).toMatchObject({
+      partnerId: QA_PARTNER_ID,
+      emailNormalized: "qa-reviewer@tripdar-qa.invalid",
+    });
     expect(prismaMock.staffReviewInvitation.create.mock.calls[0][0].data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
@@ -236,6 +256,7 @@ describe("staff review invitations", () => {
   });
 
   it("does not reactivate inactive or opted-out employees during preview prep", async () => {
+    process.env[QA_STAFF_REVIEW_PARTNER_ID_ENV] = QA_PARTNER_ID;
     prismaMock.mycoEmployee.upsert.mockResolvedValue({
       id: EMPLOYEE_ID,
       name: "QA Reviewer",
