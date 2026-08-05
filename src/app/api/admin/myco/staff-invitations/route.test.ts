@@ -43,7 +43,24 @@ describe("admin staff invitation preview route", () => {
     expect(response.status).toBe(201);
     expect(json.data).toMatchObject({ status: "UNSENT DRAFT", send: false });
     expect(prepareMock).toHaveBeenCalledWith(
-      expect.objectContaining({ partnerId: "partner-tmt", issuedBy: "admin@example.com" })
+      expect.objectContaining({
+        partnerId: "partner-tmt",
+        issuedBy: "admin@example.com",
+        qaOnly: false,
+      })
+    );
+  });
+
+  it("passes qaOnly through for sink-address QA invitation generation", async () => {
+    const response = await post({ partnerId: "partner-qa", send: false, qaOnly: true });
+
+    expect(response.status).toBe(201);
+    expect(prepareMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        partnerId: "partner-qa",
+        issuedBy: "admin@example.com",
+        qaOnly: true,
+      })
     );
   });
 });

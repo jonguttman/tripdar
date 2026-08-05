@@ -175,6 +175,38 @@ describe("staff review invitations", () => {
     expect(prismaMock.staffReviewInvitation.create.mock.calls[0][0].data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
   });
 
+  it("keeps non-QA canonical preview inert until Jon approves live token generation", async () => {
+    const { prepareCanonicalStaffReviewInvitationBatch } = await import("./staffReviewInvitations");
+    const batch = await prepareCanonicalStaffReviewInvitationBatch({
+      partnerId: PARTNER_ID,
+      issuedBy: "admin@example.com",
+      requestOrigin: "https://tripdar.test",
+    });
+
+    expect(batch).toMatchObject({
+      status: "UNSENT DRAFT",
+      send: false,
+      previewOnly: true,
+    });
+    expect(batch.recipients).toHaveLength(6);
+    expect(batch.recipients.map((recipient) => recipient.displayName)).toEqual([
+      "Sage",
+      "Dani",
+      "Eddie",
+      "Devon",
+      "Clay",
+      "Audrey",
+    ]);
+    expect(batch.recipients.every((recipient) => recipient.url === null)).toBe(true);
+    expect(batch.recipients.every((recipient) => recipient.tokenPreview === null)).toBe(true);
+    expect(batch.recipients.every((recipient) => recipient.tokenHashPrefix === null)).toBe(true);
+    expect(batch.recipients.every((recipient) => recipient.invitationId === null)).toBe(true);
+    expect(batch.recipients.every((recipient) => recipient.employeeId === null)).toBe(true);
+    expect(prismaMock.mycoEmployee.upsert).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInvitation.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInvitation.create).not.toHaveBeenCalled();
+  });
+
   it("does not reactivate inactive or opted-out employees during preview prep", async () => {
     prismaMock.mycoEmployee.upsert.mockResolvedValue({
       id: EMPLOYEE_ID,

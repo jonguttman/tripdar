@@ -416,12 +416,33 @@ export async function prepareCanonicalStaffReviewInvitationBatch(input: {
     ? Math.max(1, Math.min(90, Math.round(input.expiresInDays!)))
     : DEFAULT_INVITATION_DAYS;
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
-  const recipients = input.qaOnly
-    ? [QA_STAFF_REVIEW_INVITE_RECIPIENT]
-    : [...CANONICAL_TMT_STAFF_INVITE_RECIPIENTS];
+  if (!input.qaOnly) {
+    return {
+      partner: { id: partner.id, name: partner.name },
+      status: "UNSENT DRAFT" as const,
+      send: false,
+      previewOnly: true,
+      recipients: CANONICAL_TMT_STAFF_INVITE_RECIPIENTS.map((recipient) => {
+        const emailNormalized = normalizeEmployeeEmail(recipient.email);
+        return {
+          displayName: recipient.displayName,
+          email: emailNormalized,
+          emailMasked: maskEmail(emailNormalized),
+          employeeId: null,
+          invitationId: null,
+          status: "UNSENT DRAFT",
+          url: null,
+          tokenPreview: null,
+          tokenHashPrefix: null,
+          expiresAt: null,
+          error: "Preview only; no invitation generated before Jon approval",
+        };
+      }),
+    };
+  }
 
   const invitations = [];
-  for (const recipient of recipients) {
+  for (const recipient of [QA_STAFF_REVIEW_INVITE_RECIPIENT]) {
     const emailNormalized = normalizeEmployeeEmail(recipient.email);
     const rawToken = createStaffReviewInvitationToken();
     const tokenHash = hashStaffReviewInvitationToken(rawToken);
