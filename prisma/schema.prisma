@@ -467,6 +467,7 @@ model Partner {
   enrollmentEvents ReviewerEnrollmentEvent[]
   staffReviewInvitations StaffReviewInvitation[]
   staffReviewSessions StaffReviewSession[]
+  staffReviewInviteBatches StaffReviewInviteBatch[]
   staffReviewerIdentityAliases StaffReviewerIdentityAlias[]
 
   @@index([apiKeyHash])
@@ -883,6 +884,7 @@ model MycoEmployee {
   enrollmentEvents ReviewerEnrollmentEvent[]
   staffReviewInvitations StaffReviewInvitation[]
   staffReviewSessions StaffReviewSession[]
+  staffReviewInviteBatchRecipients StaffReviewInviteBatchRecipient[]
   staffReviewerIdentityAliases StaffReviewerIdentityAlias[] @relation("StaffReviewerIdentityAliasEmployee")
   legacyStaffReviewerIdentityAliases StaffReviewerIdentityAlias[] @relation("StaffReviewerIdentityAliasLegacyEmployee")
 
@@ -918,10 +920,99 @@ model StaffReviewInvitation {
   partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
   employee MycoEmployee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   sessions StaffReviewSession[]
+  inviteBatchRecipients StaffReviewInviteBatchRecipient[]
 
   @@index([partnerId, status])
   @@index([employeeId, status])
   @@index([expiresAt])
+}
+
+/// KEWL-2950 — immutable approval envelope for direct staff-review invitation batches.
+///
+/// This table stores the exact approved operational artifact. Provider execution must
+/// name a batch id plus approved interaction id and revalidate every recipient row before
+/// the provider call. Status values are enforced in `staffReviewInviteBatches.ts`.
+model StaffReviewInviteBatch {
+  id                            String   @id @default(cuid())
+  partnerId                     String
+  status                        String   @default("draft") // draft, approved, sending, partially_sent, sent, validation_failed, superseded
+  renderedBy                    String
+  renderedAt                    DateTime @default(now())
+  sourceIssueId                 String?
+  sourceCommentId               String?
+  sourceCardId                  String?
+  approvedInteractionId         String?  @unique
+  approvedBy                    String?
+  approvedAt                    DateTime?
+  provider                      String
+  providerCredentialFingerprint String
+  fromAddress                   String
+  replyToAddress                String?
+  rendererVersion               String
+  rosterDigest                  String
+  batchDigest                   String   @unique
+  sealKeyFingerprint            String
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  partner    Partner                           @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  recipients StaffReviewInviteBatchRecipient[]
+
+  @@index([partnerId, status])
+  @@index([approvedInteractionId])
+  @@index([createdAt])
+}
+
+/// KEWL-2950 — immutable per-recipient snapshot plus send/no-send audit.
+///
+/// The exact provider payload is authenticated-encrypted. Plaintext bearer links and raw
+/// tokens must never be stored here; validation decrypts only inside the send executor.
+model StaffReviewInviteBatchRecipient {
+  id                            String    @id @default(cuid())
+  batchId                       String
+  ordinal                       Int
+  invitationId                  String
+  employeeId                    String
+  displayName                   String
+  emailNormalized               String
+  invitationTokenHash           String
+  invitationStatusAtApproval    String
+  invitationIssuedAt            DateTime
+  invitationExpiresAt           DateTime
+  invitationRevokedAt           DateTime?
+  partnerScopeId                String
+  recipientIdentityDigest       String
+  linkDigest                    String
+  subjectDigest                 String
+  htmlDigest                    String
+  textDigest                    String
+  sealedPayloadCiphertext       String
+  sealedPayloadIv               String
+  sealedPayloadAuthTag          String
+  providerIdempotencyKey        String    @unique
+  sendStatus                    String    @default("pending") // pending, claimed, sent, validation_failed, provider_failed, skipped
+  claimId                       String?
+  claimedAt                     DateTime?
+  sendAttemptCount              Int       @default(0)
+  lastValidatedAt               DateTime?
+  validationFailureCode         String?
+  validationFailureEvidence     Json?
+  providerMessageId             String?   @unique
+  providerError                 String?
+  sentAt                        DateTime?
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  batch      StaffReviewInviteBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  invitation StaffReviewInvitation  @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  employee   MycoEmployee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([batchId, emailNormalized])
+  @@unique([batchId, invitationId])
+  @@index([batchId, sendStatus])
+  @@index([employeeId])
+  @@index([invitationId])
+  @@index([validationFailureCode])
 }
 
 /// KEWL-2912 — server-verifiable staff catalog session minted by a confirmed invitation.

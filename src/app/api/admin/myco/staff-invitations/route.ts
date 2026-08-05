@@ -4,6 +4,11 @@ import {
   prepareCanonicalStaffReviewInvitationBatch,
   StaffReviewInvitationPartnerScopeError,
 } from "@/domain/myco/staffReviewInvitations";
+import {
+  approveStaffReviewInviteBatch,
+  prepareStaffReviewInviteBatch,
+  type StaffInviteBatchMessageInput,
+} from "@/domain/myco/staffReviewInviteBatches";
 import { isQaStaffReviewPartner } from "@/domain/myco/staffReviewRoster";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +30,13 @@ export async function POST(request: NextRequest) {
     send?: unknown;
     expiresInDays?: unknown;
     qaOnly?: unknown;
+    action?: unknown;
+    batchId?: unknown;
+    approvedInteractionId?: unknown;
+    sourceIssueId?: unknown;
+    sourceCommentId?: unknown;
+    sourceCardId?: unknown;
+    messages?: unknown;
   };
   if (body.send === true) {
     return NextResponse.json(
@@ -46,21 +58,77 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-  if (body.qaOnly === true && !isQaStaffReviewPartner(partnerId)) {
-    const error = new StaffReviewInvitationPartnerScopeError();
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message: error.message,
-          code: error.code,
-        },
-      },
-      { status: error.statusCode }
-    );
-  }
-
+  const action = typeof body.action === "string" ? body.action : "preview";
   try {
+    if (action === "record_approval") {
+      const batchId = typeof body.batchId === "string" ? body.batchId : "";
+      const approvedInteractionId =
+        typeof body.approvedInteractionId === "string" ? body.approvedInteractionId : "";
+      if (!batchId || !approvedInteractionId) {
+        return NextResponse.json(
+          { success: false, error: { message: "batchId and approvedInteractionId are required" } },
+          { status: 400 }
+        );
+      }
+      const approved = await approveStaffReviewInviteBatch({
+        batchId,
+        approvedInteractionId,
+        approvedBy: auth,
+        sourceIssueId: typeof body.sourceIssueId === "string" ? body.sourceIssueId : undefined,
+        sourceCommentId: typeof body.sourceCommentId === "string" ? body.sourceCommentId : undefined,
+        sourceCardId: typeof body.sourceCardId === "string" ? body.sourceCardId : undefined,
+      });
+      return NextResponse.json({ success: true, data: approved });
+    }
+    if (action === "prepare_batch") {
+      if (!Array.isArray(body.messages)) {
+        return NextResponse.json(
+          { success: false, error: { message: "messages are required for prepare_batch" } },
+          { status: 400 }
+        );
+      }
+      const messages = body.messages.filter(
+        (message): message is StaffInviteBatchMessageInput =>
+          typeof message === "object" &&
+          message !== null &&
+          typeof (message as { email?: unknown }).email === "string" &&
+          typeof (message as { subject?: unknown }).subject === "string" &&
+          typeof (message as { html?: unknown }).html === "string" &&
+          typeof (message as { text?: unknown }).text === "string"
+      );
+      if (messages.length !== body.messages.length) {
+        return NextResponse.json(
+          { success: false, error: { message: "Each message requires email, subject, html, and text" } },
+          { status: 400 }
+        );
+      }
+      const batch = await prepareStaffReviewInviteBatch({
+        partnerId,
+        renderedBy: auth,
+        requestOrigin: request.nextUrl.origin,
+        expiresInDays: Number(body.expiresInDays),
+        sourceIssueId: typeof body.sourceIssueId === "string" ? body.sourceIssueId : undefined,
+        sourceCommentId: typeof body.sourceCommentId === "string" ? body.sourceCommentId : undefined,
+        sourceCardId: typeof body.sourceCardId === "string" ? body.sourceCardId : undefined,
+        messages,
+      });
+      return NextResponse.json({ success: true, data: batch }, { status: 201 });
+    }
+
+    if (body.qaOnly === true && !isQaStaffReviewPartner(partnerId)) {
+      const error = new StaffReviewInvitationPartnerScopeError();
+      return NextResponse.json(
+        {
+          success: false,
+          error: {
+            message: error.message,
+            code: error.code,
+          },
+        },
+        { status: error.statusCode }
+      );
+    }
+
     const batch = await prepareCanonicalStaffReviewInvitationBatch({
       partnerId,
       issuedBy: auth,

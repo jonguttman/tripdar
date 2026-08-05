@@ -5,10 +5,15 @@ import {
   QA_STAFF_REVIEW_PARTNER_ID_ENV,
   STAFF_REVIEWER_COUNT,
   STAFF_REVIEWER_EMAILS,
+  TMT_DIRECT_STAFF_REVIEWER_COUNT,
+  TMT_DIRECT_STAFF_REVIEWERS,
   approvedReviewerEmails,
+  directStaffReviewerWhere,
   isQaStaffReviewPartner,
   isStaffReviewerEmail,
+  resolveDirectStaffReviewRoster,
   staffReviewerWhere,
+  tmtDirectStaffReviewerEmails,
 } from "./staffReviewRoster";
 
 const TMT_PARTNER_ID = "partner-tmt";
@@ -159,5 +164,81 @@ describe("QA sandbox reviewer scoping (KEWL-2475)", () => {
     expect(approvedReviewerEmails(TMT_PARTNER_ID)).not.toContain(
       "audrey@themushroomtop.internal"
     );
+  });
+});
+
+describe("direct staff-review invitation roster (KEWL-2950)", () => {
+  function employees() {
+    return TMT_DIRECT_STAFF_REVIEWERS.map((reviewer, index) => ({
+      id: `employee-${index}`,
+      partnerId: TMT_PARTNER_ID,
+      name: reviewer.displayName,
+      email: reviewer.email.toUpperCase(),
+      active: true,
+      optedOut: false,
+    }));
+  }
+
+  it("uses exactly the six real-email direct reviewers without widening the legacy shared-link allowlist", () => {
+    expect(TMT_DIRECT_STAFF_REVIEWER_COUNT).toBe(6);
+    expect(tmtDirectStaffReviewerEmails()).toEqual([
+      "sage@thegreenroomonventura.com",
+      "dani@thehigherpath.com",
+      "eddie@thehigherpath.com",
+      "devinmandley@yahoo.com",
+      "clayton@thehigherpath.com",
+      "audrey@theotherpathcbd.com",
+    ]);
+    expect(directStaffReviewerWhere(TMT_PARTNER_ID)).toEqual({
+      partnerId: TMT_PARTNER_ID,
+      email: { in: tmtDirectStaffReviewerEmails() },
+    });
+    expect(STAFF_REVIEWER_EMAILS).not.toContain("sage@thegreenroomonventura.com");
+  });
+
+  it("computes a deterministic roster digest in canonical order", () => {
+    const first = resolveDirectStaffReviewRoster(TMT_PARTNER_ID, employees());
+    const second = resolveDirectStaffReviewRoster(TMT_PARTNER_ID, [...employees()].reverse());
+
+    expect(first.reviewers.map((reviewer) => reviewer.displayName)).toEqual([
+      "Sage",
+      "Dani",
+      "Eddie",
+      "Devon",
+      "Clay",
+      "Audrey",
+    ]);
+    expect(first.rosterDigest).toBe(second.rosterDigest);
+  });
+
+  it("fails closed on missing, inactive, opted-out, or extra direct roster rows", () => {
+    expect(() =>
+      resolveDirectStaffReviewRoster(TMT_PARTNER_ID, employees().slice(1))
+    ).toThrow(/Missing direct staff reviewer/);
+    expect(() =>
+      resolveDirectStaffReviewRoster(TMT_PARTNER_ID, [
+        ...employees().slice(0, 1).map((employee) => ({ ...employee, active: false })),
+        ...employees().slice(1),
+      ])
+    ).toThrow(/inactive/);
+    expect(() =>
+      resolveDirectStaffReviewRoster(TMT_PARTNER_ID, [
+        ...employees().slice(0, 1).map((employee) => ({ ...employee, optedOut: true })),
+        ...employees().slice(1),
+      ])
+    ).toThrow(/opted out/);
+    expect(() =>
+      resolveDirectStaffReviewRoster(TMT_PARTNER_ID, [
+        ...employees(),
+        {
+          id: "employee-extra",
+          partnerId: TMT_PARTNER_ID,
+          name: "Extra",
+          email: "extra@example.com",
+          active: true,
+          optedOut: false,
+        },
+      ])
+    ).toThrow(/Expected 6 direct staff reviewers/);
   });
 });

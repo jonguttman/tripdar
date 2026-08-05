@@ -480,6 +480,16 @@ export async function prepareCanonicalStaffReviewInvitationBatch(input: {
         return { employee, invitation: null };
       }
 
+      const pendingInvitations = await tx.staffReviewInvitation.findMany({
+        where: {
+          partnerId: partner.id,
+          employeeId: employee.id,
+          status: "pending",
+          revokedAt: null,
+        },
+        select: { id: true },
+      });
+
       await tx.staffReviewInvitation.updateMany({
         where: {
           partnerId: partner.id,
@@ -494,6 +504,23 @@ export async function prepareCanonicalStaffReviewInvitationBatch(input: {
           revocationReason: "reissued by KEWL-2912 unsent preview",
         },
       });
+      if (pendingInvitations.length > 0) {
+        await tx.staffReviewInviteBatchRecipient.updateMany({
+          where: {
+            invitationId: { in: pendingInvitations.map((invitation) => invitation.id) },
+            sendStatus: { in: ["pending", "claimed", "provider_failed"] },
+            batch: { status: { in: ["approved", "sending", "partially_sent"] } },
+          },
+          data: {
+            sendStatus: "validation_failed",
+            validationFailureCode: "revoked",
+            validationFailureEvidence: {
+              reason: "invitation reissued by staff invitation preview",
+              invalidatedAt: new Date().toISOString(),
+            },
+          },
+        });
+      }
 
       const invitation = await tx.staffReviewInvitation.create({
         data: {
