@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.1] - 2026-08-05
+
+### Fixed
+- **Staff-review invite-batch release blockers** (KEWL-3012 / KEWL-3022): reconciled the Prisma schema with the production index/constraint names that the invite-batch branch depends on, so the branch no longer implies accidental index churn during review or deployment preparation.
+- **Repo-local invite-batch executor path** (KEWL-3012 / KEWL-3022): the approved sender now runs through `npm run staff-review:send-invite-batch`, using the checked-in `vite-node` resolver instead of a missing global executor, and refuses missing identity arguments before importing domain code or reading runtime secrets.
+- **Retryable provider failures** (KEWL-3012 / KEWL-3022): provider-only send failures now leave the batch retryable, reclaim `provider_failed` rows with the same idempotency keys, skip already-sent rows, and reserve `validation_failed` status for true validation refusals.
+
 ## [1.18.0] - 2026-08-01
 
 ### Added
