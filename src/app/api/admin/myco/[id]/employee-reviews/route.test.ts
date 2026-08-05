@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { NextRequest } from "next/server";
 import {
   digestCanonical,
   digestStaffReviewInviteRoster,
@@ -6,25 +7,43 @@ import {
 } from "@/domain/myco/employeeReviews";
 
 const sendEmailMock = vi.hoisted(() => vi.fn());
+const getAdminSessionMock = vi.hoisted(() => vi.fn());
+const resolveProductForAdminMock = vi.hoisted(() => vi.fn());
 
 const prismaMock = vi.hoisted(() => ({
+  storeProductCatalog: {
+    findUnique: vi.fn(),
+  },
+  mycoEmployee: {
+    upsert: vi.fn(),
+  },
+  catalogAccessToken: {
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  mycoEmployeeReviewAssignment: {
+    findUnique: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
   staffReviewInviteBatch: {
     findFirst: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
+    create: vi.fn(),
   },
   staffReviewInviteRecipient: {
     count: vi.fn(),
     update: vi.fn(),
+    create: vi.fn(),
+    findMany: vi.fn(),
   },
   staffReviewInviteNoSendEvidence: {
     create: vi.fn(),
   },
-  mycoEmployeeReviewAssignment: {
-    update: vi.fn(),
-  },
   $transaction: vi.fn(async (operation: unknown) => {
     if (Array.isArray(operation)) return Promise.all(operation);
-    if (typeof operation === "function") throw new Error("interactive transaction is not used in these sender tests");
+    if (typeof operation === "function") return operation(prismaMock);
     return operation;
   }),
 }));
@@ -35,6 +54,8 @@ vi.mock("@/lib/prisma", async () => {
 });
 
 vi.mock("@/lib/email", () => ({ sendEmail: sendEmailMock }));
+vi.mock("@/domain/auth/adminSession", () => ({ getAdminSession: getAdminSessionMock }));
+vi.mock("@/domain/myco/adminAccess", () => ({ resolveProductForAdmin: resolveProductForAdminMock }));
 
 const EXPIRES_AT = new Date("2026-08-20T12:00:00Z");
 const ROSTER_DIGEST = digestStaffReviewInviteRoster([
@@ -135,8 +156,34 @@ describe("employee review invite-batch sender", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.RESEND_API_KEY = "resend-key-a";
+    getAdminSessionMock.mockResolvedValue({ user: { email: "admin@tripd.ar" } });
+    resolveProductForAdminMock.mockResolvedValue({ ok: true, status: 200, partnerId: "partner-a" });
+    prismaMock.storeProductCatalog.findUnique.mockResolvedValue({
+      id: "catalog-a",
+      partnerId: "partner-a",
+      productName: "Product A",
+      brandId: "brand-a",
+      partner: { name: "The Mushroom Top" },
+    });
+    prismaMock.mycoEmployee.upsert.mockResolvedValue({
+      id: "employee-a",
+      partnerId: "partner-a",
+      name: "Sage",
+      email: "sage@example.com",
+      optedOut: false,
+    });
+    prismaMock.mycoEmployeeReviewAssignment.findUnique.mockResolvedValue(null);
+    prismaMock.catalogAccessToken.create.mockResolvedValue({
+      id: "access-token-a",
+      tokenHash: "access-token-hash-a",
+    });
+    prismaMock.mycoEmployeeReviewAssignment.create.mockResolvedValue({ id: "assignment-a" });
+    prismaMock.staffReviewInviteBatch.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.staffReviewInviteBatch.create.mockResolvedValue({ id: "batch-a" });
     prismaMock.staffReviewInviteBatch.update.mockResolvedValue({});
     prismaMock.staffReviewInviteRecipient.update.mockResolvedValue({});
+    prismaMock.staffReviewInviteRecipient.create.mockResolvedValue({});
+    prismaMock.staffReviewInviteRecipient.findMany.mockResolvedValue([]);
     prismaMock.staffReviewInviteNoSendEvidence.create.mockResolvedValue({});
     prismaMock.mycoEmployeeReviewAssignment.update.mockResolvedValue({});
     sendEmailMock.mockResolvedValue({ id: "resend-message-a" });
@@ -144,6 +191,39 @@ describe("employee review invite-batch sender", () => {
 
   afterEach(() => {
     delete process.env.RESEND_API_KEY;
+  });
+
+  it("persists immutable source approval evidence on the created batch without sending", async () => {
+    const { POST } = await import("./route");
+    const request = {
+      nextUrl: { origin: "https://tripdar.test" },
+      json: async () => ({
+        send: false,
+        expiresInDays: 21,
+        sourceCommentId: "53ac88a9-e43d-4db8-b037-636bdf08489f",
+        sourceCardId: "card-tmt-staff-review",
+        approvedInteractionId: "interaction-approval-1",
+        employees: [{ name: "Sage", email: "sage@example.com" }],
+      }),
+    } as unknown as NextRequest;
+
+    const response = await POST(request, { params: Promise.resolve({ id: "catalog-a" }) });
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.data.batchId).toBe("batch-a");
+    expect(sendEmailMock).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInviteBatch.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          approvedBy: "admin@tripd.ar",
+          sourceCommentId: "53ac88a9-e43d-4db8-b037-636bdf08489f",
+          sourceCardId: "card-tmt-staff-review",
+          approvedInteractionId: "interaction-approval-1",
+          totalRecipients: 1,
+        }),
+      })
+    );
   });
 
   it("persists no-send evidence and never calls email for a superseded batch A", async () => {

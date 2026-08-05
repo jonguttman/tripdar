@@ -363,6 +363,9 @@ export async function POST(
     const body = await request.json();
     const sendNow = body.send === true;
     const requestedBatchId = cleanText(body.batchId);
+    const sourceCommentId = cleanText(body.sourceCommentId) ?? null;
+    const sourceCardId = cleanText(body.sourceCardId) ?? null;
+    const approvedInteractionId = cleanText(body.approvedInteractionId) ?? null;
     if (requestedBatchId) {
       if (!sendNow) {
         return NextResponse.json(
@@ -616,6 +619,9 @@ export async function POST(
           catalogItemId: id,
           status: "approved",
           approvedBy: auth.user!.email!,
+          sourceCommentId,
+          sourceCardId,
+          approvedInteractionId,
           expiresInDays,
           rosterDigest,
           sender: REVIEW_INVITE_SENDER,

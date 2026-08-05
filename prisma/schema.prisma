@@ -1019,6 +1019,9 @@ model StaffReviewInviteBatch {
   status                        String   @default("approved") // approved, sending, partial, sent, blocked, superseded
   approvedBy                    String
   approvedAt                    DateTime @default(now())
+  sourceCommentId               String?
+  sourceCardId                  String?
+  approvedInteractionId         String?
   expiresInDays                 Int
   rosterDigest                  String
   sender                        String
