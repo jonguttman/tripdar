@@ -65,6 +65,7 @@ export const STAFF_INVITE_VALIDATION_FAILURE_CODES = [
   "roster_mismatch",
   "payload_unseal_failed",
   "link_digest_mismatch",
+  "cc_mismatch",
   "subject_digest_mismatch",
   "body_digest_mismatch",
   "sender_mismatch",
@@ -77,6 +78,7 @@ export type StaffInviteValidationFailureCode =
 
 export interface StaffInviteBatchMessageInput {
   email: string;
+  cc?: string[];
   subject: string;
   html: string;
   text: string;
@@ -117,6 +119,7 @@ export interface SealedStaffInvitePayload {
   emailNormalized: string;
   tokenHash: string;
   inviteUrl: string;
+  cc?: string[];
   subject: string;
   html: string;
   text: string;
@@ -170,6 +173,7 @@ interface RecipientRecord {
   partnerScopeId: string;
   recipientIdentityDigest: string;
   linkDigest: string;
+  ccDigest: string | null;
   subjectDigest: string;
   htmlDigest: string;
   textDigest: string;
@@ -229,6 +233,50 @@ export function digestCanonical(value: unknown): string {
 
 function digestText(value: string): string {
   return crypto.createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function isValidEmailAddress(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function normalizeCcForPrepare(cc: string[] | undefined): string[] {
+  if (!cc) return [];
+  return cc.map((email, index) => {
+    if (email.trim() === "") {
+      throw new Error(`Staff invite Cc entry ${index + 1} is blank`);
+    }
+    const normalized = normalizeEmployeeEmail(email);
+    if (!isValidEmailAddress(normalized)) {
+      throw new Error(`Staff invite Cc entry ${index + 1} is not a valid email address`);
+    }
+    return normalized;
+  });
+}
+
+function isCanonicalCc(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((email) => (
+    typeof email === "string" &&
+    email.trim() !== "" &&
+    email === normalizeEmployeeEmail(email) &&
+    isValidEmailAddress(email)
+  ));
+}
+
+function digestCc(cc: string[]): string {
+  return digestCanonical(cc);
+}
+
+function validateSealedCcDigest(
+  payload: SealedStaffInvitePayload,
+  recipient: Pick<RecipientRecord, "id" | "ccDigest">
+): boolean {
+  if (payload.cc === undefined) {
+    return recipient.ccDigest === null;
+  }
+  if (!isCanonicalCc(payload.cc)) {
+    return false;
+  }
+  return digestCc(payload.cc) === recipient.ccDigest;
 }
 
 function requireSealingKey(): Buffer {
@@ -342,6 +390,7 @@ function batchDigest(input: {
     invitationTokenHash: string;
     invitationExpiresAt: Date;
     linkDigest: string;
+    ccDigest: string | null;
     subjectDigest: string;
     htmlDigest: string;
     textDigest: string;
@@ -403,7 +452,13 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
   const currentSealFingerprint = sealKeyFingerprint();
 
   const messagesByEmail = new Map(
-    input.messages.map((message) => [normalizeEmployeeEmail(message.email), message])
+    input.messages.map((message) => [
+      normalizeEmployeeEmail(message.email),
+      {
+        ...message,
+        cc: normalizeCcForPrepare(message.cc),
+      },
+    ])
   );
   const expectedEmails = tmtDirectStaffReviewerEmails();
   if (messagesByEmail.size !== expectedEmails.length) {
@@ -427,10 +482,12 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
       invitation: { id: string; tokenHash: string; issuedAt: Date; expiresAt: Date; status: string; revokedAt: Date | null };
       rawToken: string;
       inviteUrl: string;
+      cc: string[];
       subject: string;
       html: string;
       text: string;
       linkDigest: string;
+      ccDigest: string;
       subjectDigest: string;
       htmlDigest: string;
       textDigest: string;
@@ -491,6 +548,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
       });
       const url = inviteUrl(rawToken, input.requestOrigin);
       const message = messagesByEmail.get(reviewer.emailNormalized)!;
+      const cc = message.cc;
       const subject = message.subject;
       const html = replaceInviteUrlPlaceholder(message.html, url);
       const text = replaceInviteUrlPlaceholder(message.text, url);
@@ -499,10 +557,12 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
         invitation,
         rawToken,
         inviteUrl: url,
+        cc,
         subject,
         html,
         text,
         linkDigest: digestText(url),
+        ccDigest: digestCc(cc),
         subjectDigest: digestText(subject),
         htmlDigest: digestText(html),
         textDigest: digestText(text),
@@ -533,6 +593,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
         invitationTokenHash: recipient.invitation.tokenHash,
         invitationExpiresAt: recipient.invitation.expiresAt,
         linkDigest: recipient.linkDigest,
+        ccDigest: recipient.ccDigest,
         subjectDigest: recipient.subjectDigest,
         htmlDigest: recipient.htmlDigest,
         textDigest: recipient.textDigest,
@@ -574,6 +635,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
         emailNormalized: prepared.reviewer.emailNormalized,
         tokenHash: prepared.invitation.tokenHash,
         inviteUrl: prepared.inviteUrl,
+        cc: prepared.cc,
         subject: prepared.subject,
         html: prepared.html,
         text: prepared.text,
@@ -606,6 +668,7 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
           partnerScopeId: partner.id,
           recipientIdentityDigest: prepared.recipientIdentityDigest,
           linkDigest: prepared.linkDigest,
+          ccDigest: prepared.ccDigest,
           subjectDigest: prepared.subjectDigest,
           htmlDigest: prepared.htmlDigest,
           textDigest: prepared.textDigest,
@@ -622,7 +685,11 @@ export async function prepareStaffReviewInviteBatch(input: PrepareStaffInviteBat
           invitationExpiresAt: true,
         },
       });
-      recipients.push({ ...row, emailMasked: maskEmail(row.emailNormalized) });
+      recipients.push({
+        ...row,
+        emailMasked: maskEmail(row.emailNormalized),
+        inviteUrl: prepared.inviteUrl,
+      });
     }
 
     return {
@@ -778,6 +845,9 @@ async function validateRecipientForSend(
   }
   if (digestText(payload.inviteUrl) !== recipient.linkDigest) {
     return failValidation("link_digest_mismatch", { recipientId: recipient.id });
+  }
+  if (!validateSealedCcDigest(payload, recipient)) {
+    return failValidation("cc_mismatch", { recipientId: recipient.id });
   }
   if (digestText(payload.subject) !== recipient.subjectDigest) {
     return failValidation("subject_digest_mismatch", { recipientId: recipient.id });
@@ -982,6 +1052,7 @@ export async function sendApprovedStaffReviewInviteBatch(input: {
     try {
       result = await send({
         to: validation.payload.emailNormalized,
+        ...(validation.payload.cc && validation.payload.cc.length > 0 ? { cc: validation.payload.cc } : {}),
         from: validation.payload.fromAddress,
         replyTo: validation.payload.replyToAddress ?? undefined,
         subject: validation.payload.subject,

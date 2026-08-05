@@ -984,6 +984,7 @@ model StaffReviewInviteBatchRecipient {
   partnerScopeId                String
   recipientIdentityDigest       String
   linkDigest                    String
+  ccDigest                      String?
   subjectDigest                 String
   htmlDigest                    String
   textDigest                    String

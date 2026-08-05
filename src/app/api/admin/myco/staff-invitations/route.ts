@@ -21,6 +21,10 @@ async function requireAdmin() {
   return session.user.email;
 }
 
+function isOptionalCc(value: unknown): value is string[] | undefined {
+  return value === undefined || (Array.isArray(value) && value.every((email) => typeof email === "string"));
+}
+
 export async function POST(request: NextRequest) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
@@ -94,11 +98,12 @@ export async function POST(request: NextRequest) {
           typeof (message as { email?: unknown }).email === "string" &&
           typeof (message as { subject?: unknown }).subject === "string" &&
           typeof (message as { html?: unknown }).html === "string" &&
-          typeof (message as { text?: unknown }).text === "string"
+          typeof (message as { text?: unknown }).text === "string" &&
+          isOptionalCc((message as { cc?: unknown }).cc)
       );
       if (messages.length !== body.messages.length) {
         return NextResponse.json(
-          { success: false, error: { message: "Each message requires email, subject, html, and text" } },
+          { success: false, error: { message: "Each message requires email, subject, html, text, and optional cc string array" } },
           { status: 400 }
         );
       }
