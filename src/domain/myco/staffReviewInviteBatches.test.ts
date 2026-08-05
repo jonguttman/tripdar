@@ -87,10 +87,8 @@ function digestText(value: string) {
   return crypto.createHash("sha256").update(value, "utf8").digest("hex");
 }
 
-function digestCc(cc: string[] | undefined) {
-  return cc && cc.length > 0
-    ? crypto.createHash("sha256").update(JSON.stringify(cc), "utf8").digest("hex")
-    : null;
+function digestCc(cc: string[]) {
+  return crypto.createHash("sha256").update(JSON.stringify(cc), "utf8").digest("hex");
 }
 
 async function arrangeApprovedBatch(overrides: {
@@ -119,6 +117,7 @@ async function arrangeApprovedBatch(overrides: {
     emailNormalized: "sage@thegreenroomonventura.com",
     tokenHash,
     inviteUrl: `https://tripdar.test/staff-review/invite/${token}`,
+    cc: [],
     subject: "Subject A",
     html: "<p>A</p>",
     text: "A",
@@ -146,7 +145,7 @@ async function arrangeApprovedBatch(overrides: {
     partnerScopeId: PARTNER_ID,
     recipientIdentityDigest: "identity-digest",
     linkDigest: digestText(payload.inviteUrl),
-    ccDigest: digestCc((payload as { cc?: string[] }).cc),
+    ccDigest: digestCc((payload as { cc?: string[] }).cc ?? []),
     subjectDigest: digestText(payload.subject),
     htmlDigest: digestText(payload.html),
     textDigest: digestText(payload.text),
@@ -378,6 +377,74 @@ describe("staff review invite batches", () => {
     expect(JSON.stringify(recipientData)).not.toContain("Open review");
   });
 
+  it("persists a non-null empty cc digest and sealed empty cc array for new no-Cc rows", async () => {
+    const {
+      digestCanonical,
+      prepareStaffReviewInviteBatch,
+      unsealStaffInvitePayload,
+    } = await import("./staffReviewInviteBatches");
+
+    await prepareStaffReviewInviteBatch({
+      partnerId: PARTNER_ID,
+      renderedBy: "admin@example.com",
+      requestOrigin: "https://tripdar.test",
+      messages: messages(),
+      now: NOW,
+      sourceIssueId: "KEWL-3075",
+    });
+
+    const recipientData = prismaMock.staffReviewInviteBatchRecipient.create.mock.calls[0][0].data;
+    expect(recipientData.ccDigest).toBe(digestCanonical([]));
+    expect(unsealStaffInvitePayload(recipientData).cc).toEqual([]);
+  });
+
+  it("normalizes Cc email casing while preserving order before sealing", async () => {
+    const {
+      digestCanonical,
+      prepareStaffReviewInviteBatch,
+      unsealStaffInvitePayload,
+    } = await import("./staffReviewInviteBatches");
+    const cc = [" Adrienne@TheOtherPathCBD.com ", "AUDREY@TheOtherPathCBD.com"];
+    const normalizedCc = ["adrienne@theotherpathcbd.com", "audrey@theotherpathcbd.com"];
+
+    await prepareStaffReviewInviteBatch({
+      partnerId: PARTNER_ID,
+      renderedBy: "admin@example.com",
+      requestOrigin: "https://tripdar.test",
+      messages: messages().map((message) => (
+        message.email === "sage@thegreenroomonventura.com" ? { ...message, cc } : message
+      )),
+      now: NOW,
+      sourceIssueId: "KEWL-3075",
+    });
+
+    const recipientData = prismaMock.staffReviewInviteBatchRecipient.create.mock.calls[0][0].data;
+    expect(recipientData.ccDigest).toBe(digestCanonical(normalizedCc));
+    expect(unsealStaffInvitePayload(recipientData).cc).toEqual(normalizedCc);
+  });
+
+  it.each([
+    { name: "blank", cc: ["adrienne@theotherpathcbd.com", " "] },
+    { name: "malformed", cc: ["not-an-email"] },
+  ])("rejects $name Cc entries before batch preparation", async ({ cc }) => {
+    const { prepareStaffReviewInviteBatch } = await import("./staffReviewInviteBatches");
+
+    await expect(prepareStaffReviewInviteBatch({
+      partnerId: PARTNER_ID,
+      renderedBy: "admin@example.com",
+      requestOrigin: "https://tripdar.test",
+      messages: messages().map((message) => (
+        message.email === "sage@thegreenroomonventura.com" ? { ...message, cc } : message
+      )),
+      now: NOW,
+      sourceIssueId: "KEWL-3075",
+    })).rejects.toThrow(/Staff invite Cc entry/);
+
+    expect(prismaMock.staffReviewInvitation.create).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInviteBatch.create).not.toHaveBeenCalled();
+    expect(prismaMock.staffReviewInviteBatchRecipient.create).not.toHaveBeenCalled();
+  });
+
   it("preserves sealed cc through prepare, validation, and provider send", async () => {
     const {
       digestCanonical,
@@ -463,6 +530,86 @@ describe("staff review invite batches", () => {
       to: "sage@thegreenroomonventura.com",
       cc,
     }));
+  });
+
+  it("sends a new-format no-Cc row without passing an empty provider cc list", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch();
+    sendSpy.mockResolvedValue({ messageId: "resend-no-cc", provider: "resend" });
+    prismaMock.staffReviewInviteBatchRecipient.findMany.mockResolvedValueOnce([{ sendStatus: "sent" }]);
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(result.sent).toEqual([
+      {
+        recipientId: "recipient-1",
+        emailMasked: "s***@thegreenroomonventura.com",
+        providerMessageId: "resend-no-cc",
+      },
+    ]);
+    expect(sendSpy).toHaveBeenCalledWith(expect.objectContaining({
+      to: "sage@thegreenroomonventura.com",
+    }));
+    expect(sendSpy.mock.calls[0][0]).not.toHaveProperty("cc");
+  });
+
+  it("keeps true legacy null/no-field Cc rows send-compatible", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch({
+      payload: { cc: undefined },
+      recipient: { ccDigest: null },
+    });
+    sendSpy.mockResolvedValue({ messageId: "resend-legacy-no-cc", provider: "resend" });
+    prismaMock.staffReviewInviteBatchRecipient.findMany.mockResolvedValueOnce([{ sendStatus: "sent" }]);
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(result.sent[0]).toMatchObject({
+      recipientId: "recipient-1",
+      providerMessageId: "resend-legacy-no-cc",
+    });
+    expect(sendSpy.mock.calls[0][0]).not.toHaveProperty("cc");
+  });
+
+  it("rejects a new-format sealed empty Cc payload when the stored digest is missing", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch({
+      recipient: { ccDigest: null },
+    });
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(result.failed[0]).toMatchObject({ recipientId: "recipient-1", code: "cc_mismatch" });
+  });
+
+  it("rejects Cc representation drift without normalizing at send time", async () => {
+    const { sendApprovedStaffReviewInviteBatch, sendSpy } = await arrangeApprovedBatch({
+      payload: { cc: ["Adrienne@TheOtherPathCBD.com"] },
+      recipient: { ccDigest: digestCc(["adrienne@theotherpathcbd.com"]) },
+    });
+
+    const result = await sendApprovedStaffReviewInviteBatch({
+      batchId: "batch-a",
+      approvedInteractionId: "interaction-a",
+      now: NOW,
+      send: sendSpy,
+    });
+
+    expect(sendSpy).not.toHaveBeenCalled();
+    expect(result.failed[0]).toMatchObject({ recipientId: "recipient-1", code: "cc_mismatch" });
   });
 
   it("generation B revokes prior pending invitations and records durable no-send evidence for approved batch A rows", async () => {

@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.18.2] - 2026-08-05
+
+### Fixed
+- **Staff-review invite-batch Cc integrity** (KEWL-3075): invite-batch preparation now seals canonical Cc arrays for every new recipient, including a non-null digest for `[]`, rejects blank or malformed Cc values before DB work, and keeps send validation exact while preserving true legacy no-Cc rows.
+
 ## [1.18.1] - 2026-08-05
 
 ### Fixed
