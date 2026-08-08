@@ -24,7 +24,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const roster = await resolveReviewerRoster(token);
+  const roster = await resolveReviewerRoster(
+    token,
+    request.cookies.get(REVIEWER_SESSION_COOKIE)?.value
+  );
   if (!roster.ok) return roster.response;
 
   const partner = await prisma.partner.findUnique({
@@ -32,22 +35,28 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     select: { name: true },
   });
 
-  // Mark the link opened once, for the same audit reason KEWL-2332 tracks it.
-  await prisma.catalogAccessToken.updateMany({
-    where: { id: roster.tokenId, openedAt: null },
-    data: { openedAt: new Date() },
-  });
+  if (roster.kind === "catalog_token") {
+    // Legacy shared-link audit behavior. Invitation session bootstrap is deliberately not
+    // a CatalogAccessToken read, so it never mutates token openedAt.
+    await prisma.catalogAccessToken.updateMany({
+      where: { id: roster.tokenId, openedAt: null },
+      data: { openedAt: new Date() },
+    });
+  }
 
-  const existing = verifyReviewerSession(
-    request.cookies.get(REVIEWER_SESSION_COOKIE)?.value,
-    { tokenId: roster.tokenId, secret: reviewerSessionSecret() }
-  );
+  const cookieValue = request.cookies.get(REVIEWER_SESSION_COOKIE)?.value;
+  const existing = verifyReviewerSession(cookieValue, {
+    tokenId: roster.tokenId,
+    secret: reviewerSessionSecret(),
+  });
 
   // A session survives a reload only if the PIN behind it hasn't been reset since.
   let signedInAs: string | null = null;
   if (existing.ok) {
     const reviewer = roster.reviewers.find((entry) => entry.id === existing.employeeId);
-    if (
+    if (reviewer && roster.kind === "staff_session") {
+      signedInAs = reviewer.id;
+    } else if (
       reviewer &&
       !isReviewerSessionStale({ sessionIssuedAt: existing.issuedAt, pinSetAt: reviewer.pinSetAt })
     ) {

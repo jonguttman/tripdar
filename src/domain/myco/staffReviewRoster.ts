@@ -16,6 +16,9 @@
  */
 
 import type { Prisma } from "@prisma/client";
+import crypto from "crypto";
+
+import { normalizeEmployeeEmail } from "./employeeReviews";
 
 export const STAFF_REVIEWER_EMAILS = [
   "adrienne@themushroomtop.internal",
@@ -25,6 +28,155 @@ export const STAFF_REVIEWER_EMAILS = [
   "devon@themushroomtop.internal",
   "eddie@themushroomtop.internal",
 ] as const;
+
+/**
+ * KEWL-2912 — forward-looking direct-invitation roster.
+ *
+ * These real-email identities are additive and intentionally separate from the legacy
+ * shared-link allowlist above. Do not use them to widen the old roster picker.
+ */
+export const TMT_DIRECT_STAFF_REVIEWERS = [
+  { displayName: "Sage", email: "sage@thegreenroomonventura.com" },
+  { displayName: "Dani", email: "dani@thehigherpath.com" },
+  { displayName: "Eddie", email: "eddie@thehigherpath.com" },
+  { displayName: "Devon", email: "devinmandley@yahoo.com" },
+  { displayName: "Clay", email: "clayton@thehigherpath.com" },
+  { displayName: "Audrey", email: "audrey@theotherpathcbd.com" },
+] as const;
+
+export const TMT_DIRECT_STAFF_REVIEWER_COUNT = TMT_DIRECT_STAFF_REVIEWERS.length;
+
+export interface DirectStaffReviewEmployee {
+  id: string;
+  partnerId: string;
+  name: string;
+  email: string;
+  active: boolean;
+  optedOut: boolean;
+}
+
+export interface ResolvedDirectStaffReviewer {
+  ordinal: number;
+  employeeId: string;
+  partnerId: string;
+  displayName: string;
+  expectedDisplayName: string;
+  emailNormalized: string;
+  active: boolean;
+  optedOut: boolean;
+}
+
+export class DirectStaffReviewRosterError extends Error {
+  readonly code: string;
+  readonly statusCode = 409;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "DirectStaffReviewRosterError";
+    this.code = code;
+  }
+}
+
+export function tmtDirectStaffReviewerEmails(): string[] {
+  return TMT_DIRECT_STAFF_REVIEWERS.map((reviewer) =>
+    normalizeEmployeeEmail(reviewer.email)
+  );
+}
+
+export function directStaffReviewerWhere(partnerId: string): Prisma.MycoEmployeeWhereInput {
+  return {
+    partnerId,
+    email: { in: tmtDirectStaffReviewerEmails() },
+  };
+}
+
+function directRosterDigestPayload(roster: ResolvedDirectStaffReviewer[]) {
+  return {
+    version: "staff-direct-roster-v1",
+    reviewers: roster.map((reviewer) => ({
+      ordinal: reviewer.ordinal,
+      employeeId: reviewer.employeeId,
+      partnerId: reviewer.partnerId,
+      displayName: reviewer.displayName,
+      expectedDisplayName: reviewer.expectedDisplayName,
+      emailNormalized: reviewer.emailNormalized,
+      active: reviewer.active,
+      optedOut: reviewer.optedOut,
+    })),
+  };
+}
+
+export function hashDirectStaffReviewRoster(roster: ResolvedDirectStaffReviewer[]): string {
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify(directRosterDigestPayload(roster)), "utf8")
+    .digest("hex");
+}
+
+export function resolveDirectStaffReviewRoster(
+  partnerId: string,
+  employees: DirectStaffReviewEmployee[]
+): { reviewers: ResolvedDirectStaffReviewer[]; rosterDigest: string } {
+  const byEmail = new Map<string, DirectStaffReviewEmployee>();
+  for (const employee of employees) {
+    const email = normalizeEmployeeEmail(employee.email);
+    if (byEmail.has(email)) {
+      throw new DirectStaffReviewRosterError(
+        "roster_duplicate_email",
+        `Duplicate direct staff reviewer email: ${email}`
+      );
+    }
+    byEmail.set(email, employee);
+  }
+
+  const reviewers = TMT_DIRECT_STAFF_REVIEWERS.map((expected, index) => {
+    const emailNormalized = normalizeEmployeeEmail(expected.email);
+    const employee = byEmail.get(emailNormalized);
+    if (!employee) {
+      throw new DirectStaffReviewRosterError(
+        "roster_missing",
+        `Missing direct staff reviewer: ${emailNormalized}`
+      );
+    }
+    if (employee.partnerId !== partnerId) {
+      throw new DirectStaffReviewRosterError(
+        "partner_scope_mismatch",
+        `Direct staff reviewer is outside partner scope: ${emailNormalized}`
+      );
+    }
+    if (!employee.active) {
+      throw new DirectStaffReviewRosterError(
+        "employee_inactive",
+        `Direct staff reviewer is inactive: ${emailNormalized}`
+      );
+    }
+    if (employee.optedOut) {
+      throw new DirectStaffReviewRosterError(
+        "employee_opted_out",
+        `Direct staff reviewer is opted out: ${emailNormalized}`
+      );
+    }
+    return {
+      ordinal: index,
+      employeeId: employee.id,
+      partnerId: employee.partnerId,
+      displayName: employee.name,
+      expectedDisplayName: expected.displayName,
+      emailNormalized,
+      active: employee.active,
+      optedOut: employee.optedOut,
+    };
+  });
+
+  if (employees.length !== TMT_DIRECT_STAFF_REVIEWER_COUNT) {
+    throw new DirectStaffReviewRosterError(
+      "roster_mismatch",
+      `Expected ${TMT_DIRECT_STAFF_REVIEWER_COUNT} direct staff reviewers, found ${employees.length}`
+    );
+  }
+
+  return { reviewers, rosterDigest: hashDirectStaffReviewRoster(reviewers) };
+}
 
 /** Roster size the enrollment auto-close counts against ("six of six"). */
 export const STAFF_REVIEWER_COUNT = STAFF_REVIEWER_EMAILS.length;

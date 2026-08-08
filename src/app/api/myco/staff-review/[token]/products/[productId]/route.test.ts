@@ -9,11 +9,13 @@ const requireReviewerMock = vi.hoisted(() => vi.fn());
 const txMock = vi.hoisted(() => ({
   catalogFieldChange: { createMany: vi.fn() },
   catalogFieldVerificationState: { upsert: vi.fn() },
+  staffReviewerIdentityAlias: { findMany: vi.fn() },
   storeProductCatalog: { findUniqueOrThrow: vi.fn(), update: vi.fn() },
 }));
 
 const prismaMock = vi.hoisted(() => ({
   catalogFieldVerificationRule: { findMany: vi.fn(), createMany: vi.fn() },
+  staffReviewerIdentityAlias: { findMany: vi.fn() },
   storeProductCatalog: { findFirst: vi.fn() },
   $transaction: vi.fn(),
 }));
@@ -131,12 +133,15 @@ describe("staff-review product submit projection hardening", () => {
           {
             catalogFieldChange: txMock.catalogFieldChange,
             catalogFieldVerificationState: txMock.catalogFieldVerificationState,
+            staffReviewerIdentityAlias: txMock.staffReviewerIdentityAlias,
             storeProductCatalog: txMock.storeProductCatalog,
           },
           "tx"
         )
       )
     );
+    prismaMock.staffReviewerIdentityAlias.findMany.mockResolvedValue([]);
+    txMock.staffReviewerIdentityAlias.findMany.mockResolvedValue([]);
     txMock.catalogFieldChange.createMany.mockResolvedValue({ count: 1 });
     txMock.catalogFieldVerificationState.upsert.mockResolvedValue({});
     txMock.storeProductCatalog.update.mockResolvedValue({});
