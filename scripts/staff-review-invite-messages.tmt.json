@@ -1,0 +1,38 @@
+[
+  {
+    "email": "sage@thegreenroomonventura.com",
+    "subject": "Your TMT product guide invite",
+    "html": "<p>Hi Sage,</p><p>Here is your personal link for the TMT staff product guide:</p><p><a href=\"{{INVITE_URL}}\">Open your review link</a></p><p>Use the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.</p><p>Enter this same email address when the page asks. No app, account, or password.</p><p>If you already opened it somewhere else by accident, ask Jon for a fresh link.</p><p>- Jon</p>",
+    "text": "Hi Sage,\n\nHere is your personal link for the TMT staff product guide:\n{{INVITE_URL}}\n\nUse the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.\n\nEnter this same email address when the page asks. No app, account, or password.\n\nIf you already opened it somewhere else by accident, ask Jon for a fresh link.\n\n- Jon"
+  },
+  {
+    "email": "dani@thehigherpath.com",
+    "subject": "Your TMT product guide invite",
+    "html": "<p>Hi Dani,</p><p>Here is your personal link for the TMT staff product guide:</p><p><a href=\"{{INVITE_URL}}\">Open your review link</a></p><p>Use the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.</p><p>Enter this same email address when the page asks. No app, account, or password.</p><p>If you already opened it somewhere else by accident, ask Jon for a fresh link.</p><p>- Jon</p>",
+    "text": "Hi Dani,\n\nHere is your personal link for the TMT staff product guide:\n{{INVITE_URL}}\n\nUse the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.\n\nEnter this same email address when the page asks. No app, account, or password.\n\nIf you already opened it somewhere else by accident, ask Jon for a fresh link.\n\n- Jon"
+  },
+  {
+    "email": "eddie@thehigherpath.com",
+    "subject": "Your TMT product guide invite",
+    "html": "<p>Hi Eddie,</p><p>Here is your personal link for the TMT staff product guide:</p><p><a href=\"{{INVITE_URL}}\">Open your review link</a></p><p>Use the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.</p><p>Enter this same email address when the page asks. No app, account, or password.</p><p>If you already opened it somewhere else by accident, ask Jon for a fresh link.</p><p>- Jon</p>",
+    "text": "Hi Eddie,\n\nHere is your personal link for the TMT staff product guide:\n{{INVITE_URL}}\n\nUse the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.\n\nEnter this same email address when the page asks. No app, account, or password.\n\nIf you already opened it somewhere else by accident, ask Jon for a fresh link.\n\n- Jon"
+  },
+  {
+    "email": "devinmandley@yahoo.com",
+    "subject": "Your TMT product guide invite",
+    "html": "<p>Hi Devon,</p><p>Here is your personal link for the TMT staff product guide:</p><p><a href=\"{{INVITE_URL}}\">Open your review link</a></p><p>Use the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.</p><p>Enter this same email address when the page asks. No app, account, or password.</p><p>If you already opened it somewhere else by accident, ask Jon for a fresh link.</p><p>- Jon</p>",
+    "text": "Hi Devon,\n\nHere is your personal link for the TMT staff product guide:\n{{INVITE_URL}}\n\nUse the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.\n\nEnter this same email address when the page asks. No app, account, or password.\n\nIf you already opened it somewhere else by accident, ask Jon for a fresh link.\n\n- Jon"
+  },
+  {
+    "email": "clayton@thehigherpath.com",
+    "subject": "Your TMT product guide invite",
+    "html": "<p>Hi Clay,</p><p>Here is your personal link for the TMT staff product guide:</p><p><a href=\"{{INVITE_URL}}\">Open your review link</a></p><p>Use the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.</p><p>Enter this same email address when the page asks. No app, account, or password.</p><p>If you already opened it somewhere else by accident, ask Jon for a fresh link.</p><p>- Jon</p>",
+    "text": "Hi Clay,\n\nHere is your personal link for the TMT staff product guide:\n{{INVITE_URL}}\n\nUse the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.\n\nEnter this same email address when the page asks. No app, account, or password.\n\nIf you already opened it somewhere else by accident, ask Jon for a fresh link.\n\n- Jon"
+  },
+  {
+    "email": "audrey@theotherpathcbd.com",
+    "subject": "Your TMT product guide invite",
+    "html": "<p>Hi Audrey,</p><p>Here is your personal link for the TMT staff product guide:</p><p><a href=\"{{INVITE_URL}}\">Open your review link</a></p><p>Use the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.</p><p>Enter this same email address when the page asks. No app, account, or password.</p><p>If you already opened it somewhere else by accident, ask Jon for a fresh link.</p><p>- Jon</p>",
+    "text": "Hi Audrey,\n\nHere is your personal link for the TMT staff product guide:\n{{INVITE_URL}}\n\nUse the device and browser you will actually work from. This link is one-time: the first browser that confirms it becomes the place you continue from.\n\nEnter this same email address when the page asks. No app, account, or password.\n\nIf you already opened it somewhere else by accident, ask Jon for a fresh link.\n\n- Jon"
+  }
+]

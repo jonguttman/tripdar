@@ -54,12 +54,18 @@ export default async function StaffReviewInvitePage({
         ) : null}
 
         {preview?.state === "ready" ? (
-          <InviteConfirmClient
-            token={token}
-            csrfToken={preview.csrfToken}
-            displayName={preview.displayName}
-            emailMasked={preview.emailMasked}
-          />
+          <>
+            <p className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
+              Use the device and browser you&apos;ll actually review from. Once you confirm
+              here, this invitation is used and you&apos;ll continue from this browser.
+            </p>
+            <InviteConfirmClient
+              token={token}
+              csrfToken={preview.csrfToken}
+              displayName={preview.displayName}
+              emailMasked={preview.emailMasked}
+            />
+          </>
         ) : (
           <p className="mt-7 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
             No session was created and no review state changed.
