@@ -4,6 +4,36 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-09-001: legacy and real staff reviewer rows could count as two reviewers without aliases
+
+**Symptoms:**
+- The TMT staff-review roster had legacy `@themushroomtop.internal` reviewer rows and separate real-email rows for the same humans.
+- `StaffReviewerIdentityAlias` existed as the no-rewrite bridge, but an empty alias table meant `computeFieldStates()` treated legacy and real employee ids as distinct identities.
+- A reviewer using both rows on the same Tier-B field could prospectively satisfy a two-distinct-reviewer listing gate alone once shared-link PIN re-entry moved them back onto the legacy roster.
+
+**Root Cause:**
+The distinct-reviewer counter depends on canonical reviewer ids, and canonicalization is data-driven. Without the five TMT legacy-to-real alias rows, the function correctly fell back to the raw `actorIdentity`, which made one human with two `MycoEmployee` rows look like two reviewers.
+
+**Fix:**
+- Added a regression test that first shows two matching submissions confirm without aliases, then supplies the alias row and verifies the same two submissions remain unreviewed with one confirmation.
+- Backfill the five verified TMT `StaffReviewerIdentityAlias` rows in production before KEWL-3379 moves reviewers onto shared-link PIN re-entry.
+- Do not add aliases for Adrienne or Sage because they have no verified counterpart rows.
+
+**Files Modified:**
+- `src/domain/myco/staffReviewService.test.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Any staff-review flow that introduces alternate reviewer identities must seed alias data before those identities can write `CatalogFieldChange` rows.
+- Keep a no-alias control in tests for distinct-reviewer gates so missing alias data remains visible as a gate-integrity failure.
+- Extend alias-awareness to new reviewer-keyed write models before assignment work ships, not after duplicate rows exist.
+
+**Lesson Learned:**
+Identity bridges are only protective when populated before the second path goes live. A schema-level alias table without data is still the identity function.
+
+---
+
 ## BUG-2026-08-05-001: staff invite-batch release blockers left the approved-send path unreleasable
 
 **Symptoms:**

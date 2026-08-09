@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.18.3] - 2026-08-09
+
+### Fixed
+- **Staff-review alias distinctness regression** (KEWL-3383): added coverage proving `computeFieldStates` folds legacy and real `MycoEmployee` rows through `StaffReviewerIdentityAlias` before counting Tier-B distinct reviewers, so one human cannot satisfy a two-reviewer gate by acting under both identities.
+- **Staff-review assignment alias ruling** (KEWL-3383): documented that `MycoEmployeeReviewAssignment` creation/query work must canonicalize reviewer identity before it ships, because the current raw `employeeId` uniqueness constraint permits duplicate assignments for one aliased human.
+
 ## [1.18.2] - 2026-08-05
 
 ### Fixed

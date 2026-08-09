@@ -18,10 +18,11 @@ vi.mock("@/lib/prisma", async () => {
   return { prisma: createPrismaMock(prismaMock) };
 });
 
+let computeFieldStates: typeof import("./staffReviewService").computeFieldStates;
 let recomputeCatalogItemProjection: typeof import("./staffReviewService").recomputeCatalogItemProjection;
 
 beforeAll(async () => {
-  ({ recomputeCatalogItemProjection } = await import("./staffReviewService"));
+  ({ computeFieldStates, recomputeCatalogItemProjection } = await import("./staffReviewService"));
 });
 
 function specRuleRows() {
@@ -99,5 +100,55 @@ describe("staff-review catalog projection hardening", () => {
         source: "recomputeCatalogItemProjection",
       })
     );
+  });
+});
+
+describe("staff-review identity aliases", () => {
+  it("folds legacy and real reviewer rows before checking distinct-reviewer gates", () => {
+    const rule = {
+      fieldName: "activeCompound",
+      tier: "B",
+      requiredConfirmations: 2,
+      requiresDistinctReviewers: true,
+      gateRequired: true,
+      readinessKey: "activeCompound",
+      catalogColumn: "activeCompound",
+      label: "Active compound",
+      helpText: null,
+      inputType: "text",
+      allowsConfirmedAbsent: false,
+      gateSatisfyingValues: [],
+      sortOrder: 10,
+    };
+    const changes = [
+      {
+        fieldName: "activeCompound",
+        submittedValue: "psilocybin",
+        actorType: "staff",
+        actorIdentity: "legacy-devon",
+        source: "packaging",
+        disposition: "accepted",
+        createdAt: new Date("2026-08-05T16:00:00Z"),
+      },
+      {
+        fieldName: "activeCompound",
+        submittedValue: "psilocybin",
+        actorType: "staff",
+        actorIdentity: "real-devon",
+        source: "packaging",
+        disposition: "accepted",
+        createdAt: new Date("2026-08-05T16:05:00Z"),
+      },
+    ];
+
+    expect(computeFieldStates([rule], changes).activeCompound.state).toBe("confirmed");
+
+    const states = computeFieldStates([rule], changes, [
+      { legacyEmployeeId: "legacy-devon", employeeId: "real-devon" },
+    ]);
+
+    expect(states.activeCompound.confirmationsCount).toBe(1);
+    expect(states.activeCompound.state).toBe("unreviewed");
+    expect(states.activeCompound.confirmedValue).toBeNull();
   });
 });
