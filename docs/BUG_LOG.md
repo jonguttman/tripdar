@@ -4,6 +4,74 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-10-002: retired staff invite send script imported a deleted provider-send function
+
+**Symptoms:**
+- PR #66 removed the provider-send path as intended, but `npm run staff-review:send-invite-batch` still imported `sendApprovedStaffReviewInviteBatch`.
+- Typecheck, lint, Vitest, and the Vercel build were green because `tsconfig.json` only includes `src/`, while this operator script lives under `scripts/`.
+- An operator running the old send command would hit `sendApprovedStaffReviewInviteBatch is not a function` instead of an intentional credential-free workflow refusal.
+- The prepare and approval scripts were also outside typecheck and still called the rewritten domain API with legacy arguments: prepare passed `messages`, `expiresInDays`, and `requestOrigin` while omitting templates/source/provider evidence; approval omitted `partnerId`.
+
+**Root Cause:**
+The implementation correctly retired provider sends in the domain module but left legacy script entrypoints in place with stale dynamic imports and stale argument contracts. Existing script coverage only tested the missing-argument path, which returns before the import, so valid-looking invocation paths were invisible.
+
+**Fix:**
+- Removed the retired send npm entry and script file so provider-send is no longer a live operator command.
+- Changed prepare to accept one credential-free template file plus source issue/comment and provider credential fingerprint evidence, then pass `templates`, `requestedExpirySeconds`, and seal/source/provider fields to the current API.
+- Required `partnerId` on approval recording and forwarded optional source/provider/seal evidence to the approval API.
+- Added script-path coverage that runs the missing-argument and malformed-input npm paths without runtime secrets, and asserts there is no send npm entry.
+
+**Files Modified:**
+- `package.json`
+- `CLAUDE.md`
+- `scripts/prepare-staff-review-invite-batch.mts`
+- `scripts/record-staff-review-invite-batch-approval.mts`
+- `scripts/send-staff-review-invite-batch.test.mjs`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- When retiring a domain export, search the whole tree, not only `src/`, and run the operator command paths that remain documented in `package.json`.
+- Script tests must cover the first path after argument validation, not only usage failures that exit before imports.
+- CI should either typecheck operational TypeScript entrypoints or keep script-path smoke tests for every npm script that imports application modules.
+
+**Lesson Learned:**
+Removing a capability is not complete until every old entrypoint either disappears intentionally or refuses intentionally. A green app build does not prove operator scripts still resolve.
+
+## BUG-2026-08-10-001: credential-free staff invite change was based before live staff-review schema
+
+**Symptoms:**
+- The credential-free staff-invite draft work appeared locally to satisfy the approval contract, but its branch base predated the live staff-review invitation subsystem on `origin/main`.
+- The local schema dropped upstream `StaffReviewSession` and `StaffReviewerIdentityAlias` models plus live invitation/recipient fields used by staff-review re-entry and send validation.
+- The draft migration used `CREATE TABLE IF NOT EXISTS` for tables that already exist upstream, so a real database could silently skip creates and still exit successfully against the wrong schema.
+
+**Root Cause:**
+The implementation was authored on a divergent checkout and treated as complete in the workspace instead of being re-derived from current `origin/main`. Migration safety was tested against the wrong baseline, masking destructive schema drift and missing-table assumptions.
+
+**Fix:**
+- Rebuilt the credential-free prepare, one-shared-staff-link approval, and legacy-only revoke behavior on a fresh worktree cut from `origin/main`.
+- Preserved upstream `StaffReviewSession`, `StaffReviewerIdentityAlias`, and live invitation/recipient fields while adding only the draft-recipient table, approval digest metadata, shared `CatalogAccessToken` recipient evidence, and nullable legacy invitation fields required by the new final evidence model.
+- Replaced the unsafe migration with an upstream-shaped migration that alters existing staff invite tables and creates only the new draft-recipient table, with no `CREATE TABLE IF NOT EXISTS` masking.
+- Verified the migration in a disposable local Postgres database seeded to the `origin/main` datamodel; after applying the migration, `prisma migrate diff` reported an empty migration.
+
+**Files Modified:**
+- `prisma/schema.prisma`
+- `prisma/migrations/20260810130000_staff_invite_credential_free_main/migration.sql`
+- `src/domain/myco/staffReviewInviteBatches.ts`
+- `src/domain/myco/staffReviewInviteBatches.test.ts`
+- `src/app/api/admin/myco/staff-invitations/route.ts`
+- `src/app/api/admin/myco/staff-invitations/route.test.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Before schema work, cut the implementation branch from current `origin/main` and diff schema changes against that exact base.
+- Test migrations against a database already shaped like upstream when the production target is not empty; fresh-empty migration-chain repair is a separate baseline problem.
+- Do not use `IF NOT EXISTS` on expected upstream tables in application migrations; collisions and missing prerequisites should fail loudly.
+
+**Lesson Learned:**
+Workspace-local completion is not enough for schema work. The base commit is part of the safety proof, and a migration that succeeds against the wrong starting schema can be more dangerous than one that fails.
+
 ## BUG-2026-08-05-001: staff invite-batch release blockers left the approved-send path unreleasable
 
 **Symptoms:**

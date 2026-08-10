@@ -1,192 +1,222 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
 
+const getAdminSessionMock = vi.hoisted(() => vi.fn());
 const prepareMock = vi.hoisted(() => vi.fn());
-const prepareBatchMock = vi.hoisted(() => vi.fn());
-const approveBatchMock = vi.hoisted(() => vi.fn());
-const isQaStaffReviewPartnerMock = vi.hoisted(() => vi.fn());
+const approveMock = vi.hoisted(() => vi.fn());
+const revokeMock = vi.hoisted(() => vi.fn());
 
-vi.mock("@/domain/auth/adminSession", () => ({
-  getAdminSession: vi.fn(async () => ({ user: { email: "admin@example.com" } })),
-}));
+vi.mock("@/domain/auth/adminSession", () => ({ getAdminSession: getAdminSessionMock }));
+vi.mock("@/domain/myco/staffReviewInviteBatches", async () => {
+  const actual = await vi.importActual<typeof import("@/domain/myco/staffReviewInviteBatches")>(
+    "@/domain/myco/staffReviewInviteBatches"
+  );
+  return {
+    ...actual,
+    prepareStaffReviewInviteBatch: prepareMock,
+    approveStaffReviewInviteBatch: approveMock,
+    revokeStaffReviewInvitation: revokeMock,
+  };
+});
 
-vi.mock("@/domain/myco/staffReviewInvitations", () => ({
-  prepareCanonicalStaffReviewInvitationBatch: prepareMock,
-  StaffReviewInvitationPartnerScopeError: class StaffReviewInvitationPartnerScopeError extends Error {
-    readonly code = "qa_partner_scope_refused";
-    readonly statusCode = 403;
+import { StaffInviteError } from "@/domain/myco/staffReviewInviteBatches";
+import { POST } from "./route";
 
-    constructor() {
-      super("qaOnly is only allowed for the QA staff review partner.");
-    }
-  },
-}));
+const ADMIN_EMAIL = "jon@example.com";
 
-vi.mock("@/domain/myco/staffReviewRoster", () => ({
-  isQaStaffReviewPartner: isQaStaffReviewPartnerMock,
-}));
-
-vi.mock("@/domain/myco/staffReviewInviteBatches", () => ({
-  prepareStaffReviewInviteBatch: prepareBatchMock,
-  approveStaffReviewInviteBatch: approveBatchMock,
-}));
-
-async function post(body: Record<string, unknown>) {
-  const { POST } = await import("./route");
-  const request = new NextRequest("https://tripdar.test/api/admin/myco/staff-invitations", {
+function request(body: Record<string, unknown>) {
+  return new Request("https://tripdar.test/api/admin/myco/staff-invitations", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
-  });
-  return POST(request);
+  }) as unknown as import("next/server").NextRequest;
 }
 
-describe("admin staff invitation preview route", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    isQaStaffReviewPartnerMock.mockReturnValue(false);
-    prepareMock.mockResolvedValue({ status: "UNSENT DRAFT", send: false, recipients: [] });
-    prepareBatchMock.mockResolvedValue({ id: "batch-1", status: "draft" });
-    approveBatchMock.mockResolvedValue({
-      id: "batch-1",
-      status: "approved",
-      approvedInteractionId: "interaction-1",
-    });
+beforeEach(() => {
+  vi.clearAllMocks();
+  getAdminSessionMock.mockResolvedValue({
+    user: { email: ADMIN_EMAIL },
+    expires: "2099-01-01T00:00:00.000Z",
+    actualUser: { email: ADMIN_EMAIL, role: "super_admin" },
+    viewAs: null,
+  });
+});
+
+describe("POST /api/admin/myco/staff-invitations", () => {
+  it("refuses unauthenticated callers before dispatching an action", async () => {
+    getAdminSessionMock.mockResolvedValue(null);
+
+    const response = await POST(request({ action: "revoke" }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload.error.code).toBe("unauthorized");
+    expect(revokeMock).not.toHaveBeenCalled();
   });
 
-  it("refuses send=true before preparing anything", async () => {
-    const response = await post({ partnerId: "partner-tmt", send: true });
-    const json = await response.json();
+  it("keeps send disabled even when an action is otherwise valid", async () => {
+    const response = await POST(request({ action: "record_approval", send: true }));
+    const payload = await response.json();
 
     expect(response.status).toBe(403);
-    expect(json.error.code).toBe("send_not_authorized");
-    expect(prepareMock).not.toHaveBeenCalled();
+    expect(payload.error.code).toBe("send_forbidden");
+    expect(approveMock).not.toHaveBeenCalled();
   });
 
-  it("prepares only an unsent draft batch", async () => {
-    const response = await post({ partnerId: "partner-tmt", send: false });
-    const json = await response.json();
-
-    expect(response.status).toBe(201);
-    expect(json.data).toMatchObject({ status: "UNSENT DRAFT", send: false });
-    expect(prepareMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        partnerId: "partner-tmt",
-        issuedBy: "admin@example.com",
-        qaOnly: false,
-      })
-    );
-  });
-
-  it("refuses qaOnly for non-QA partners before preparing anything", async () => {
-    const response = await post({ partnerId: "partner-tmt", send: false, qaOnly: true });
-    const json = await response.json();
-
-    expect(response.status).toBe(403);
-    expect(json.error).toMatchObject({
-      code: "qa_partner_scope_refused",
-      message: "qaOnly is only allowed for the QA staff review partner.",
+  it("returns inert prepare metadata without provider send or credential material", async () => {
+    prepareMock.mockResolvedValue({
+      batchId: "batch_redacted",
+      status: "draft",
+      approvalDigest: "approval_digest_redacted",
+      approvalDigestVersion: "staff-invite-approval-v1",
+      requestedExpirySeconds: 86_400,
+      recipients: [{ ordinal: 0, employeeId: "emp_redacted", displayName: "Adrienne", emailMasked: "ad***@example.test" }],
+      previews: {
+        subject: "Your Tripdar review link: [invite link minted after approval]",
+        html: "<p>[invite link minted after approval]</p>",
+        text: "[invite link minted after approval]",
+      },
     });
-    expect(isQaStaffReviewPartnerMock).toHaveBeenCalledWith("partner-tmt");
-    expect(prepareMock).not.toHaveBeenCalled();
-  });
 
-  it("passes qaOnly through only for sink-address QA invitation generation", async () => {
-    isQaStaffReviewPartnerMock.mockReturnValue(true);
-
-    const response = await post({ partnerId: "partner-qa", send: false, qaOnly: true });
-
-    expect(response.status).toBe(201);
-    expect(isQaStaffReviewPartnerMock).toHaveBeenCalledWith("partner-qa");
-    expect(prepareMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        partnerId: "partner-qa",
-        issuedBy: "admin@example.com",
-        qaOnly: true,
-      })
-    );
-  });
-
-  it("prepares a frozen batch only through explicit prepare_batch action", async () => {
-    const response = await post({
-      action: "prepare_batch",
-      partnerId: "partner-tmt",
-      sourceIssueId: "KEWL-2950",
-      messages: [
-        {
-          email: "sage@thegreenroomonventura.com",
-          cc: ["adrienne@theotherpathcbd.com"],
-          subject: "Subject",
+    const response = await POST(
+      request({
+        action: "prepare_batch",
+        partnerId: "partner_tmt",
+        sourceIssueId: "KEWL-3385",
+        sourceCommentId: "comment_redacted",
+        provider: "resend",
+        providerCredentialFingerprint: "fingerprint_redacted",
+        fromAddress: "Tripdar <staff@example.test>",
+        requestedExpirySeconds: 86_400,
+        templates: {
+          subject: "Your Tripdar review link: {{INVITE_URL}}",
           html: "<p>{{INVITE_URL}}</p>",
           text: "{{INVITE_URL}}",
         },
-      ],
-    });
-    const json = await response.json();
-
-    expect(response.status).toBe(201);
-    expect(json.data).toMatchObject({ id: "batch-1", status: "draft" });
-    expect(prepareBatchMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        partnerId: "partner-tmt",
-        renderedBy: "admin@example.com",
-        sourceIssueId: "KEWL-2950",
-        messages: [
-          expect.objectContaining({
-            email: "sage@thegreenroomonventura.com",
-            cc: ["adrienne@theotherpathcbd.com"],
-          }),
-        ],
       })
     );
-    expect(prepareMock).not.toHaveBeenCalled();
-  });
-
-  it("refuses malformed cc on frozen batch messages", async () => {
-    const response = await post({
-      action: "prepare_batch",
-      partnerId: "partner-tmt",
-      messages: [
-        {
-          email: "sage@thegreenroomonventura.com",
-          cc: "adrienne@theotherpathcbd.com",
-          subject: "Subject",
-          html: "<p>{{INVITE_URL}}</p>",
-          text: "{{INVITE_URL}}",
-        },
-      ],
-    });
-    const json = await response.json();
-
-    expect(response.status).toBe(400);
-    expect(json.error.message).toContain("optional cc string array");
-    expect(prepareBatchMock).not.toHaveBeenCalled();
-  });
-
-  it("records approval evidence only through explicit record_approval action", async () => {
-    const response = await post({
-      action: "record_approval",
-      partnerId: "partner-tmt",
-      batchId: "batch-1",
-      approvedInteractionId: "interaction-1",
-      sourceCommentId: "comment-1",
-    });
-    const json = await response.json();
+    const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.data).toMatchObject({
-      id: "batch-1",
+    expect(payload.data.status).toBe("draft");
+    expect(JSON.stringify(payload)).toContain("[invite link minted after approval]");
+    expect(JSON.stringify(payload)).not.toContain("/review/myco/");
+    expect(JSON.stringify(payload)).not.toContain("/staff/catalog/");
+    expect(JSON.stringify(payload)).not.toContain("tokenHash");
+  });
+
+  it("returns one-shared-link approval metadata with zero legacy invitation rows", async () => {
+    approveMock.mockResolvedValue({
+      batchId: "batch_redacted",
       status: "approved",
-      approvedInteractionId: "interaction-1",
+      approvalDigest: "approval_digest_redacted",
+      batchDigest: "batch_digest_redacted",
+      approvedInteractionId: "interaction_redacted",
+      approvedBy: ADMIN_EMAIL,
+      approvedAt: new Date("2026-08-09T17:45:00.000Z"),
+      staffReviewInvitationCount: 0,
+      sharedCatalogAccessTokenCount: 1,
+      recipientEvidenceCount: 2,
+      invitationCount: 0,
+      recipientCount: 2,
+      revokedPriorInvitationCount: 1,
     });
-    expect(approveBatchMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        batchId: "batch-1",
-        approvedInteractionId: "interaction-1",
-        approvedBy: "admin@example.com",
-        sourceCommentId: "comment-1",
+
+    const response = await POST(
+      request({
+        action: "record_approval",
+        partnerId: "partner_tmt",
+        batchId: "batch_redacted",
+        approvedInteractionId: "interaction_redacted",
+        sourceIssueId: "KEWL-3385",
+        sourceCommentId: "comment_redacted",
+        providerCredentialFingerprint: "fingerprint_redacted",
       })
     );
-    expect(prepareMock).not.toHaveBeenCalled();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data).toMatchObject({
+      staffReviewInvitationCount: 0,
+      sharedCatalogAccessTokenCount: 1,
+      recipientEvidenceCount: 2,
+      invitationCount: 0,
+      recipientCount: 2,
+    });
+    expect(JSON.stringify(payload)).not.toContain("tokenHash");
+    expect(JSON.stringify(payload)).not.toContain("/staff/catalog/");
+  });
+
+  it("passes the actual admin session to explicit revoke and returns metadata only", async () => {
+    revokeMock.mockResolvedValue({
+      invitationId: "invite_1",
+      status: "revoked",
+      alreadyRevoked: false,
+      invalidatedRecipientCount: 1,
+    });
+
+    const response = await POST(
+      request({
+        action: "revoke",
+        partnerId: "partner_tmt",
+        invitationId: "invite_1",
+        reason: "Jon asked to revoke this pending staff invite.",
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data).toEqual({
+      invitationId: "invite_1",
+      status: "revoked",
+      alreadyRevoked: false,
+      invalidatedRecipientCount: 1,
+    });
+    expect(JSON.stringify(payload)).not.toContain("tokenHash");
+    expect(JSON.stringify(payload)).not.toContain("/review/myco/");
+    expect(revokeMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        session: expect.objectContaining({
+          actualUser: { email: ADMIN_EMAIL, role: "super_admin" },
+        }),
+        partnerId: "partner_tmt",
+        invitationId: "invite_1",
+      })
+    );
+  });
+
+  it("maps service authorization and partner-scope failures to stable codes", async () => {
+    revokeMock.mockRejectedValue(
+      new StaffInviteError("view_as_forbidden", "View-as cannot mutate staff invitations", 403)
+    );
+
+    const response = await POST(
+      request({
+        action: "revoke",
+        partnerId: "partner_tmt",
+        invitationId: "invite_1",
+        reason: "Jon asked to revoke this pending staff invite.",
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(403);
+    expect(payload.error.code).toBe("view_as_forbidden");
+  });
+
+  it("maps wrong-partner/not-found parity to 404 without leaking existence", async () => {
+    revokeMock.mockRejectedValue(new StaffInviteError("invitation_not_found", "Invitation not found", 404));
+
+    const response = await POST(
+      request({
+        action: "revoke",
+        partnerId: "wrong_partner",
+        invitationId: "invite_1",
+        reason: "Jon asked to revoke this pending staff invite.",
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.error.code).toBe("invitation_not_found");
   });
 });

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.3] - 2026-08-10
+
+### Fixed
+- **Staff invite approval re-derived on `origin/main`** (KEWL-3405): moved credential-free draft prepare, atomic one-shared-staff-link approval, and legacy-only explicit revoke onto the current staff-review invite subsystem without dropping `StaffReviewSession`, `StaffReviewerIdentityAlias`, or upstream live invitation fields. Added an upstream-shaped Postgres migration for token-free draft recipients and shared `CatalogAccessToken` final evidence, with focused no-provider-send, retry, refusal, metadata, rollback, and authorization coverage.
+- **Retired staff invite provider-send executor** (KEWL-3405): removed `npm run staff-review:send-invite-batch` instead of repointing it at the credential-free approval flow, so there is no live provider-send operator command outside the `src/` typecheck boundary.
+- **Staff invite operator scripts aligned to the credential-free API** (KEWL-3405): removed the retired send npm entry, changed prepare to accept one template file plus source/provider approval evidence, and required `partnerId` on approval recording so the unchecked `scripts/` region no longer calls removed or malformed domain APIs.
+
 ## [1.18.2] - 2026-08-05
 
 ### Fixed
