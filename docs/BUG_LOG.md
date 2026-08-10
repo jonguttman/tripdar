@@ -4,6 +4,34 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-10-002: retired staff invite send script imported a deleted provider-send function
+
+**Symptoms:**
+- PR #66 removed the provider-send path as intended, but `npm run staff-review:send-invite-batch` still imported `sendApprovedStaffReviewInviteBatch`.
+- Typecheck, lint, Vitest, and the Vercel build were green because `tsconfig.json` only includes `src/`, while this operator script lives under `scripts/`.
+- An operator running the old send command would hit `sendApprovedStaffReviewInviteBatch is not a function` instead of an intentional credential-free workflow refusal.
+
+**Root Cause:**
+The implementation correctly retired provider sends in the domain module but left the legacy script entrypoint in place with a stale dynamic import. Existing script coverage only tested the missing-argument path, which returns before the import, so the valid-looking invocation path was invisible.
+
+**Fix:**
+- Changed `scripts/send-staff-review-invite-batch.mts` to validate arguments and then fail closed with an explicit message that provider send is retired under KEWL-3385/KEWL-3405.
+- Added regression coverage for the all-required-arguments invocation through the canonical npm script, with runtime secrets absent, proving the command no longer imports the removed send function or domain/provider dependencies.
+
+**Files Modified:**
+- `scripts/send-staff-review-invite-batch.mts`
+- `scripts/send-staff-review-invite-batch.test.mjs`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- When retiring a domain export, search the whole tree, not only `src/`, and run the operator command paths that remain documented in `package.json`.
+- Script tests must cover the first path after argument validation, not only usage failures that exit before imports.
+- CI should either typecheck operational TypeScript entrypoints or keep script-path smoke tests for every npm script that imports application modules.
+
+**Lesson Learned:**
+Removing a capability is not complete until every old entrypoint either disappears intentionally or refuses intentionally. A green app build does not prove operator scripts still resolve.
+
 ## BUG-2026-08-10-001: credential-free staff invite change was based before live staff-review schema
 
 **Symptoms:**

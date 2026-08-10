@@ -2,6 +2,8 @@
 
 const USAGE =
   "Usage: npm run staff-review:send-invite-batch -- --batch-id <id> --approved-interaction-id <id>";
+const RETIRED =
+  "staff invite batch provider send is retired under KEWL-3385/KEWL-3405. Use npm run staff-review:prepare-invite-batch to render credential-free drafts, then npm run staff-review:record-invite-batch-approval to approve and release one shared staff link. No provider send is performed.";
 
 function arg(name: string): string | null {
   const index = process.argv.indexOf(name);
@@ -19,18 +21,10 @@ async function main() {
     return;
   }
 
-  const { sendApprovedStaffReviewInviteBatch } = await import("../src/domain/myco/staffReviewInviteBatches");
-  const result = await sendApprovedStaffReviewInviteBatch({ batchId, approvedInteractionId });
-  console.log(JSON.stringify({
-    batchId: result.batchId,
-    status: result.status,
-    sent: result.sent,
-    skipped: result.skipped,
-    failed: result.failed,
-  }, null, 2));
-  if (result.failed.length > 0 || result.status === "validation_failed") {
-    process.exitCode = 1;
-  }
+  void batchId;
+  void approvedInteractionId;
+  console.error(RETIRED);
+  process.exitCode = 1;
 }
 
 main().catch((error) => {

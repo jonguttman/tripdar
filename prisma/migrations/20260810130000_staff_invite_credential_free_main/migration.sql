@@ -59,6 +59,11 @@ CREATE UNIQUE INDEX "StaffReviewInviteBatchDraftRecipient_batchId_emailNormalize
 CREATE INDEX "StaffReviewInviteBatchDraftRecipient_employeeId_idx"
   ON "StaffReviewInviteBatchDraftRecipient"("employeeId");
 
+-- Production preflight before applying:
+-- SELECT "batchId", "ordinal", count(*) FROM "StaffReviewInviteBatchRecipient"
+-- GROUP BY 1,2 HAVING count(*) > 1;
+-- Expect 0 rows. This migration intentionally fails loudly if legacy data already has
+-- duplicate ordinals for the same batch.
 CREATE UNIQUE INDEX "StaffReviewInviteBatchRecipient_batchId_ordinal_key"
   ON "StaffReviewInviteBatchRecipient"("batchId", "ordinal");
 CREATE INDEX "StaffReviewInviteBatchRecipient_catalogAccessTokenId_idx"

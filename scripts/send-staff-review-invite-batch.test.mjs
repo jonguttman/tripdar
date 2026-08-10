@@ -34,6 +34,30 @@ describe("send staff-review invite-batch executor", () => {
     expect(result.stderr).not.toContain("RESEND_API_KEY");
     expect(result.stderr).not.toContain("STAFF_INVITE_BATCH_SEALING_KEY");
   });
+
+  it("refuses valid-looking sends because provider send is retired", () => {
+    const result = spawnSync("npm", [
+      "run",
+      "staff-review:send-invite-batch",
+      "--",
+      "--batch-id",
+      "batch-a",
+      "--approved-interaction-id",
+      "interaction-a",
+    ], {
+      cwd: repoRoot,
+      encoding: "utf8",
+      env: scriptEnv(),
+    });
+
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("staff invite batch provider send is retired");
+    expect(result.stderr).toContain("staff-review:record-invite-batch-approval");
+    expect(result.stderr).not.toContain("sendApprovedStaffReviewInviteBatch");
+    expect(result.stderr).not.toContain("DATABASE_URL");
+    expect(result.stderr).not.toContain("RESEND_API_KEY");
+    expect(result.stderr).not.toContain("STAFF_INVITE_BATCH_SEALING_KEY");
+  });
 });
 
 describe("prepare staff-review invite-batch executor", () => {
