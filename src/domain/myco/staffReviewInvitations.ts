@@ -1,7 +1,12 @@
 import crypto from "crypto";
 import { NextResponse } from "next/server";
+import { DEFAULT_EMAIL_FROM_ADDRESS, DEFAULT_EMAIL_REPLY_TO_ADDRESS, sendEmail } from "@/lib/email";
 import { prisma } from "@/lib/prisma";
 import { normalizeEmployeeEmail } from "./employeeReviews";
+import {
+  recordEnrollmentEvent,
+  type RequestFingerprint,
+} from "./reviewerEnrollment";
 import {
   REVIEWER_SESSION_TTL_MS,
   signReviewerSession,
@@ -19,6 +24,16 @@ export const STAFF_REVIEW_SESSION_ROUTE_TOKEN = "session";
 const TOKEN_BYTES = 32;
 const CSRF_TTL_MS = 15 * 60 * 1000;
 const DEFAULT_INVITATION_DAYS = 21;
+const REENTRY_INVITATION_TTL_MS = 30 * 60 * 1000;
+const REENTRY_EMPLOYEE_HOURLY_LIMIT = 3;
+const REENTRY_EMPLOYEE_DAILY_LIMIT = 10;
+const REENTRY_PARTNER_DAILY_LIMIT = 30;
+
+export const SELF_SERVICE_REENTRY_ISSUED_BY = "self-service-reentry";
+export const STAFF_REVIEW_REENTRY_SUCCESS_MESSAGE =
+  "If that address is on the reviewer list, a sign-in link is on its way. It expires in 30 minutes.";
+export const STAFF_REVIEW_REENTRY_RATE_LIMIT_MESSAGE =
+  "You've asked for a few links already. Try again in an hour, or ask Jon.";
 
 export const CANONICAL_TMT_STAFF_INVITE_RECIPIENTS = [
   ...TMT_DIRECT_STAFF_REVIEWERS,
@@ -250,7 +265,7 @@ export async function confirmStaffReviewInvitation(input: {
       tokenHash,
     })
   ) {
-    return fail(403, "csrf");
+    return fail(403, "csrf", "This page expired. Reload and try again.");
   }
 
   if (email !== invitation.emailNormalized) {
@@ -279,9 +294,23 @@ export async function confirmStaffReviewInvitation(input: {
         maxAge: Math.floor(REVIEWER_SESSION_TTL_MS / 1000),
       };
     }
-    return fail(409, "already_confirmed", "This invitation was already used. Ask Jon for a new link.");
+    return fail(
+      200,
+      "reentry_offered",
+      "This invitation was already used. Enter your email and we'll send a fresh one."
+    );
   }
-  if (state !== "ready") return fail(state === "expired" || state === "revoked" ? 410 : 403, state);
+  if (state === "expired") {
+    return fail(
+      410,
+      "expired",
+      "This invitation expired. Enter your email below and we'll send a fresh link."
+    );
+  }
+  if (state === "revoked") {
+    return fail(410, "revoked", "This invitation was cancelled. Ask Jon for a new one.");
+  }
+  if (state !== "ready") return fail(403, "invalid");
 
   const sessionRaw = createStaffReviewInvitationToken();
   const sessionHash = hashStaffReviewInvitationToken(sessionRaw);
@@ -318,7 +347,26 @@ export async function confirmStaffReviewInvitation(input: {
     });
   });
 
-  if (!confirmed) return fail(409, "replayed", "This invitation was already used. Ask Jon for a new link.");
+  if (!confirmed) {
+    return fail(
+      409,
+      "replayed",
+      "This link was just used. Enter your email and we'll send a fresh one."
+    );
+  }
+
+  if (invitation.issuedBy === SELF_SERVICE_REENTRY_ISSUED_BY) {
+    await recordEnrollmentEvent(prisma, {
+      partnerId: invitation.partnerId,
+      employeeId: invitation.employeeId,
+      employeeName: invitation.employee.name,
+      employeeEmail: invitation.emailNormalized,
+      eventType: "reentry_confirmed",
+      actorType: "reentry",
+      actorIdentity: invitation.emailNormalized,
+      reason: `invitation:${invitation.id}`,
+    });
+  }
 
   return {
     ok: true,
@@ -331,6 +379,276 @@ export async function confirmStaffReviewInvitation(input: {
       secret: secret(),
     }),
     maxAge: Math.floor(REVIEWER_SESSION_TTL_MS / 1000),
+  };
+}
+
+export type StaffReviewReentryResult =
+  | {
+      ok: true;
+      status: 202;
+      message: typeof STAFF_REVIEW_REENTRY_SUCCESS_MESSAGE;
+      afterResponse?: () => Promise<void>;
+    }
+  | {
+      ok: false;
+      status: 429;
+      code: "too_many_requests";
+      message: typeof STAFF_REVIEW_REENTRY_RATE_LIMIT_MESSAGE;
+      retryAfter: number;
+    };
+
+interface ReentryInvitationCandidate {
+  id: string;
+  partnerId: string;
+  employeeId: string;
+  emailNormalized: string;
+  employee: {
+    id: string;
+    partnerId: string;
+    name: string;
+    email: string;
+    active: boolean;
+    optedOut: boolean;
+  };
+}
+
+function validEmailAddress(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function retryAfterSeconds(oldest: Date, windowMs: number, now: Date): number {
+  return Math.max(1, Math.ceil((oldest.getTime() + windowMs - now.getTime()) / 1000));
+}
+
+async function rateLimitRetryAfter(input: {
+  partnerId: string;
+  employeeId: string;
+  now: Date;
+}): Promise<number | null> {
+  const hourMs = 60 * 60 * 1000;
+  const dayMs = 24 * hourMs;
+  const hourStart = new Date(input.now.getTime() - hourMs);
+  const dayStart = new Date(input.now.getTime() - dayMs);
+  const baseWhere = { issuedBy: SELF_SERVICE_REENTRY_ISSUED_BY };
+
+  const [employeeHour, employeeDay, partnerDay] = await Promise.all([
+    prisma.staffReviewInvitation.findMany({
+      where: { ...baseWhere, employeeId: input.employeeId, issuedAt: { gte: hourStart } },
+      orderBy: { issuedAt: "asc" },
+      select: { issuedAt: true },
+    }),
+    prisma.staffReviewInvitation.findMany({
+      where: { ...baseWhere, employeeId: input.employeeId, issuedAt: { gte: dayStart } },
+      orderBy: { issuedAt: "asc" },
+      select: { issuedAt: true },
+    }),
+    prisma.staffReviewInvitation.findMany({
+      where: { ...baseWhere, partnerId: input.partnerId, issuedAt: { gte: dayStart } },
+      orderBy: { issuedAt: "asc" },
+      select: { issuedAt: true },
+    }),
+  ]);
+
+  if (employeeHour.length >= REENTRY_EMPLOYEE_HOURLY_LIMIT) {
+    return retryAfterSeconds(employeeHour[0].issuedAt, hourMs, input.now);
+  }
+  if (employeeDay.length >= REENTRY_EMPLOYEE_DAILY_LIMIT) {
+    return retryAfterSeconds(employeeDay[0].issuedAt, dayMs, input.now);
+  }
+  if (partnerDay.length >= REENTRY_PARTNER_DAILY_LIMIT) {
+    console.warn("[staff-review-reentry] partner daily cap exceeded", {
+      partnerId: input.partnerId,
+      count: partnerDay.length,
+    });
+    return retryAfterSeconds(partnerDay[0].issuedAt, dayMs, input.now);
+  }
+  return null;
+}
+
+function inviteEmail(input: { displayName: string; inviteUrl: string }) {
+  const displayName = escapeHtml(input.displayName);
+  const inviteUrl = escapeHtml(input.inviteUrl);
+  const text = [
+    `Hi ${input.displayName},`,
+    "",
+    "Here is your fresh one-time staff review sign-in link for The Mushroom Top:",
+    input.inviteUrl,
+    "",
+    "It expires in 30 minutes and can only be used once.",
+    "Signing in on another phone or computer later? You can request another fresh link from the invitation page.",
+  ].join("\n");
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 520px; margin: 0 auto; padding: 28px;">
+      <p>Hi ${displayName},</p>
+      <p>Here is your fresh one-time staff review sign-in link for The Mushroom Top.</p>
+      <p><a href="${inviteUrl}" style="display:inline-block;background:#171717;color:#ffffff;padding:12px 18px;border-radius:6px;text-decoration:none;font-weight:600;">Open staff review</a></p>
+      <p>This link expires in 30 minutes and can only be used once.</p>
+      <p>Signing in on another phone or computer later? You can request another fresh link from the invitation page.</p>
+    </div>
+  `;
+  return { subject: "Your fresh staff review sign-in link", text, html };
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "\"":
+        return "&quot;";
+      default:
+        return "&#39;";
+    }
+  });
+}
+
+async function sendStaffReviewReentryInvitation(input: {
+  invitationId: string;
+  partnerId: string;
+  employeeId: string;
+  displayName: string;
+  emailNormalized: string;
+  inviteUrl: string;
+  fingerprint?: RequestFingerprint;
+}) {
+  const email = inviteEmail({ displayName: input.displayName, inviteUrl: input.inviteUrl });
+  await sendEmail({
+    to: input.emailNormalized,
+    from: DEFAULT_EMAIL_FROM_ADDRESS,
+    replyTo: DEFAULT_EMAIL_REPLY_TO_ADDRESS,
+    subject: email.subject,
+    html: email.html,
+    text: email.text,
+    idempotencyKey: `staff-review-reentry:${input.invitationId}`,
+  });
+  await recordEnrollmentEvent(prisma, {
+    partnerId: input.partnerId,
+    employeeId: input.employeeId,
+    employeeName: input.displayName,
+    employeeEmail: input.emailNormalized,
+    eventType: "reentry_sent",
+    actorType: "reentry",
+    actorIdentity: input.emailNormalized,
+    reason: `invitation:${input.invitationId}`,
+    ip: input.fingerprint?.ip ?? null,
+    userAgent: input.fingerprint?.userAgent ?? null,
+  });
+}
+
+export async function requestStaffReviewReentry(input: {
+  email: string;
+  requestOrigin?: string;
+  fingerprint?: RequestFingerprint;
+  now?: Date;
+}): Promise<StaffReviewReentryResult> {
+  const emailNormalized = normalizeEmployeeEmail(input.email);
+  if (!validEmailAddress(emailNormalized)) {
+    return {
+      ok: true,
+      status: 202,
+      message: STAFF_REVIEW_REENTRY_SUCCESS_MESSAGE,
+    };
+  }
+
+  const now = input.now ?? new Date();
+  const candidate = await prisma.staffReviewInvitation.findFirst({
+    where: {
+      emailNormalized,
+      revokedAt: null,
+      status: { not: "revoked" },
+    },
+    orderBy: { issuedAt: "desc" },
+    include: {
+      employee: {
+        select: {
+          id: true,
+          partnerId: true,
+          name: true,
+          email: true,
+          active: true,
+          optedOut: true,
+        },
+      },
+    },
+  }) as ReentryInvitationCandidate | null;
+
+  if (
+    !candidate ||
+    !candidate.employee.active ||
+    candidate.employee.optedOut ||
+    candidate.employee.partnerId !== candidate.partnerId ||
+    normalizeEmployeeEmail(candidate.employee.email) !== candidate.emailNormalized
+  ) {
+    return {
+      ok: true,
+      status: 202,
+      message: STAFF_REVIEW_REENTRY_SUCCESS_MESSAGE,
+    };
+  }
+
+  const retryAfter = await rateLimitRetryAfter({
+    partnerId: candidate.partnerId,
+    employeeId: candidate.employeeId,
+    now,
+  });
+  if (retryAfter !== null) {
+    return {
+      ok: false,
+      status: 429,
+      code: "too_many_requests",
+      message: STAFF_REVIEW_REENTRY_RATE_LIMIT_MESSAGE,
+      retryAfter,
+    };
+  }
+
+  const rawToken = createStaffReviewInvitationToken();
+  const tokenHash = hashStaffReviewInvitationToken(rawToken);
+  const expiresAt = new Date(now.getTime() + REENTRY_INVITATION_TTL_MS);
+  const invitation = await prisma.staffReviewInvitation.create({
+    data: {
+      partnerId: candidate.partnerId,
+      employeeId: candidate.employeeId,
+      emailNormalized: candidate.emailNormalized,
+      tokenHash,
+      status: "pending",
+      expiresAt,
+      issuedBy: SELF_SERVICE_REENTRY_ISSUED_BY,
+      issuedAt: now,
+    },
+    select: { id: true },
+  });
+  await recordEnrollmentEvent(prisma, {
+    partnerId: candidate.partnerId,
+    employeeId: candidate.employeeId,
+    employeeName: candidate.employee.name,
+    employeeEmail: candidate.emailNormalized,
+    eventType: "reentry_requested",
+    actorType: "reentry",
+    actorIdentity: candidate.emailNormalized,
+    reason: `sourceInvitation:${candidate.id}; invitation:${invitation.id}`,
+    ip: input.fingerprint?.ip ?? null,
+    userAgent: input.fingerprint?.userAgent ?? null,
+  });
+
+  return {
+    ok: true,
+    status: 202,
+    message: STAFF_REVIEW_REENTRY_SUCCESS_MESSAGE,
+    afterResponse: async () => {
+      await sendStaffReviewReentryInvitation({
+        invitationId: invitation.id,
+        partnerId: candidate.partnerId,
+        employeeId: candidate.employeeId,
+        displayName: candidate.employee.name,
+        emailNormalized: candidate.emailNormalized,
+        inviteUrl: inviteUrl(rawToken, input.requestOrigin),
+        fingerprint: input.fingerprint,
+      });
+    },
   };
 }
 

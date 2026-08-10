@@ -38,9 +38,12 @@ export type EnrollmentEventType =
   | "enrollment_rejected"
   | "pin_reset"
   | "enrollment_opened"
-  | "enrollment_closed";
+  | "enrollment_closed"
+  | "reentry_requested"
+  | "reentry_sent"
+  | "reentry_confirmed";
 
-export type EnrollmentActorType = "enrollment" | "admin" | "system";
+export type EnrollmentActorType = "enrollment" | "admin" | "system" | "reentry";
 
 export interface EnrollmentWindowState {
   enrollmentOpen: boolean;
