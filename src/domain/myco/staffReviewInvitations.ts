@@ -639,15 +639,31 @@ export async function requestStaffReviewReentry(input: {
     status: 202,
     message: STAFF_REVIEW_REENTRY_SUCCESS_MESSAGE,
     afterResponse: async () => {
-      await sendStaffReviewReentryInvitation({
-        invitationId: invitation.id,
-        partnerId: candidate.partnerId,
-        employeeId: candidate.employeeId,
-        displayName: candidate.employee.name,
-        emailNormalized: candidate.emailNormalized,
-        inviteUrl: inviteUrl(rawToken, input.requestOrigin),
-        fingerprint: input.fingerprint,
-      });
+      try {
+        await sendStaffReviewReentryInvitation({
+          invitationId: invitation.id,
+          partnerId: candidate.partnerId,
+          employeeId: candidate.employeeId,
+          displayName: candidate.employee.name,
+          emailNormalized: candidate.emailNormalized,
+          inviteUrl: inviteUrl(rawToken, input.requestOrigin),
+          fingerprint: input.fingerprint,
+        });
+      } catch (error) {
+        await recordEnrollmentEvent(prisma, {
+          partnerId: candidate.partnerId,
+          employeeId: candidate.employeeId,
+          employeeName: candidate.employee.name,
+          employeeEmail: candidate.emailNormalized,
+          eventType: "reentry_send_failed",
+          actorType: "reentry",
+          actorIdentity: candidate.emailNormalized,
+          reason: `invitation:${invitation.id}; error:${error instanceof Error ? error.message : String(error)}`,
+          ip: input.fingerprint?.ip ?? null,
+          userAgent: input.fingerprint?.userAgent ?? null,
+        });
+        throw error;
+      }
     },
   };
 }
