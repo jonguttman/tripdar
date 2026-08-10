@@ -10,16 +10,22 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 - PR #66 removed the provider-send path as intended, but `npm run staff-review:send-invite-batch` still imported `sendApprovedStaffReviewInviteBatch`.
 - Typecheck, lint, Vitest, and the Vercel build were green because `tsconfig.json` only includes `src/`, while this operator script lives under `scripts/`.
 - An operator running the old send command would hit `sendApprovedStaffReviewInviteBatch is not a function` instead of an intentional credential-free workflow refusal.
+- The prepare and approval scripts were also outside typecheck and still called the rewritten domain API with legacy arguments: prepare passed `messages`, `expiresInDays`, and `requestOrigin` while omitting templates/source/provider evidence; approval omitted `partnerId`.
 
 **Root Cause:**
-The implementation correctly retired provider sends in the domain module but left the legacy script entrypoint in place with a stale dynamic import. Existing script coverage only tested the missing-argument path, which returns before the import, so the valid-looking invocation path was invisible.
+The implementation correctly retired provider sends in the domain module but left legacy script entrypoints in place with stale dynamic imports and stale argument contracts. Existing script coverage only tested the missing-argument path, which returns before the import, so valid-looking invocation paths were invisible.
 
 **Fix:**
-- Changed `scripts/send-staff-review-invite-batch.mts` to validate arguments and then fail closed with an explicit message that provider send is retired under KEWL-3385/KEWL-3405.
-- Added regression coverage for the all-required-arguments invocation through the canonical npm script, with runtime secrets absent, proving the command no longer imports the removed send function or domain/provider dependencies.
+- Removed the retired send npm entry and script file so provider-send is no longer a live operator command.
+- Changed prepare to accept one credential-free template file plus source issue/comment and provider credential fingerprint evidence, then pass `templates`, `requestedExpirySeconds`, and seal/source/provider fields to the current API.
+- Required `partnerId` on approval recording and forwarded optional source/provider/seal evidence to the approval API.
+- Added script-path coverage that runs the missing-argument and malformed-input npm paths without runtime secrets, and asserts there is no send npm entry.
 
 **Files Modified:**
-- `scripts/send-staff-review-invite-batch.mts`
+- `package.json`
+- `CLAUDE.md`
+- `scripts/prepare-staff-review-invite-batch.mts`
+- `scripts/record-staff-review-invite-batch-approval.mts`
 - `scripts/send-staff-review-invite-batch.test.mjs`
 - `docs/CHANGELOG.md`
 - `docs/BUG_LOG.md`
