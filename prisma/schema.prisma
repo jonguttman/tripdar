@@ -704,6 +704,7 @@ model CatalogAccessToken {
   regenerations CatalogAccessToken[] @relation("CatalogTokenRegeneration")
   brandSubmissions BrandSubmission[]
   enrollmentEvents ReviewerEnrollmentEvent[]
+  staffReviewInviteBatchRecipients StaffReviewInviteBatchRecipient[]
 
   @@index([partnerId, purpose, status])
   @@index([brandId, status])
@@ -884,6 +885,7 @@ model MycoEmployee {
   assignments MycoEmployeeReviewAssignment[]
   enrollmentEvents ReviewerEnrollmentEvent[]
   staffReviewInvitations StaffReviewInvitation[]
+  inviteBatchDraftRecipients StaffReviewInviteBatchDraftRecipient[]
   staffReviewSessions StaffReviewSession[]
   staffReviewInviteBatchRecipients StaffReviewInviteBatchRecipient[]
   staffReviewerIdentityAliases StaffReviewerIdentityAlias[] @relation("StaffReviewerIdentityAliasEmployee")
@@ -951,17 +953,54 @@ model StaffReviewInviteBatch {
   replyToAddress                String?
   rendererVersion               String
   rosterDigest                  String
-  batchDigest                   String   @unique
+  approvalDigest                String?  @unique
+  approvalDigestVersion         String?
+  requestedExpirySeconds        Int      @default(1814400)
+  batchDigest                   String?  @unique
   sealKeyFingerprint            String
   createdAt                     DateTime @default(now())
   updatedAt                     DateTime @updatedAt
 
-  partner    Partner                           @relation(fields: [partnerId], references: [id], onDelete: Restrict)
-  recipients StaffReviewInviteBatchRecipient[]
+  partner         Partner                               @relation(fields: [partnerId], references: [id], onDelete: Restrict)
+  draftRecipients StaffReviewInviteBatchDraftRecipient[]
+  recipients      StaffReviewInviteBatchRecipient[]
 
   @@index([partnerId, status])
   @@index([approvedInteractionId])
+  @@index([approvalDigest])
+  @@index([batchDigest])
   @@index([createdAt])
+}
+
+/// KEWL-3387 — encrypted token-free draft material for staff invite approval.
+///
+/// Prepare writes only inert templates and reviewer evidence here. No bearer token,
+/// live URL, provider idempotency key, or sendable final payload exists until approval.
+model StaffReviewInviteBatchDraftRecipient {
+  id                            String   @id @default(cuid())
+  batchId                       String
+  ordinal                       Int
+  employeeId                    String
+  displayName                   String
+  emailNormalized               String
+  partnerScopeId                String
+  draftRecipientDigest          String
+  ccDigest                      String
+  subjectTemplateDigest         String
+  htmlTemplateDigest            String
+  textTemplateDigest            String
+  sealedDraftCiphertext         String
+  sealedDraftIv                 String
+  sealedDraftAuthTag            String
+  createdAt                     DateTime @default(now())
+  updatedAt                     DateTime @updatedAt
+
+  batch    StaffReviewInviteBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
+  employee MycoEmployee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([batchId, ordinal])
+  @@unique([batchId, emailNormalized])
+  @@index([employeeId])
 }
 
 /// KEWL-2950 — immutable per-recipient snapshot plus send/no-send audit.
@@ -972,16 +1011,18 @@ model StaffReviewInviteBatchRecipient {
   id                            String    @id @default(cuid())
   batchId                       String
   ordinal                       Int
-  invitationId                  String
+  invitationId                  String?
+  catalogAccessTokenId          String?
   employeeId                    String
   displayName                   String
   emailNormalized               String
-  invitationTokenHash           String
-  invitationStatusAtApproval    String
-  invitationIssuedAt            DateTime
-  invitationExpiresAt           DateTime
+  invitationTokenHash           String?
+  invitationStatusAtApproval    String?
+  invitationIssuedAt            DateTime?
+  invitationExpiresAt           DateTime?
   invitationRevokedAt           DateTime?
   partnerScopeId                String
+  draftRecipientDigest          String?
   recipientIdentityDigest       String
   linkDigest                    String
   ccDigest                      String?
@@ -1002,15 +1043,19 @@ model StaffReviewInviteBatchRecipient {
   providerMessageId             String?   @unique
   providerError                 String?
   sentAt                        DateTime?
+  invalidatedAt                 DateTime?
   createdAt                     DateTime  @default(now())
   updatedAt                     DateTime  @updatedAt
 
   batch      StaffReviewInviteBatch @relation(fields: [batchId], references: [id], onDelete: Restrict)
-  invitation StaffReviewInvitation  @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  invitation StaffReviewInvitation? @relation(fields: [invitationId], references: [id], onDelete: Restrict)
+  catalogAccessToken CatalogAccessToken? @relation(fields: [catalogAccessTokenId], references: [id], onDelete: Restrict)
   employee   MycoEmployee           @relation(fields: [employeeId], references: [id], onDelete: Restrict)
 
   @@unique([batchId, emailNormalized])
   @@unique([batchId, invitationId])
+  @@unique([batchId, ordinal])
+  @@index([catalogAccessTokenId])
   @@index([batchId, sendStatus])
   @@index([employeeId])
   @@index([invitationId])

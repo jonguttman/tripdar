@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.18.3] - 2026-08-10
+
+### Fixed
+- **Staff invite approval re-derived on `origin/main`** (KEWL-3405): moved credential-free draft prepare, atomic one-shared-staff-link approval, and legacy-only explicit revoke onto the current staff-review invite subsystem without dropping `StaffReviewSession`, `StaffReviewerIdentityAlias`, or upstream live invitation fields. Added an upstream-shaped Postgres migration for token-free draft recipients and shared `CatalogAccessToken` final evidence, with focused no-provider-send, retry, refusal, metadata, rollback, and authorization coverage.
+
 ## [1.18.2] - 2026-08-05
 
 ### Fixed

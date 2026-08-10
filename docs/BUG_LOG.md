@@ -4,6 +4,40 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-10-001: credential-free staff invite change was based before live staff-review schema
+
+**Symptoms:**
+- The credential-free staff-invite draft work appeared locally to satisfy the approval contract, but its branch base predated the live staff-review invitation subsystem on `origin/main`.
+- The local schema dropped upstream `StaffReviewSession` and `StaffReviewerIdentityAlias` models plus live invitation/recipient fields used by staff-review re-entry and send validation.
+- The draft migration used `CREATE TABLE IF NOT EXISTS` for tables that already exist upstream, so a real database could silently skip creates and still exit successfully against the wrong schema.
+
+**Root Cause:**
+The implementation was authored on a divergent checkout and treated as complete in the workspace instead of being re-derived from current `origin/main`. Migration safety was tested against the wrong baseline, masking destructive schema drift and missing-table assumptions.
+
+**Fix:**
+- Rebuilt the credential-free prepare, one-shared-staff-link approval, and legacy-only revoke behavior on a fresh worktree cut from `origin/main`.
+- Preserved upstream `StaffReviewSession`, `StaffReviewerIdentityAlias`, and live invitation/recipient fields while adding only the draft-recipient table, approval digest metadata, shared `CatalogAccessToken` recipient evidence, and nullable legacy invitation fields required by the new final evidence model.
+- Replaced the unsafe migration with an upstream-shaped migration that alters existing staff invite tables and creates only the new draft-recipient table, with no `CREATE TABLE IF NOT EXISTS` masking.
+- Verified the migration in a disposable local Postgres database seeded to the `origin/main` datamodel; after applying the migration, `prisma migrate diff` reported an empty migration.
+
+**Files Modified:**
+- `prisma/schema.prisma`
+- `prisma/migrations/20260810130000_staff_invite_credential_free_main/migration.sql`
+- `src/domain/myco/staffReviewInviteBatches.ts`
+- `src/domain/myco/staffReviewInviteBatches.test.ts`
+- `src/app/api/admin/myco/staff-invitations/route.ts`
+- `src/app/api/admin/myco/staff-invitations/route.test.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Before schema work, cut the implementation branch from current `origin/main` and diff schema changes against that exact base.
+- Test migrations against a database already shaped like upstream when the production target is not empty; fresh-empty migration-chain repair is a separate baseline problem.
+- Do not use `IF NOT EXISTS` on expected upstream tables in application migrations; collisions and missing prerequisites should fail loudly.
+
+**Lesson Learned:**
+Workspace-local completion is not enough for schema work. The base commit is part of the safety proof, and a migration that succeeds against the wrong starting schema can be more dangerous than one that fails.
+
 ## BUG-2026-08-05-001: staff invite-batch release blockers left the approved-send path unreleasable
 
 **Symptoms:**
