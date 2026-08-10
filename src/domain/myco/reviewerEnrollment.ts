@@ -41,6 +41,7 @@ export type EnrollmentEventType =
   | "enrollment_closed"
   | "reentry_requested"
   | "reentry_sent"
+  | "reentry_send_failed"
   | "reentry_confirmed";
 
 export type EnrollmentActorType = "enrollment" | "admin" | "system" | "reentry";
