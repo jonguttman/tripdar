@@ -1,4 +1,5 @@
 import InviteConfirmClient from "./InviteConfirmClient";
+import InviteReentryClient from "./InviteReentryClient";
 import { getStaffInvitePreview, type StaffInviteState } from "@/domain/myco/staffReviewInvitations";
 
 export const dynamic = "force-dynamic";
@@ -10,15 +11,15 @@ const STATE_COPY: Record<StaffInviteState, { title: string; body: string }> = {
   },
   expired: {
     title: "Invitation expired",
-    body: "This staff review invitation is no longer active. Ask Jon for a fresh link.",
+    body: "This invitation expired. Enter your email below and we'll send a fresh link.",
   },
   revoked: {
     title: "Invitation revoked",
-    body: "This staff review invitation was cancelled. Ask Jon for a fresh link.",
+    body: "This invitation was cancelled. Ask Jon for a new one.",
   },
   used: {
     title: "Invitation already used",
-    body: "This invitation has already been confirmed. Continue from the device where you opened it, or ask Jon for a fresh link.",
+    body: "Signing in on a different phone or computer? Send me a new link.",
   },
   invalid: {
     title: "Invitation unavailable",
@@ -60,6 +61,8 @@ export default async function StaffReviewInvitePage({
             displayName={preview.displayName}
             emailMasked={preview.emailMasked}
           />
+        ) : preview?.state === "used" || preview?.state === "expired" ? (
+          <InviteReentryClient />
         ) : (
           <p className="mt-7 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-950">
             No session was created and no review state changed.
