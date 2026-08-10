@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.18.6] - 2026-08-10
+
+### Fixed
+- **Staff invite runbook cleanup** (KEWL-3426): replaced the stale `CLAUDE.md` invite-batch executor command after the provider-send script was retired. The agent runbook now describes approval-time shared-link release through one `CatalogAccessToken` plus final recipient evidence, and explicitly says not to run the removed `staff-review:send-invite-batch` package script.
+
 ## [1.18.5] - 2026-08-10
 
 ### Fixed

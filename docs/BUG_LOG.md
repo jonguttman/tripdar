@@ -4,6 +4,32 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-10-002: Staff invite runbook still pointed at retired provider-send executor
+
+**Symptoms:**
+- `CLAUDE.md` still told every agent and operator to run `npm run staff-review:send-invite-batch -- --batch-id <id> --approved-interaction-id <id>`.
+- This branch intentionally removed both that package script and `scripts/send-staff-review-invite-batch.mts`, so following the runbook would fail with a missing npm script instead of reflecting the shared-link approval flow.
+
+**Root Cause:**
+The credential-free approval change retired provider sending at approval but did not update the always-loaded operator runbook. Typecheck, lint, and unit tests did not read `CLAUDE.md`, so the stale instruction survived green checks.
+
+**Fix:**
+- Replaced the executor section with staff invite-batch delivery guidance that states provider send is retired at approval.
+- Documented that approval now mints one shared `CatalogAccessToken`, revokes prior partner-scoped pending legacy invitations, and seals the shared `/staff/catalog/` link into final recipient evidence.
+- Explicitly warned not to run the removed `staff-review:send-invite-batch` command.
+
+**Files Modified:**
+- `CLAUDE.md`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Treat always-loaded agent/operator runbooks as part of the executable release surface when package scripts are deleted or renamed.
+- Any PR that removes an operational script must search top-level runbooks and package-script references before closeout.
+
+**Lesson Learned:**
+Retiring a delivery path is incomplete while the operator memory still names it. A deleted script can pass CI and still break the next human or agent who follows the runbook.
+
 ## BUG-2026-08-10-001: Staff invite route scope and legacy revocation gaps survived re-derive
 
 **Symptoms:**
