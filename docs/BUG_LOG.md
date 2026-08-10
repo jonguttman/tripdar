@@ -4,6 +4,41 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
+## BUG-2026-08-10-001: Staff invite route scope and legacy revocation gaps survived re-derive
+
+**Symptoms:**
+- The staff invite admin route accepted an authenticated partner admin's `partnerId` for prepare/approval without checking that the actor was a super admin or belonged to that partner.
+- A View-as session could reach prepare/approval dispatch instead of being refused before mutation.
+- Approval revoked legacy pending `StaffReviewInvitation` rows only for employees in the freshly prepared draft, leaving other pending direct-review bearer links active for the same partner after the shared staff link was reissued.
+
+**Root Cause:**
+The route trusted the service layer for mutation authorization, but prepare/approve only received an email string and had no session or partner-ownership context. The first route-level repair still accepted role as a call-site argument, which made the invariant depend on every caller passing session metadata correctly instead of re-deriving current authority from the database. The legacy cleanup query was derived from draft recipients instead of the credential class being retired: all partner-scoped pending direct-review invitations.
+
+**Fix:**
+- Added route-level mutation scope checks that reject unauthenticated and View-as callers, then route prepare/approval through a DB-backed resolver that re-derives role and persisted `User.partnerId`.
+- `resolvePartnerMutationForAdmin()` now allows super admins to target any existing partner and allows partner admins only when the requested `partnerId` matches their persisted partner assignment.
+- Kept wrong-partner/not-found parity as `404 partner_not_found` before service dispatch.
+- Changed approval to select and revoke all pending, unrevoked legacy direct-review invitations for the partner, not just draft employees, before minting the one shared `CatalogAccessToken` staff link.
+- Added negative route, resolver, and service tests for wrong-partner refusal, View-as refusal, and partner-wide legacy revocation.
+
+**Files Modified:**
+- `src/app/api/admin/myco/staff-invitations/route.ts`
+- `src/app/api/admin/myco/staff-invitations/route.test.ts`
+- `src/domain/myco/adminAccess.ts`
+- `src/domain/myco/adminAccess.test.ts`
+- `src/domain/myco/staffReviewInviteBatches.ts`
+- `src/domain/myco/staffReviewInviteBatches.test.ts`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Admin routes that accept a `partnerId` must resolve actor role and ownership from current database state before calling mutation services.
+- Approval-time token retirement should query by the token class and partner boundary, not by the current draft roster.
+- View-as should be refused at the route boundary for every write, even when the service has its own revoke-only guard.
+
+**Lesson Learned:**
+Credential-free prepare does not make the route harmless. If approval can release or retire bearer links, the route must enforce the same actor and partner boundary before any service dispatch.
+
 ## BUG-2026-08-05-001: staff invite-batch release blockers left the approved-send path unreleasable
 
 **Symptoms:**
