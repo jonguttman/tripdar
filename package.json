@@ -51,6 +51,7 @@
     "staff-review:prepare-invite-batch": "node --env-file-if-exists=.env.local node_modules/vite-node/vite-node.mjs scripts/prepare-staff-review-invite-batch.mts --",
     "staff-review:record-invite-batch-approval": "node --env-file-if-exists=.env.local node_modules/vite-node/vite-node.mjs scripts/record-staff-review-invite-batch-approval.mts --",
     "staff-review:send-invite-batch": "node --env-file-if-exists=.env.local node_modules/vite-node/vite-node.mjs scripts/send-staff-review-invite-batch.mts --",
-    "check:myco-strain-drift": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/check-myco-strain-slug-drift.mts"
+    "check:myco-strain-drift": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/check-myco-strain-slug-drift.mts",
+    "report:tmt-reviewer-status": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --experimental-strip-types scripts/tmt-reviewer-status.mts"
   }
 }

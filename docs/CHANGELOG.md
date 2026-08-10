@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.18.3] - 2026-08-10
+
+### Added
+- **TMT reviewer-status report** (KEWL-3414): added a canonical read-only Tripdar command that runs the production-verified TMT reviewer tracking SELECT, refuses broken row-count/Sage controls before printing JSON, and covers runtime, output, read-only, and schema contracts in Vitest.
+
 ## [1.18.2] - 2026-08-05
 
 ### Fixed
