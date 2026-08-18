@@ -5,14 +5,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Anthropic from "@anthropic-ai/sdk";
 import { PrismaClient } from "@prisma/client";
+import { put } from "@vercel/blob";
 import sharp from "sharp";
 import { validateLabelFidelity } from "./label-fidelity.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const CONFIG_ROOT = path.join(REPO_ROOT, "photo-pipeline/config");
 const SUPPORTED_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".heic", ".heif", ".dng", ".tif", ".tiff"]);
+const BROWSER_NATIVE_SOURCE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png"]);
 const PREFIXES = {
   originals: "originals",
+  sourcePreviews: "source-previews",
   working: "working",
   catalogSafe: "catalog-safe",
   premiumEnhanced: "premium-enhanced",
@@ -33,6 +36,9 @@ const HEURISTIC_QA_REVIEW_WARNING =
 const GENERATIVE_REVIEW_WARNING =
   "review: AI-enhanced generative output is non-catalog-safe; human label verification required";
 const PREMIUM_PROMPT_PATH = path.join(CONFIG_ROOT, "premium_prompt.v1.txt");
+const PHOTO_PIPELINE_BLOB_PREFIX = "Photo_Pipeline";
+export const PHOTO_ASSET_LOCAL_WARNING =
+  "photo-pipeline: BLOB_READ_WRITE_TOKEN is not set; review asset references will remain local filesystem paths. Hosted /admin/photo-jobs cannot render those local-only images. For hosted review jobs, load DATABASE_URL and BLOB_READ_WRITE_TOKEN, for example: node --env-file=.env.local scripts/photo-pipeline/cli.mjs ...";
 
 let prisma;
 
@@ -47,6 +53,11 @@ export async function runBatch(options) {
 export async function runSingle(options) {
   const configs = await loadConfigs();
   await ensureBlobDirs(options.rootDir);
+  const ledgerMode = resolveLedgerMode(options);
+  const uploadAssets = shouldUploadPhotoAssets(options);
+  if (ledgerMode === "prisma" && !uploadAssets) {
+    throw new Error("BLOB_READ_WRITE_TOKEN is required when writing PhotoJob rows so hosted admin assets resolve.");
+  }
 
   const requestedMode = options.mode ?? "catalog_safe";
   if (!new Set(["catalog_safe", "premium"]).has(requestedMode)) {
@@ -61,22 +72,15 @@ export async function runSingle(options) {
 
   const originalBytes = await readFile(inputPath);
   const sourceContentHash = createHash("sha256").update(originalBytes).digest("hex");
-  const ledger = await createLedger(options);
+  const ledger = await createLedger({ ...options, ledger: ledgerMode });
   const existing = await ledger.findByHash(sourceContentHash);
-  if (
+  const canReuseApprovedCatalogSafe =
     requestedMode === "catalog_safe" &&
     existing?.status === "approved" &&
     existing.processingMode === "catalog_safe" &&
     !hasBackgroundFallbackWarning(existing) &&
     !hasHeuristicQaWarning(jobWarnings(existing)) &&
-    !hasGenerativeReviewWarning(jobWarnings(existing))
-  ) {
-    return {
-      job: existing,
-      manifestPath: existing.manifestPath ?? existing.manifest?.manifest_path ?? null,
-      skipped: true,
-    };
-  }
+    !hasGenerativeReviewWarning(jobWarnings(existing));
 
   const jobId = existing?.jobId ?? buildJobId(sourceContentHash);
   const baseName = buildBaseName({
@@ -88,14 +92,17 @@ export async function runSingle(options) {
   });
   const originalName = `${baseName}_original_${sourceContentHash.slice(0, 12)}${normalOutputExt(ext)}`;
   const originalPath = blobPath(options.rootDir, "originals", originalName);
-  const originalBlobUrl = relativeBlobPath(options.rootDir, originalPath);
+  const localOriginalBlobUrl = relativeBlobPath(options.rootDir, originalPath);
 
   if (!existing && existsSync(originalPath)) {
-    throw new Error(`Original blob already exists and must not be overwritten: ${originalBlobUrl}`);
+    throw new Error(`Original blob already exists and must not be overwritten: ${localOriginalBlobUrl}`);
   }
   if (!existsSync(originalPath)) {
     await copyFile(inputPath, originalPath);
   }
+  const originalBlobUrl = isHttpReference(existing?.originalBlobUrl)
+    ? existing.originalBlobUrl
+    : await assetReference(options.rootDir, localOriginalBlobUrl, uploadAssets);
 
   let job = existing ?? (await ledger.create({
     jobId,
@@ -117,12 +124,45 @@ export async function runSingle(options) {
     approvedBy: null,
     approvedAt: null,
   }));
+  if (existing && job.originalBlobUrl !== originalBlobUrl) {
+    job = await ledger.update(job.jobId, { originalBlobUrl });
+  }
+
+  if (canReuseApprovedCatalogSafe) {
+    if (requiresSourcePreview(ext) && !manifestSourcePreview(job.manifest)) {
+      const localSourcePreview = await writeSourcePreview({
+        rootDir: options.rootDir,
+        job,
+        baseName,
+        ext,
+        inputPath,
+        originalBytes,
+      });
+      const sourcePreview = await persistedSourcePreviewReference(
+        options.rootDir,
+        localSourcePreview,
+        uploadAssets,
+      );
+      const manifest = withSourcePreview(job.manifest, sourcePreview);
+      const manifestPath = await writeManifest(options.rootDir, job.jobId, withoutManifestPath(manifest));
+      job = await ledger.update(job.jobId, {
+        manifest: { ...manifest, manifest_path: manifestPath },
+      });
+      return { job, manifestPath, skipped: true, sourcePreviewGenerated: true };
+    }
+    return {
+      job,
+      manifestPath: job.manifestPath ?? job.manifest?.manifest_path ?? null,
+      skipped: true,
+    };
+  }
 
   const startedAt = new Date();
   const warnings = [];
   let outputs = emptyOutputs();
   let quality = null;
   let costCents = job.costCents ?? 0;
+  let sourcePreviewReference = manifestSourcePreview(job.manifest);
 
   try {
     job = await ledger.update(job.jobId, {
@@ -133,7 +173,21 @@ export async function runSingle(options) {
       approvedAt: null,
     });
     const normalizedPath = blobPath(options.rootDir, "working", `${job.jobId}_normalized.png`);
-    await sharp(originalBytes).rotate().png().toFile(normalizedPath);
+    if (requiresSourcePreview(ext) && !sourcePreviewReference) {
+      sourcePreviewReference = await writeSourcePreview({
+        rootDir: options.rootDir,
+        job,
+        baseName,
+        ext,
+        inputPath,
+        originalBytes,
+      });
+    }
+    if (sourcePreviewReference && !isHttpReference(sourcePreviewReference)) {
+      await copyFile(path.join(REPO_ROOT, sourcePreviewReference), normalizedPath);
+    } else {
+      await sharp(originalBytes).rotate().png().toFile(normalizedPath);
+    }
 
     quality = await assessQuality(normalizedPath, configs.thresholds);
     costCents += quality.costCents;
@@ -141,15 +195,22 @@ export async function runSingle(options) {
 
     if (!quality.usable) {
       outputs = await writeReviewCopy(options.rootDir, job, normalizedPath, "needsReview");
+      const persistedOutputs = await outputReferences(options.rootDir, outputs, uploadAssets);
+      const persistedSourcePreview = await persistedSourcePreviewReference(
+        options.rootDir,
+        sourcePreviewReference,
+        uploadAssets,
+      );
       const manifest = buildManifest(job, {
         status: "needs_review",
-        outputs,
+        outputs: persistedOutputs,
         qualityScore: quality.confidence,
         labelFidelityScore: null,
         warnings: uniqueStrings([...warnings, quality.retake_reason]),
         approvedBy: null,
         approvedAt: null,
         requiresReview: true,
+        sourcePreview: persistedSourcePreview,
       });
       const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
       job = await ledger.update(job.jobId, {
@@ -224,10 +285,19 @@ export async function runSingle(options) {
     const status = requiresReview ? "needs_review" : "approved";
     const approvedAt = status === "approved" ? new Date().toISOString() : null;
     const approvedBy = status === "approved" ? options.operator : null;
+    const persistedOutputs = await outputReferences(options.rootDir, outputs, uploadAssets);
+    const persistedCatalogSafeOutputs = requestedMode === "premium"
+      ? await outputReferences(options.rootDir, catalogSafe.outputs, uploadAssets)
+      : null;
+    const persistedSourcePreview = await persistedSourcePreviewReference(
+      options.rootDir,
+      sourcePreviewReference,
+      uploadAssets,
+    );
 
     const manifest = buildManifest(job, {
       status,
-      outputs,
+      outputs: persistedOutputs,
       qualityScore: quality.confidence,
       labelFidelityScore: processed.labelFidelityScore,
       backgroundRemoval: processed.backgroundRemoval,
@@ -236,7 +306,8 @@ export async function runSingle(options) {
       approvedBy,
       approvedAt,
       requiresReview,
-      catalogSafeOutputs: requestedMode === "premium" ? catalogSafe.outputs : null,
+      sourcePreview: persistedSourcePreview,
+      catalogSafeOutputs: persistedCatalogSafeOutputs,
       labelValidation,
     });
     const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
@@ -255,15 +326,28 @@ export async function runSingle(options) {
     return { job, manifestPath };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const failedOutputs = await failedOutputReferences(options.rootDir, outputs, uploadAssets);
+    const failedSourcePreview = await failedSourcePreviewReference(
+      options.rootDir,
+      sourcePreviewReference,
+      uploadAssets,
+    );
+    const failedWarnings = uniqueStrings([
+      ...warnings,
+      message,
+      ...failedOutputs.warnings,
+      ...failedSourcePreview.warnings,
+    ]);
     const manifest = buildManifest(job, {
       status: "failed",
-      outputs,
+      outputs: failedOutputs.outputs,
       qualityScore: quality?.confidence ?? null,
       labelFidelityScore: null,
-      warnings: uniqueStrings([...warnings, message]),
+      warnings: failedWarnings,
       approvedBy: null,
       approvedAt: null,
       requiresReview: requestedMode === "premium",
+      sourcePreview: failedSourcePreview.reference,
     });
     const manifestPath = await writeManifest(options.rootDir, job.jobId, manifest);
     job = await ledger.update(job.jobId, {
@@ -303,8 +387,21 @@ async function ensureBlobDirs(rootDir) {
   await Promise.all(Object.values(PREFIXES).map((prefix) => mkdir(path.join(rootDir, prefix), { recursive: true })));
 }
 
+function resolveLedgerMode(options) {
+  return options.ledger ?? (process.env.DATABASE_URL ? "prisma" : "filesystem");
+}
+
+function shouldUploadPhotoAssets(options) {
+  if (options.uploadAssets === false) return false;
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+export function warnIfPhotoAssetsRemainLocal(options = {}, warn = console.warn) {
+  if (!shouldUploadPhotoAssets(options)) warn(PHOTO_ASSET_LOCAL_WARNING);
+}
+
 async function createLedger(options) {
-  const mode = options.ledger ?? (process.env.DATABASE_URL ? "prisma" : "filesystem");
+  const mode = resolveLedgerMode(options);
   if (mode === "prisma") {
     if (!prisma) prisma = new PrismaClient();
     return {
@@ -349,6 +446,86 @@ async function createLedger(options) {
       return jobs[index];
     },
   };
+}
+
+async function outputReferences(rootDir, outputs, uploadAssets) {
+  const entries = await Promise.all(
+    Object.entries(outputs).map(async ([key, value]) => [
+      key,
+      await assetReference(rootDir, value, uploadAssets),
+    ]),
+  );
+  return Object.fromEntries(entries);
+}
+
+async function failedOutputReferences(rootDir, outputs, uploadAssets) {
+  if (!uploadAssets) return { outputs, warnings: [] };
+  try {
+    return { outputs: await outputReferences(rootDir, outputs, uploadAssets), warnings: [] };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      outputs: emptyOutputs(),
+      warnings: [`blob upload failed; omitted failed-run local output references: ${message}`],
+    };
+  }
+}
+
+async function assetReference(rootDir, localReference, uploadAssets) {
+  if (!localReference || isHttpReference(localReference) || !uploadAssets) return localReference;
+  const localPath = path.join(REPO_ROOT, localReference);
+  const pathname = blobObjectPath(rootDir, localPath);
+  const blob = await put(pathname, await readFile(localPath), {
+    access: "public",
+    addRandomSuffix: true,
+    contentType: contentTypeForPath(localPath),
+  });
+  return blob.url;
+}
+
+async function persistedSourcePreviewReference(rootDir, sourcePreviewReference, uploadAssets) {
+  if (!sourcePreviewReference) return null;
+  return assetReference(rootDir, sourcePreviewReference, uploadAssets);
+}
+
+async function failedSourcePreviewReference(rootDir, sourcePreviewReference, uploadAssets) {
+  if (!sourcePreviewReference) return { reference: null, warnings: [] };
+  if (!uploadAssets || isHttpReference(sourcePreviewReference)) {
+    return { reference: sourcePreviewReference, warnings: [] };
+  }
+  try {
+    return {
+      reference: await assetReference(rootDir, sourcePreviewReference, uploadAssets),
+      warnings: [],
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      reference: null,
+      warnings: [`blob upload failed; omitted source preview reference from failed manifest: ${message}`],
+    };
+  }
+}
+
+function blobObjectPath(rootDir, localPath) {
+  const relativeToRoot = path.relative(rootDir, localPath).split(path.sep).join("/");
+  return `${PHOTO_PIPELINE_BLOB_PREFIX}/${relativeToRoot.replace(/^\/+/, "")}`;
+}
+
+function contentTypeForPath(filePath) {
+  switch (path.extname(filePath).toLowerCase()) {
+    case ".png":
+      return "image/png";
+    case ".webp":
+      return "image/webp";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".gif":
+      return "image/gif";
+    default:
+      return "application/octet-stream";
+  }
 }
 
 async function assessQuality(imagePath, thresholds) {
@@ -1059,6 +1236,23 @@ async function writeReviewCopy(rootDir, job, normalizedPath, stage) {
   return { ...emptyOutputs(), white_master: relativeBlobPath(rootDir, reviewPath) };
 }
 
+async function writeSourcePreview({ rootDir, job, baseName, ext, inputPath, originalBytes }) {
+  const sourcePreviewPath = blobPath(
+    rootDir,
+    "sourcePreviews",
+    `${baseName}_${sanitizeField(job.jobId)}_source-preview.png`,
+  );
+  try {
+    await sharp(originalBytes).rotate().png().toFile(sourcePreviewPath);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Source preview conversion failed for ${path.basename(inputPath)} (${ext.slice(1).toUpperCase()}): ${message}`,
+    );
+  }
+  return relativeBlobPath(rootDir, sourcePreviewPath);
+}
+
 function buildManifest(job, data) {
   const manifest = {
     job_id: job.jobId,
@@ -1075,9 +1269,25 @@ function buildManifest(job, data) {
     approved_at: data.approvedAt,
   };
   if (typeof data.requiresReview === "boolean") manifest.requires_review = data.requiresReview;
+  if (typeof data.sourcePreview === "string" && data.sourcePreview.trim()) {
+    manifest.source_preview = data.sourcePreview;
+  }
   if (data.catalogSafeOutputs) manifest.catalog_safe_outputs = data.catalogSafeOutputs;
   if (data.labelValidation) manifest.label_validation = data.labelValidation;
   return manifest;
+}
+
+function withSourcePreview(manifest, sourcePreview) {
+  return {
+    ...(manifest && typeof manifest === "object" && !Array.isArray(manifest) ? manifest : {}),
+    source_preview: sourcePreview,
+  };
+}
+
+function withoutManifestPath(manifest) {
+  const copy = { ...manifest };
+  delete copy.manifest_path;
+  return copy;
 }
 
 async function writeManifest(rootDir, jobId, manifest) {
@@ -1099,6 +1309,10 @@ export async function writeRunProof(filePath, results) {
     if (manifest) {
       for (const [key, output] of Object.entries(manifest.outputs)) {
         if (!output) continue;
+        if (isHttpReference(output)) {
+          outputStats[key] = { url: output };
+          continue;
+        }
         const meta = await sharp(path.join(REPO_ROOT, output)).metadata();
         const fileStat = await stat(path.join(REPO_ROOT, output));
         outputStats[key] = { width: meta.width, height: meta.height, format: meta.format, bytes: fileStat.size };
@@ -1155,12 +1369,26 @@ function normalOutputExt(ext) {
   return ext;
 }
 
+export function requiresSourcePreview(ext) {
+  const normalized = String(ext ?? "").toLowerCase();
+  return SUPPORTED_EXTENSIONS.has(normalized) && !BROWSER_NATIVE_SOURCE_EXTENSIONS.has(normalized);
+}
+
 function blobPath(rootDir, stage, filename) {
   return path.join(rootDir, PREFIXES[stage], filename);
 }
 
 function relativeBlobPath(rootDir, fullPath) {
   return path.relative(REPO_ROOT, fullPath).split(path.sep).join("/");
+}
+
+function isHttpReference(value) {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
+function manifestSourcePreview(manifest) {
+  const value = manifest?.source_preview;
+  return typeof value === "string" && value.trim() ? value : null;
 }
 
 function emptyOutputs() {

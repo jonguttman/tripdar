@@ -4,7 +4,46 @@ This document tracks significant bugs, their root causes, fixes, and lessons lea
 
 ---
 
-## BUG-2026-08-05-001: staff invite-batch release blockers left the approved-send path unreleasable
+## BUG-2026-08-05-001: Non-browser-native photo originals were selected directly for admin source preview
+
+**Symptoms:**
+- Premium photo review jobs kept immutable HEIC, HEIF, DNG, TIF, and TIFF uploads in `PhotoJob.originalBlobUrl`, but the admin source pane and `kind=source` image route selected that original directly.
+- Browser `<img>` rendering was unreliable because those originals are commonly uploaded as `application/octet-stream` and are not consistently browser-native image formats.
+- Repointing `originalBlobUrl` at a converted image would have fixed display by breaking audit lineage and byte-identical original retention.
+
+**Root Cause:**
+The hosted photo-job work stored originals and review outputs separately, but had no separate browser-renderable derivative for the source pane. The review domain serialized `PhotoReviewJob.sourceUrl` from `originalBlobUrl`, and `getPhotoJobAssetReference(id, "source")` used the same immutable-original field without checking manifest metadata.
+
+**Fix:**
+- The photo pipeline now classifies non-browser-native supported extensions with lowercase normalization, copies the immutable original first, then writes an orientation-correct PNG source preview under the dedicated `source-previews/` prefix.
+- The preview is persisted as optional `manifest.source_preview`, including needs-review and failed manifests when conversion has completed. JPG/JPEG/PNG sources continue without preview metadata.
+- Blob-backed preview uploads use `.png` paths and `contentType: image/png`; originals remain separate and keep their original extension/content-type behavior.
+- The review domain centralizes preview-first source selection so list serialization and direct authenticated image-route resolution cannot drift.
+- Existing approved catalog-safe dedupe rows with non-browser-native sources and no preview generate only the missing preview metadata instead of silently returning a non-renderable legacy source.
+
+**Files Modified:**
+- `scripts/photo-pipeline/pipeline.mjs`
+- `scripts/photo-pipeline/pipeline.test.mjs`
+- `src/domain/photo-pipeline/manifest.ts`
+- `src/domain/photo-pipeline/review.ts`
+- `src/domain/photo-pipeline/review.test.ts`
+- `src/app/api/admin/photo-jobs/[id]/route.test.ts`
+- `photo-pipeline/config/manifest.schema.json`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Keep immutable source storage and browser-renderable review assets as separate references; never reuse `originalBlobUrl` for a derivative.
+- Any converted derivative must make its bytes, extension, persisted pathname, and Blob `contentType` agree.
+- Source selection logic belongs in the review domain, not independently in the list API and image route.
+- Dedupe/skip paths must be checked for new manifest-derived assets so legacy rows do not bypass newly required review plumbing.
+
+**Lesson Learned:**
+An audit-safe original is not automatically a browser-safe preview. If a UI needs to render a source asset, store a derivative reference beside the immutable original and make the selection contract explicit.
+
+---
+
+## BUG-2026-08-05-002: staff invite-batch release blockers left the approved-send path unreleasable
 
 **Symptoms:**
 - The invite-batch branch carried schema metadata that did not match production's existing index and constraint names, making the release look like it could produce unintended index churn.
@@ -37,6 +76,43 @@ Three separate release assumptions were too loose. The Prisma schema named logic
 
 **Lesson Learned:**
 Release readiness is not just green unit tests. The command an operator runs, the schema names production already has, and the state a retry will see are all part of the real path; if any one is only asserted indirectly, the approval gate can be satisfied while the send path remains unreleasable.
+
+---
+
+## BUG-2026-08-01-002: Hosted premium photo review images 404 because pipeline stored local paths
+
+**Symptoms:**
+- `/admin/photo-jobs` listed premium review jobs correctly in the hosted admin, but original, catalog-safe, and premium comparison images returned 404.
+- The image proxy route worked only on the machine that had run the photo pipeline because the referenced files existed only in that local checkout.
+
+**Root Cause:**
+The photo pipeline wrote output files under the local `tripdar-product-images/` tree, then persisted `path.relative(REPO_ROOT, fullPath)` values in `PhotoJob.originalBlobUrl` and manifest output keys. The review image route already redirected `https://` references, but pipeline rows never contained URLs. In Vercel, `.gitignore` excludes the generated image tree, so the route fell through to `readFile()` and could not find the assets.
+
+**Fix:**
+- Added Vercel Blob uploads for original and generated review assets when `BLOB_READ_WRITE_TOKEN` is configured.
+- Persisted returned public Blob URLs in `PhotoJob.originalBlobUrl`, `manifest.outputs`, and `manifest.catalog_safe_outputs` while preserving local files for operator working copies, validation, and local fallback rows.
+- Required Blob upload capability before writing Prisma-backed `PhotoJob` rows, so hosted-admin rows do not silently regress to relative filesystem paths.
+- Documented the env-file CLI invocation operators need for hosted review jobs and added a no-upload warning so filesystem/local runs announce that their image references will not render in hosted admin.
+- Updated proof generation to report remote asset URLs instead of treating every manifest output as a local file.
+
+**Files Modified:**
+- `scripts/photo-pipeline/pipeline.mjs`
+- `scripts/photo-pipeline/cli.mjs`
+- `scripts/photo-pipeline/pipeline.test.mjs`
+- `docs/photo-pipeline/operator-guide.md`
+- `docs/CHANGELOG.md`
+- `docs/BUG_LOG.md`
+
+**Prevention:**
+- Any persisted field with `BlobUrl` in its name must contain an actual URL in DB-backed production paths.
+- Keep local processing paths separate from persisted review references; validation can use local files, but hosted UI manifests must not.
+- Operator docs must include the exact env-loading command for any CLI path that depends on production-like environment variables; package scripts alone do not load `.env.local`.
+- If a production route has both redirect and filesystem branches, tests must cover the branch intended for hosted deployment, not only local fallback.
+
+**Lesson Learned:**
+Blob-shaped naming is not Blob storage. A local path can pass pipeline and UI review locally while guaranteeing a hosted 404 once ignored artifacts are absent from the deployment. A correct code path is still incomplete if the documented operator command never supplies the environment needed to trigger it.
+
+---
 
 ## BUG-2026-08-01-001: Photo pipeline reported unmeasured label fidelity and entered premium mode accidentally
 

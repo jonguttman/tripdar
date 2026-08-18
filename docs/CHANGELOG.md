@@ -8,11 +8,14 @@
 ## [1.18.2] - 2026-08-05
 
 ### Fixed
+- **Browser-renderable source previews** (KEWL-2968): non-browser-native premium photo sources now keep `PhotoJob.originalBlobUrl` pointed at the immutable HEIC/HEIF/DNG/TIF/TIFF original while writing a distinct orientation-correct PNG under `source-previews/` and storing it as `manifest.source_preview`. Admin review source panes and authenticated source image routes select that preview first, with legacy JPG/JPEG/PNG rows still falling back to the original.
 - **Staff-review invite-batch Cc integrity** (KEWL-3075): invite-batch preparation now seals canonical Cc arrays for every new recipient, including a non-null digest for `[]`, rejects blank or malformed Cc values before DB work, and keeps send validation exact while preserving true legacy no-Cc rows.
 
 ## [1.18.1] - 2026-08-05
 
 ### Fixed
+- **Hosted premium photo review images** (KEWL-2711): the photo pipeline now uploads original, catalog-safe, premium, web, and thumbnail review assets to Vercel Blob when `BLOB_READ_WRITE_TOKEN` is configured, then stores the returned `https://` URLs in `PhotoJob.originalBlobUrl` and manifest asset keys so `/admin/photo-jobs` can render from hosted admin. Local working copies and the existing relative-path fallback remain intact.
+- **Photo pipeline operator path** (KEWL-2711): documented the `node --env-file=.env.local scripts/photo-pipeline/cli.mjs ...` invocation required to load `DATABASE_URL` and `BLOB_READ_WRITE_TOKEN`, and added a CLI warning when a run will write local-only asset references that hosted admin cannot render.
 - **Staff-review invite-batch release blockers** (KEWL-3012 / KEWL-3022): reconciled the Prisma schema with the production index/constraint names that the invite-batch branch depends on, so the branch no longer implies accidental index churn during review or deployment preparation.
 - **Repo-local invite-batch executor path** (KEWL-3012 / KEWL-3022): the approved sender now runs through `npm run staff-review:send-invite-batch`, using the checked-in `vite-node` resolver instead of a missing global executor, and refuses missing identity arguments before importing domain code or reading runtime secrets.
 - **Retryable provider failures** (KEWL-3012 / KEWL-3022): provider-only send failures now leave the batch retryable, reclaim `provider_failed` rows with the same idempotency keys, skip already-sent rows, and reserve `validation_failed` status for true validation refusals.
