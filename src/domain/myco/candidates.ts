@@ -2,8 +2,8 @@
  * Recommendation candidate loader — the single code path that decides which
  * products may ever be shown to a customer.
  *
- * Gate: active, not archived, recommendation-ready per computeReadiness, and
- * not explicitly unsupported by the current psilocybin-family recommender.
+ * Gate: active, not archived, not research-only, and not explicitly
+ * unsupported by the current psilocybin-family recommender.
  * Legacy unknown/blank/missing compounds retain product identity but cannot
  * emit dose guidance.
  * Server-only (imports prisma).
@@ -11,7 +11,6 @@
 
 import { prisma } from "@/lib/prisma";
 import { isCandidacyExcludedCompound } from "@/domain/recommendation-engine/doseBasis";
-import { computeReadiness } from "./readiness";
 import { APPROVED_PHOTO_WHERE } from "./photoVisibility";
 import { normalizeVibeScores } from "./vibes";
 import type { ProductCandidate } from "./scoring";
@@ -21,16 +20,30 @@ type CatalogItemWithRelations = Awaited<ReturnType<typeof fetchActiveCatalog>>[n
 
 function fetchActiveCatalog(partnerId: string) {
   return prisma.storeProductCatalog.findMany({
-    where: { partnerId, active: true, archivedAt: null },
+    where: { partnerId, active: true, archivedAt: null, researchOnly: false },
     include: {
       vibeProfile: true,
       strengthOffset: true,
       // Approved only: a pending brand-portal photo must never reach a customer
-      // and must never satisfy the readiness photo gate below (KEWL-2460).
+      // through this customer recommendation path (KEWL-2460).
       photos: { where: APPROVED_PHOTO_WHERE, orderBy: { sortOrder: "asc" }, take: 1 },
       brandRef: true,
+      fieldVerificationStates: {
+        select: { fieldName: true, state: true, confirmedValue: true },
+      },
     },
   });
+}
+
+function verificationByField(
+  states: CatalogItemWithRelations["fieldVerificationStates"]
+): ProductCandidate["fieldVerificationStates"] {
+  return Object.fromEntries(
+    states.map((state) => [
+      state.fieldName,
+      { state: state.state, confirmedValue: state.confirmedValue },
+    ])
+  );
 }
 
 function toCandidate(item: CatalogItemWithRelations): ProductCandidate | null {
@@ -52,6 +65,7 @@ function toCandidate(item: CatalogItemWithRelations): ProductCandidate | null {
     vibeScores,
     strengthOffset: (item.strengthOffset?.offset as StrengthOffsetValue | undefined) ?? "standard",
     strengthRationale: item.strengthOffset?.rationale ?? null,
+    fieldVerificationStates: verificationByField(item.fieldVerificationStates),
     dose: {
       format: item.format,
       activeCompound: item.activeCompound,
@@ -70,28 +84,6 @@ export async function getRecommendableProducts(partnerId: string): Promise<Produ
   const candidates: ProductCandidate[] = [];
   for (const item of items) {
     if (isCandidacyExcludedCompound(item.activeCompound)) continue;
-
-    const readiness = computeReadiness({
-      format: item.format,
-      brand: item.brand,
-      brandId: item.brandId,
-      productUnitMg: item.productUnitMg,
-      unitsPerPack: item.unitsPerPack,
-      totalDoseMg: item.totalDoseMg,
-      onsetMinutes: item.onsetMinutes,
-      durationMinutes: item.durationMinutes,
-      brandMicroUnits: item.brandMicroUnits,
-      brandMiniUnits: item.brandMiniUnits,
-      brandMacroUnits: item.brandMacroUnits,
-      brandDoseTiers: item.brandDoseTiers,
-      photoUrl: item.photoUrl,
-      photoCount: item.photos.length,
-      vibeScores: item.vibeProfile?.scores ?? null,
-      strengthOffset: item.strengthOffset
-        ? { offset: item.strengthOffset.offset, confirmed: item.strengthOffset.confirmed }
-        : null,
-    });
-    if (!readiness.ready) continue;
 
     const candidate = toCandidate(item);
     if (candidate) candidates.push(candidate);

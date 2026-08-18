@@ -42,8 +42,10 @@ function readyCatalogRow(
     brandMicroUnits: 1,
     brandMiniUnits: 2,
     brandMacroUnits: 5,
+    researchOnly: false,
     vibeProfile: { scores: { clarity_cognition: 0.8 } },
     strengthOffset: { offset: "standard", confirmed: true, rationale: null },
+    fieldVerificationStates: [],
     ...overrides,
   };
 }
@@ -110,16 +112,20 @@ describe("getRecommendableProducts photo visibility", () => {
     await getRecommendableProducts("partner-1");
 
     const args = prismaMock.storeProductCatalog.findMany.mock.calls[0][0];
+    expect(args.where).toMatchObject({ partnerId: "partner-1", active: true, archivedAt: null, researchOnly: false });
     expect(args.include.photos.where).toEqual({ status: "approved" });
   });
 
-  it("drops a product whose only photo is pending and has no legacy photoUrl", async () => {
+  it("keeps a product whose only photo is pending without exposing that photo", async () => {
     // The approved-only filter above means a pending row never reaches us, so the
-    // row arrives with an empty `photos` array — readiness must then fail.
+    // row arrives with an empty `photos` array.
     const row = readyCatalogRow("pending-only", "psilocybin", { photoUrl: null, photos: [] });
     prismaMock.storeProductCatalog.findMany.mockResolvedValue([row]);
 
-    await expect(getRecommendableProducts("partner-1")).resolves.toEqual([]);
+    const candidates = await getRecommendableProducts("partner-1");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].photoUrl).toBeNull();
   });
 
   it("serves the approved photo when one exists", async () => {
@@ -133,5 +139,28 @@ describe("getRecommendableProducts photo visibility", () => {
 
     expect(candidates).toHaveLength(1);
     expect(candidates[0].photoUrl).toBe("https://cdn.test/approved.jpg");
+  });
+});
+
+describe("getRecommendableProducts verification posture", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("keeps active products with zero verified fields in the recommendation pool", async () => {
+    prismaMock.storeProductCatalog.findMany.mockResolvedValue([
+      readyCatalogRow("unverified-active", "psilocybin", {
+        fieldVerificationStates: [],
+        strengthOffset: { offset: "standard", confirmed: false, rationale: null },
+      }),
+    ]);
+
+    const candidates = await getRecommendableProducts("partner-1");
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      id: "unverified-active",
+      fieldVerificationStates: {},
+    });
   });
 });

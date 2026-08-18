@@ -14,7 +14,7 @@ import { generateAllProfiles } from "@/domain/recommendation-engine/strain-profi
 import type { ExperienceLevel } from "@/domain/recommendation-engine/types";
 import { getRecommendableProducts } from "@/domain/myco/candidates";
 import { intentsToVector, isMycoIntent, type MycoIntent } from "@/domain/myco/intents";
-import { scoreProducts } from "@/domain/myco/scoring";
+import { scoreProducts, type ScoredProduct } from "@/domain/myco/scoring";
 import { generateReflections } from "@/domain/myco/reflection";
 import type { VibeScores } from "@/domain/myco/vibes";
 import type { DoseIntensity } from "@/domain/myco/dose";
@@ -27,7 +27,14 @@ const EXPERIENCE_LEVELS: ExperienceLevel[] = ["new", "few_times", "experienced",
 const INTENSITIES: DoseIntensity[] = ["gentle", "moderate", "deep"];
 const VALID_FORMATS = ["capsule", "edible", "dried", "tincture", "other", "no_preference"];
 
-const RESULT_COUNT = 3;
+const RESULT_COUNT = 4;
+const DOSE_GUIDANCE_FIELDS = [
+  "activeCompound",
+  "doseBasis",
+  "productUnitMg",
+  "unitsPerPack",
+  "totalDoseMg",
+] as const;
 
 function generateSessionToken(): string {
   return `myco_${crypto.randomBytes(12).toString("hex")}`;
@@ -39,6 +46,28 @@ function hashIp(ip: string): string {
     .update(ip + (process.env.NEXTAUTH_SECRET || ""))
     .digest("hex")
     .slice(0, 32);
+}
+
+function hasConfirmedField(result: ScoredProduct, fieldName: string): boolean {
+  return result.candidate.fieldVerificationStates[fieldName]?.state === "confirmed";
+}
+
+function hasConfirmedFields(result: ScoredProduct, fieldNames: readonly string[]): boolean {
+  return fieldNames.every((fieldName) => hasConfirmedField(result, fieldName));
+}
+
+function serializeDoseGuidance(result: ScoredProduct) {
+  if (!result.doseGuidance || !hasConfirmedFields(result, DOSE_GUIDANCE_FIELDS)) return null;
+
+  return {
+    tierLabel: result.doseGuidance.tierLabel,
+    unitsText: result.doseGuidance.unitsText,
+    mgLow: result.doseGuidance.mgLow,
+    mgHigh: result.doseGuidance.mgHigh,
+    guidanceText: result.doseGuidance.guidanceText,
+    offsetNote: hasConfirmedField(result, "strengthOffset") ? result.doseGuidance.offsetNote : undefined,
+    steppedNote: result.doseGuidance.steppedNote,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -171,24 +200,16 @@ export async function POST(req: NextRequest) {
         format: result.candidate.format,
         photoUrl: result.candidate.photoUrl,
         flavors: result.candidate.flavors,
-        ingredients: result.candidate.ingredients,
-        onsetMinutes: result.candidate.onsetMinutes,
-        durationMinutes: result.candidate.durationMinutes,
+        ingredients: hasConfirmedField(result, "ingredients") ? result.candidate.ingredients : null,
+        onsetMinutes: hasConfirmedField(result, "onsetMinutes") ? result.candidate.onsetMinutes : null,
+        durationMinutes: hasConfirmedField(result, "durationMinutes") ? result.candidate.durationMinutes : null,
         keyVibes: result.keyVibes.map((v) => v.label),
         strainMatch: result.strainMatch,
         strainName: result.strainName,
-        doseGuidance: result.doseGuidance
-          ? {
-              tierLabel: result.doseGuidance.tierLabel,
-              unitsText: result.doseGuidance.unitsText,
-              mgLow: result.doseGuidance.mgLow,
-              mgHigh: result.doseGuidance.mgHigh,
-              guidanceText: result.doseGuidance.guidanceText,
-              offsetNote: result.doseGuidance.offsetNote,
-              steppedNote: result.doseGuidance.steppedNote,
-            }
+        doseGuidance: serializeDoseGuidance(result),
+        brandDoseInstructions: hasConfirmedField(result, "brandDoseGuidance")
+          ? result.candidate.brandDoseInstructions
           : null,
-        brandDoseInstructions: result.candidate.brandDoseInstructions,
         reflection: reflections[index],
       })),
     });
