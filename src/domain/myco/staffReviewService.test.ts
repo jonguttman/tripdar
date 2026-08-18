@@ -319,6 +319,67 @@ describe("full-package dose dispute detection", () => {
     ]);
   });
 
+  it("reopens a previously cleared finding when the supported active compound changes", () => {
+    const rules = specRuleRows();
+    const oldItem = {
+      activeCompound: "psilocybin",
+      unitMaterialMassMg: 1,
+      unitsPerPack: 20,
+      materialMassBasis: "fruiting_body",
+    };
+    const oldContext = fullPackageDoseDisputeReviewContext(oldItem);
+    const reviewerConfirmations = [
+      {
+        fieldName: "totalDoseMg",
+        previousValue: oldContext,
+        submittedValue: 20,
+        actorType: "staff",
+        actorIdentity: "employee-1",
+        source: "packaging",
+        disposition: "accepted",
+        createdAt: new Date("2026-08-01T00:00:00Z"),
+      },
+      {
+        fieldName: "totalDoseMg",
+        previousValue: oldContext,
+        submittedValue: 20,
+        actorType: "staff",
+        actorIdentity: "employee-2",
+        source: "packaging",
+        disposition: "accepted",
+        createdAt: new Date("2026-08-01T00:01:00Z"),
+      },
+    ];
+
+    expect(
+      computeFieldStates(
+        rules,
+        appendFullPackageDoseDisputeChanges(oldItem, reviewerConfirmations)
+      ).totalDoseMg.state
+    ).toBe("confirmed");
+
+    const reopened = computeFieldStates(
+      rules,
+      appendFullPackageDoseDisputeChanges(
+        {
+          activeCompound: "psilocin",
+          unitMaterialMassMg: 1,
+          unitsPerPack: 20,
+          materialMassBasis: "fruiting_body",
+        },
+        reviewerConfirmations
+      )
+    ).totalDoseMg;
+
+    expect(reopened.state).toBe("disputed");
+    expect(reopened.confirmedValue).toBeNull();
+    expect(reopened.competingValues).toEqual([
+      20,
+      expect.stringContaining("Declared full package: 20 mg"),
+      expect.stringContaining("Lowest ladder dose needs: 50 mg"),
+    ]);
+  });
+
   it.each(["muscimol", "functional-only", "unknown", "", null])(
     "does not apply the psilocybin-family ladder to %s rows",
     (activeCompound) => {

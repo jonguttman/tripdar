@@ -168,6 +168,7 @@ function fullPackageDoseDisputeFingerprint(
   dispute: Pick<FullPackageDoseDispute, "declaredPackageMaterialMassMg" | "minimumDoseMaterialMassMg">
 ): string {
   return [
+    `activeCompound=${item.activeCompound ?? "null"}`,
     `unitMaterialMassMg=${item.unitMaterialMassMg ?? "null"}`,
     `unitsPerPack=${item.unitsPerPack ?? "null"}`,
     `materialMassBasis=${item.materialMassBasis ?? "null"}`,
