@@ -3,10 +3,9 @@
 import fs from "node:fs/promises";
 
 const USAGE =
-  "Usage: npm run staff-review:prepare-invite-batch -- --partner-id <id> --messages-file <path> --from <email> --reply-to <email> --rendered-by <email> --expires-in-days <days>";
+  "Usage: npm run staff-review:prepare-invite-batch -- --partner-id <id> --template-file <path> --from <email> --reply-to <email> --rendered-by <email> --expires-in-days <days> --provider <name> --provider-credential-fingerprint <sha256> --source-issue-id <id> --source-comment-id <id> [--source-card-id <id>] [--seal-key-fingerprint <sha256>]";
 
-interface RawMessage {
-  email: string;
+interface RawTemplate {
   cc?: string[];
   subject: string;
   html: string;
@@ -20,94 +19,98 @@ function arg(name: string): string | null {
   return value && !value.startsWith("--") ? value : null;
 }
 
-function requestOriginFromEnv(): string {
-  if (process.env.NEXT_PUBLIC_APP_URL) return process.env.NEXT_PUBLIC_APP_URL;
-  if (process.env.APP_URL) return process.env.APP_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
-}
-
 function parseExpiresInDays(raw: string | null): number | null {
   if (!raw) return null;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
 }
 
-function isRawMessage(value: unknown): value is RawMessage {
+function isRawTemplate(value: unknown): value is RawTemplate {
   if (!value || typeof value !== "object") return false;
-  const message = value as Record<string, unknown>;
+  const template = value as Record<string, unknown>;
   return (
-    typeof message.email === "string" &&
-    typeof message.subject === "string" &&
-    typeof message.html === "string" &&
-    typeof message.text === "string" &&
-    (message.cc === undefined ||
-      (Array.isArray(message.cc) && message.cc.every((email) => typeof email === "string")))
+    typeof template.subject === "string" &&
+    typeof template.html === "string" &&
+    typeof template.text === "string" &&
+    (template.cc === undefined ||
+      (Array.isArray(template.cc) && template.cc.every((email) => typeof email === "string")))
   );
 }
 
-async function readMessages(filePath: string): Promise<RawMessage[]> {
+async function readTemplate(filePath: string): Promise<RawTemplate> {
   let parsed: unknown;
   try {
     parsed = JSON.parse(await fs.readFile(filePath, "utf8"));
   } catch (error) {
     throw new Error(
-      `Failed to read messages file: ${error instanceof Error ? error.message : "invalid JSON"}`
+      `Failed to read template file: ${error instanceof Error ? error.message : "invalid JSON"}`
     );
   }
-  if (!Array.isArray(parsed) || !parsed.every(isRawMessage)) {
-    throw new Error("Messages file must be a JSON array of { email, subject, html, text, cc? } objects");
+  if (!isRawTemplate(parsed)) {
+    throw new Error("Template file must be a JSON object with { subject, html, text, cc? }");
   }
   return parsed;
 }
 
-async function assertRosterMatches(messages: RawMessage[]) {
-  const { normalizeEmployeeEmail } = await import("../src/domain/myco/employeeReviews");
-  const { tmtDirectStaffReviewerEmails } = await import("../src/domain/myco/staffReviewRoster");
-  const expectedEmails = tmtDirectStaffReviewerEmails();
-  const actualEmails = messages.map((message) => normalizeEmployeeEmail(message.email));
-  const uniqueActualEmails = new Set(actualEmails);
-  if (uniqueActualEmails.size !== actualEmails.length || uniqueActualEmails.size !== expectedEmails.length) {
-    throw new Error(`Messages file must contain exactly ${expectedEmails.length} TMT staff reviewer messages`);
-  }
-  for (const email of expectedEmails) {
-    if (!uniqueActualEmails.has(email)) throw new Error(`Messages file is missing TMT staff reviewer ${email}`);
-  }
-}
-
 async function main() {
   const partnerId = arg("--partner-id");
-  const messagesFile = arg("--messages-file");
+  const templateFile = arg("--template-file");
   const from = arg("--from");
   const replyTo = arg("--reply-to");
   const renderedBy = arg("--rendered-by");
   const expiresInDays = parseExpiresInDays(arg("--expires-in-days"));
-  if (!partnerId || !messagesFile || !from || !replyTo || !renderedBy || expiresInDays === null) {
+  const provider = arg("--provider");
+  const providerCredentialFingerprint = arg("--provider-credential-fingerprint");
+  const sourceIssueId = arg("--source-issue-id");
+  const sourceCommentId = arg("--source-comment-id");
+  const sourceCardId = arg("--source-card-id");
+  const sealKeyFingerprint = arg("--seal-key-fingerprint");
+  if (
+    !partnerId ||
+    !templateFile ||
+    !from ||
+    !replyTo ||
+    !renderedBy ||
+    expiresInDays === null ||
+    !provider ||
+    !providerCredentialFingerprint ||
+    !sourceIssueId ||
+    !sourceCommentId
+  ) {
     console.error(USAGE);
     process.exitCode = 2;
     return;
   }
 
-  const messages = await readMessages(messagesFile);
-  await assertRosterMatches(messages);
+  const templates = await readTemplate(templateFile);
   const { prepareStaffReviewInviteBatch } = await import("../src/domain/myco/staffReviewInviteBatches");
   const batch = await prepareStaffReviewInviteBatch({
     partnerId,
-    messages,
+    templates,
+    provider,
+    providerCredentialFingerprint,
+    sourceIssueId,
+    sourceCommentId,
+    sourceCardId,
     fromAddress: from,
     replyToAddress: replyTo,
     renderedBy,
-    expiresInDays,
-    requestOrigin: requestOriginFromEnv(),
+    requestedExpirySeconds: expiresInDays * 24 * 60 * 60,
+    sealKeyFingerprint: sealKeyFingerprint ?? undefined,
   });
   console.log(JSON.stringify({
-    id: batch.id,
+    batchId: batch.batchId,
     status: batch.status,
+    approvalDigest: batch.approvalDigest,
+    approvalDigestVersion: batch.approvalDigestVersion,
+    requestedExpirySeconds: batch.requestedExpirySeconds,
     recipients: batch.recipients.map((recipient) => ({
-      recipientId: recipient.id,
+      ordinal: recipient.ordinal,
+      employeeId: recipient.employeeId,
+      displayName: recipient.displayName,
       emailMasked: recipient.emailMasked,
-      inviteUrl: recipient.inviteUrl,
     })),
+    previews: batch.previews,
   }, null, 2));
 }
 

@@ -1,158 +1,143 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/domain/auth/adminSession";
 import {
-  prepareCanonicalStaffReviewInvitationBatch,
-  StaffReviewInvitationPartnerScopeError,
-} from "@/domain/myco/staffReviewInvitations";
-import {
   approveStaffReviewInviteBatch,
   prepareStaffReviewInviteBatch,
-  type StaffInviteBatchMessageInput,
+  revokeStaffReviewInvitation,
+  StaffInviteError,
+  type StaffInviteTemplateInput,
 } from "@/domain/myco/staffReviewInviteBatches";
-import { isQaStaffReviewPartner } from "@/domain/myco/staffReviewRoster";
+import { resolvePartnerMutationForAdmin } from "@/domain/myco/adminAccess";
 
 export const dynamic = "force-dynamic";
 
-async function requireAdmin() {
-  const session = await getAdminSession();
-  if (!session?.user?.email) {
-    return NextResponse.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
-  }
-  return session.user.email;
+function jsonError(message: string, status: number, code = "invalid_request") {
+  return NextResponse.json({ success: false, error: { code, message } }, { status });
 }
 
-function isOptionalCc(value: unknown): value is string[] | undefined {
-  return value === undefined || (Array.isArray(value) && value.every((email) => typeof email === "string"));
+function actorEmail(session: Awaited<ReturnType<typeof getAdminSession>>): string | null {
+  return session?.actualUser.email ?? session?.user?.email ?? null;
+}
+
+async function requirePartnerScope(
+  session: Awaited<ReturnType<typeof getAdminSession>>,
+  partnerId: string
+): Promise<string | NextResponse> {
+  const email = actorEmail(session);
+  if (!email) return jsonError("Unauthorized", 401, "unauthorized");
+  if (session?.viewAs) return jsonError("View-as cannot mutate staff invitations", 403, "view_as_forbidden");
+  if (!partnerId) return jsonError("partnerId is required", 400, "invalid_request");
+
+  const access = await resolvePartnerMutationForAdmin(email, partnerId);
+  return access.ok ? email : jsonError(access.message, access.status, "partner_not_found");
+}
+
+function stringField(body: Record<string, unknown>, key: string): string {
+  return typeof body[key] === "string" ? body[key].trim() : "";
+}
+
+function optionalStringField(body: Record<string, unknown>, key: string): string | null {
+  const value = body[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function stringArrayField(value: unknown): string[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new StaffInviteError("invalid_request", "cc must be an array of email strings");
+  }
+  return value;
+}
+
+function templatesFrom(body: Record<string, unknown>): StaffInviteTemplateInput {
+  const templates = body.templates;
+  if (typeof templates !== "object" || templates === null || Array.isArray(templates)) {
+    throw new StaffInviteError("invalid_request", "templates is required");
+  }
+  const object = templates as Record<string, unknown>;
+  const subject = typeof object.subject === "string" ? object.subject : "";
+  const html = typeof object.html === "string" ? object.html : "";
+  const text = typeof object.text === "string" ? object.text : "";
+  return {
+    subject,
+    html,
+    text,
+    cc: stringArrayField(object.cc),
+  };
+}
+
+function mapStaffInviteError(error: unknown) {
+  if (error instanceof StaffInviteError) {
+    return jsonError(error.message, error.status, error.code);
+  }
+  console.error("[staff-invitations]", error);
+  return jsonError("Staff invitation request failed", 500, "internal_error");
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await requireAdmin();
-  if (auth instanceof NextResponse) return auth;
+  const session = await getAdminSession();
+  if (!actorEmail(session)) return jsonError("Unauthorized", 401, "unauthorized");
 
-  const body = (await request.json().catch(() => ({}))) as {
-    partnerId?: unknown;
-    send?: unknown;
-    expiresInDays?: unknown;
-    qaOnly?: unknown;
-    action?: unknown;
-    batchId?: unknown;
-    approvedInteractionId?: unknown;
-    sourceIssueId?: unknown;
-    sourceCommentId?: unknown;
-    sourceCardId?: unknown;
-    messages?: unknown;
-  };
+  const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
   if (body.send === true) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: {
-          message: "Staff invitations are preview-only in KEWL-2912. send=false is required.",
-          code: "send_not_authorized",
-        },
-      },
-      { status: 403 }
-    );
+    return jsonError("Sending staff invitation batches is disabled on this endpoint", 403, "send_forbidden");
   }
 
-  const partnerId = typeof body.partnerId === "string" ? body.partnerId : "";
-  if (!partnerId) {
-    return NextResponse.json(
-      { success: false, error: { message: "partnerId is required" } },
-      { status: 400 }
-    );
-  }
-  const action = typeof body.action === "string" ? body.action : "preview";
   try {
-    if (action === "record_approval") {
-      const batchId = typeof body.batchId === "string" ? body.batchId : "";
-      const approvedInteractionId =
-        typeof body.approvedInteractionId === "string" ? body.approvedInteractionId : "";
-      if (!batchId || !approvedInteractionId) {
-        return NextResponse.json(
-          { success: false, error: { message: "batchId and approvedInteractionId are required" } },
-          { status: 400 }
-        );
-      }
-      const approved = await approveStaffReviewInviteBatch({
-        batchId,
-        approvedInteractionId,
-        approvedBy: auth,
-        sourceIssueId: typeof body.sourceIssueId === "string" ? body.sourceIssueId : undefined,
-        sourceCommentId: typeof body.sourceCommentId === "string" ? body.sourceCommentId : undefined,
-        sourceCardId: typeof body.sourceCardId === "string" ? body.sourceCardId : undefined,
-      });
-      return NextResponse.json({ success: true, data: approved });
-    }
+    const action = stringField(body, "action");
+    const partnerId = stringField(body, "partnerId");
     if (action === "prepare_batch") {
-      if (!Array.isArray(body.messages)) {
-        return NextResponse.json(
-          { success: false, error: { message: "messages are required for prepare_batch" } },
-          { status: 400 }
-        );
-      }
-      const messages = body.messages.filter(
-        (message): message is StaffInviteBatchMessageInput =>
-          typeof message === "object" &&
-          message !== null &&
-          typeof (message as { email?: unknown }).email === "string" &&
-          typeof (message as { subject?: unknown }).subject === "string" &&
-          typeof (message as { html?: unknown }).html === "string" &&
-          typeof (message as { text?: unknown }).text === "string" &&
-          isOptionalCc((message as { cc?: unknown }).cc)
-      );
-      if (messages.length !== body.messages.length) {
-        return NextResponse.json(
-          { success: false, error: { message: "Each message requires email, subject, html, text, and optional cc string array" } },
-          { status: 400 }
-        );
-      }
-      const batch = await prepareStaffReviewInviteBatch({
+      const email = await requirePartnerScope(session, partnerId);
+      if (email instanceof NextResponse) return email;
+      const result = await prepareStaffReviewInviteBatch({
         partnerId,
-        renderedBy: auth,
-        requestOrigin: request.nextUrl.origin,
-        expiresInDays: Number(body.expiresInDays),
-        sourceIssueId: typeof body.sourceIssueId === "string" ? body.sourceIssueId : undefined,
-        sourceCommentId: typeof body.sourceCommentId === "string" ? body.sourceCommentId : undefined,
-        sourceCardId: typeof body.sourceCardId === "string" ? body.sourceCardId : undefined,
-        messages,
+        renderedBy: email,
+        sourceIssueId: stringField(body, "sourceIssueId"),
+        sourceCommentId: stringField(body, "sourceCommentId"),
+        sourceCardId: optionalStringField(body, "sourceCardId"),
+        templates: templatesFrom(body),
+        provider: stringField(body, "provider"),
+        providerCredentialFingerprint: stringField(body, "providerCredentialFingerprint"),
+        fromAddress: stringField(body, "fromAddress"),
+        replyToAddress: optionalStringField(body, "replyToAddress"),
+        requestedExpirySeconds:
+          typeof body.requestedExpirySeconds === "number" ? body.requestedExpirySeconds : undefined,
+        sealKeyFingerprint: optionalStringField(body, "sealKeyFingerprint") ?? undefined,
       });
-      return NextResponse.json({ success: true, data: batch }, { status: 201 });
+      return NextResponse.json({ success: true, data: result });
     }
 
-    if (body.qaOnly === true && !isQaStaffReviewPartner(partnerId)) {
-      const error = new StaffReviewInvitationPartnerScopeError();
-      return NextResponse.json(
-        {
-          success: false,
-          error: {
-            message: error.message,
-            code: error.code,
-          },
+    if (action === "record_approval") {
+      const email = await requirePartnerScope(session, partnerId);
+      if (email instanceof NextResponse) return email;
+      const result = await approveStaffReviewInviteBatch({
+        partnerId,
+        batchId: stringField(body, "batchId"),
+        approvedInteractionId: stringField(body, "approvedInteractionId"),
+        approvedBy: email,
+        sourceEvidence: {
+          sourceIssueId: stringField(body, "sourceIssueId"),
+          sourceCommentId: stringField(body, "sourceCommentId"),
+          sourceCardId: optionalStringField(body, "sourceCardId"),
         },
-        { status: error.statusCode }
-      );
+        providerCredentialFingerprint: optionalStringField(body, "providerCredentialFingerprint") ?? undefined,
+        sealKeyFingerprint: optionalStringField(body, "sealKeyFingerprint") ?? undefined,
+      });
+      return NextResponse.json({ success: true, data: result });
     }
 
-    const batch = await prepareCanonicalStaffReviewInvitationBatch({
-      partnerId,
-      issuedBy: auth,
-      requestOrigin: request.nextUrl.origin,
-      expiresInDays: Number(body.expiresInDays),
-      qaOnly: body.qaOnly === true,
-    });
-    return NextResponse.json({ success: true, data: batch }, { status: 201 });
+    if (action === "revoke") {
+      const result = await revokeStaffReviewInvitation({
+        session,
+        partnerId,
+        invitationId: stringField(body, "invitationId"),
+        reason: stringField(body, "reason"),
+      });
+      return NextResponse.json({ success: true, data: result });
+    }
+
+    return jsonError("Unsupported staff invitation action", 400, "unsupported_action");
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to prepare staff invitations";
-    const statusCode = typeof (error as { statusCode?: unknown }).statusCode === "number"
-      ? (error as { statusCode: number }).statusCode
-      : 400;
-    const code = typeof (error as { code?: unknown }).code === "string"
-      ? (error as { code: string }).code
-      : undefined;
-    return NextResponse.json(
-      { success: false, error: { message, ...(code ? { code } : {}) } },
-      { status: statusCode }
-    );
+    return mapStaffInviteError(error);
   }
 }

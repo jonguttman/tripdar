@@ -44,3 +44,27 @@ export async function resolveProductForAdmin(
 
   return { ok: true, productId: product.id, partnerId: product.partnerId };
 }
+
+export type PartnerMutationAccessResult =
+  | { ok: true; partnerId: string }
+  | { ok: false; status: 404; message: string };
+
+export async function resolvePartnerMutationForAdmin(
+  email: string,
+  partnerId: string
+): Promise<PartnerMutationAccessResult> {
+  const role = await getUserRole(email);
+  if (role === "super_admin") {
+    const partner = await prisma.partner.findUnique({ where: { id: partnerId }, select: { id: true } });
+    return partner ? { ok: true, partnerId: partner.id } : { ok: false, status: 404, message: "Partner not found" };
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { email },
+    select: { partnerId: true },
+  });
+  if (role !== "partner_admin" || user?.partnerId !== partnerId) {
+    return { ok: false, status: 404, message: "Partner not found" };
+  }
+  return { ok: true, partnerId };
+}

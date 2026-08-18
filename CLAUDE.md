@@ -198,14 +198,13 @@ vite-node, `node` loads `--env-file=.env.local` before vite-node starts, so it w
 (verified 2026-07-29, KEWL-2480). If a script needs enums, namespaces, or param properties, swap
 `--experimental-strip-types` for `--experimental-transform-types`.
 
-### Staff-review invite-batch executor
+### Staff-review invite-batch delivery
 
-Run the approved batch sender only through the checked-in npm script, which uses the
-repo-local `vite-node` resolver. Do not use `tsx` and do not install it:
-
-```bash
-npm run staff-review:send-invite-batch -- --batch-id <id> --approved-interaction-id <id>
-```
+The provider-send executor is retired at approval. Approved staff invite batches now
+release one shared staff catalog link by minting a single `CatalogAccessToken`, revoking
+prior partner-scoped pending legacy invitations, and sealing the shared `/staff/catalog/`
+link into final recipient evidence. Do not run `staff-review:send-invite-batch`; that
+package script and its executor were intentionally removed.
 
 ## Staff catalog review — verifying the screens (QA sandbox)
 
