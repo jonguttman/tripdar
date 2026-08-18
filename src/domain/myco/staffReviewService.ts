@@ -9,6 +9,8 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveLadderDivisorMg } from "@/domain/recommendation-engine/doseBasis";
+import { CANONICAL_DOSE_BASIS, CANONICAL_DOSE_LEVELS } from "@/domain/recommendation-engine/types";
 import {
   CATALOG_FIELD_SPECS,
   CONFIRMED_ABSENT_VALUE,
@@ -123,6 +125,95 @@ export interface CatalogChangeRow {
   createdAt: Date;
 }
 
+type CatalogItemForDoseDispute = {
+  unitMaterialMassMg: number | null;
+  unitsPerPack: number | null;
+  materialMassBasis: string | null;
+};
+
+export interface FullPackageDoseDispute {
+  fieldName: "totalDoseMg";
+  declaredPackageMaterialMassMg: number;
+  minimumDoseMaterialMassMg: number;
+  declaredValue: string;
+  requiredValue: string;
+}
+
+const FULL_PACKAGE_DOSE_DISPUTE_FIELD = "totalDoseMg" as const;
+const FULL_PACKAGE_DOSE_DISPUTE_AT = new Date("1970-01-01T00:00:00.000Z");
+const FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX = "system:kewl-2494-full-package-dose";
+
+function formatMg(value: number): string {
+  return `${value.toLocaleString("en-US")} mg`;
+}
+
+export function detectFullPackageDoseDispute(
+  item: CatalogItemForDoseDispute
+): FullPackageDoseDispute | null {
+  const divisorMg = resolveLadderDivisorMg({
+    unitMaterialMassMg: item.unitMaterialMassMg,
+    materialMassBasis: item.materialMassBasis,
+  });
+  if (divisorMg === null) return null;
+  if (
+    typeof item.unitsPerPack !== "number" ||
+    !Number.isFinite(item.unitsPerPack) ||
+    item.unitsPerPack <= 0
+  ) {
+    return null;
+  }
+
+  const declaredPackageMaterialMassMg = divisorMg * item.unitsPerPack;
+  const minimumDoseMaterialMassMg = Math.min(
+    ...CANONICAL_DOSE_LEVELS.map((level) => level.standardLowMg)
+  );
+  if (declaredPackageMaterialMassMg >= minimumDoseMaterialMassMg) return null;
+
+  return {
+    fieldName: FULL_PACKAGE_DOSE_DISPUTE_FIELD,
+    declaredPackageMaterialMassMg,
+    minimumDoseMaterialMassMg,
+    declaredValue:
+      `Declared full package: ${formatMg(declaredPackageMaterialMassMg)} ` +
+      `${CANONICAL_DOSE_BASIS} (${formatMg(divisorMg)} per unit x ${item.unitsPerPack} units)`,
+    requiredValue:
+      `Lowest ladder dose needs: ${formatMg(minimumDoseMaterialMassMg)} ${CANONICAL_DOSE_BASIS}`,
+  };
+}
+
+export function appendFullPackageDoseDisputeChanges(
+  item: CatalogItemForDoseDispute,
+  changes: CatalogChangeRow[]
+): CatalogChangeRow[] {
+  const dispute = detectFullPackageDoseDispute(item);
+  if (!dispute) return changes;
+
+  // The dispute state machine only counts staff-shaped accepted rows; these derived
+  // rows deliberately enter that one path instead of creating a second contradiction model.
+  const disputeChanges: CatalogChangeRow[] = [
+    {
+      fieldName: dispute.fieldName,
+      submittedValue: dispute.declaredValue,
+      actorType: "staff",
+      actorIdentity: `${FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX}:declared`,
+      source: "packaging",
+      disposition: "accepted",
+      createdAt: FULL_PACKAGE_DOSE_DISPUTE_AT,
+    },
+    {
+      fieldName: dispute.fieldName,
+      submittedValue: dispute.requiredValue,
+      actorType: "staff",
+      actorIdentity: `${FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX}:minimum`,
+      source: "personal-knowledge",
+      disposition: "accepted",
+      createdAt: FULL_PACKAGE_DOSE_DISPUTE_AT,
+    },
+  ];
+
+  return [...disputeChanges, ...changes];
+}
+
 /** Replays the append-only log into per-field state. Rejected changes are skipped. */
 export function computeFieldStates(
   rules: FieldRuleRow[],
@@ -171,6 +262,8 @@ type CatalogItemForGate = {
   brandDoseTiers: unknown;
   photoUrl: string | null;
   activeCompound: string;
+  unitMaterialMassMg: number | null;
+  materialMassBasis: string | null;
   researchOnly: boolean;
   listingOverrideAt: Date | null;
   listingOverrideBy: string | null;
@@ -260,7 +353,10 @@ export async function loadGateForProduct(catalogItemId: string): Promise<Listing
         : null,
     },
     rules,
-    fieldStates: computeFieldStates(rules, item.catalogFieldChanges),
+    fieldStates: computeFieldStates(
+      rules,
+      appendFullPackageDoseDisputeChanges(item, item.catalogFieldChanges)
+    ),
   });
 }
 
@@ -373,7 +469,10 @@ export async function recomputeCatalogItemProjection(
     },
   });
 
-  const fieldStates = computeFieldStates(rules, item.catalogFieldChanges);
+  const fieldStates = computeFieldStates(
+    rules,
+    appendFullPackageDoseDisputeChanges(item, item.catalogFieldChanges)
+  );
   const existingCache = new Map(
     (item.fieldVerificationStates ?? []).map((row) => [row.fieldName, row])
   );

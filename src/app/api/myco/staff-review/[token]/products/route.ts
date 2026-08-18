@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireReviewer, REVIEWER_SESSION_COOKIE } from "@/domain/myco/staffReviewAuth";
 import {
+  appendFullPackageDoseDisputeChanges,
   computeFieldStates,
   ensureFieldRules,
   evaluateGateForItem,
@@ -78,7 +79,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   let fullyReviewed = 0;
 
   const products = items.map((item) => {
-    const fieldStates = computeFieldStates(rules, item.catalogFieldChanges, identityAliases);
+    const fieldStates = computeFieldStates(
+      rules,
+      appendFullPackageDoseDisputeChanges(item, item.catalogFieldChanges),
+      identityAliases
+    );
     const gate = evaluateGateForItem({
       item,
       extras: {

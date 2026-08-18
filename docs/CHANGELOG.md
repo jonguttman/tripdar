@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.18.4] - 2026-08-18
+
+### Added
+- **Full-package lowest-dose staff dispute** (KEWL-2494): staff review now flags a dosing dispute when a product's full package material mass cannot reach the lowest canonical dose, names the declared package mass and minimum required mass as the competing values, and keeps clearance on the existing two-reviewer `totalDoseMg` verification path.
+
 ## [1.18.3] - 2026-08-10
 
 ### Added

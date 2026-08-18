@@ -14,6 +14,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireReviewer, REVIEWER_SESSION_COOKIE } from "@/domain/myco/staffReviewAuth";
 import {
+  appendFullPackageDoseDisputeChanges,
   computeFieldStates,
   ensureFieldRules,
   evaluateGateForItem,
@@ -135,7 +136,11 @@ export async function GET(
           },
           select: { legacyEmployeeId: true, employeeId: true },
         });
-  const fieldStates = computeFieldStates(rules, item.catalogFieldChanges, identityAliases);
+  const fieldStates = computeFieldStates(
+    rules,
+    appendFullPackageDoseDisputeChanges(item, item.catalogFieldChanges),
+    identityAliases
+  );
   const gate = evaluateGateForItem({
     item,
     extras: {
@@ -292,7 +297,11 @@ export async function POST(
           },
           select: { legacyEmployeeId: true, employeeId: true },
         });
-  const priorStates = computeFieldStates(rules, item.catalogFieldChanges, priorIdentityAliases);
+  const priorStates = computeFieldStates(
+    rules,
+    appendFullPackageDoseDisputeChanges(item, item.catalogFieldChanges),
+    priorIdentityAliases
+  );
   const changeRows: ReturnType<typeof buildCatalogFieldChange>[] = [];
 
   for (const answer of answers) {
@@ -430,7 +439,11 @@ export async function POST(
             },
             select: { legacyEmployeeId: true, employeeId: true },
           });
-    const states = computeFieldStates(rules, refreshedItem.catalogFieldChanges, refreshedIdentityAliases);
+    const states = computeFieldStates(
+      rules,
+      appendFullPackageDoseDisputeChanges(refreshedItem, refreshedItem.catalogFieldChanges),
+      refreshedIdentityAliases
+    );
     const updates: Record<string, unknown> = {};
 
     for (const fieldName of touched) {
