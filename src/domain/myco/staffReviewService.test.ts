@@ -21,6 +21,7 @@ vi.mock("@/lib/prisma", async () => {
 let appendFullPackageDoseDisputeChanges: typeof import("./staffReviewService").appendFullPackageDoseDisputeChanges;
 let computeFieldStates: typeof import("./staffReviewService").computeFieldStates;
 let detectFullPackageDoseDispute: typeof import("./staffReviewService").detectFullPackageDoseDispute;
+let fullPackageDoseDisputeReviewContext: typeof import("./staffReviewService").fullPackageDoseDisputeReviewContext;
 let recomputeCatalogItemProjection: typeof import("./staffReviewService").recomputeCatalogItemProjection;
 
 beforeAll(async () => {
@@ -28,6 +29,7 @@ beforeAll(async () => {
     appendFullPackageDoseDisputeChanges,
     computeFieldStates,
     detectFullPackageDoseDispute,
+    fullPackageDoseDisputeReviewContext,
     recomputeCatalogItemProjection,
   } = await import("./staffReviewService"));
 });
@@ -170,15 +172,18 @@ describe("full-package dose dispute detection", () => {
 
   it("lets two real reviewer confirmations clear the derived dispute without changing product data", () => {
     const rules = specRuleRows();
+    const item = {
+      unitMaterialMassMg: 1,
+      unitsPerPack: 20,
+      materialMassBasis: "fruiting_body",
+    };
+    const disputeContext = fullPackageDoseDisputeReviewContext(item);
     const changes = appendFullPackageDoseDisputeChanges(
-      {
-        unitMaterialMassMg: 1,
-        unitsPerPack: 20,
-        materialMassBasis: "fruiting_body",
-      },
+      item,
       [
         {
           fieldName: "totalDoseMg",
+          previousValue: disputeContext,
           submittedValue: 20,
           actorType: "staff",
           actorIdentity: "employee-1",
@@ -188,6 +193,7 @@ describe("full-package dose dispute detection", () => {
         },
         {
           fieldName: "totalDoseMg",
+          previousValue: disputeContext,
           submittedValue: 20,
           actorType: "staff",
           actorIdentity: "employee-2",
@@ -203,5 +209,105 @@ describe("full-package dose dispute detection", () => {
     expect(state.state).toBe("confirmed");
     expect(state.confirmationsCount).toBe(2);
     expect(state.confirmedValue).toBe(20);
+  });
+
+  it("does not let stale package-total confirmations suppress first detection", () => {
+    const rules = specRuleRows();
+    const changes = appendFullPackageDoseDisputeChanges(
+      {
+        unitMaterialMassMg: 1,
+        unitsPerPack: 20,
+        materialMassBasis: "fruiting_body",
+      },
+      [
+        {
+          fieldName: "totalDoseMg",
+          submittedValue: 20,
+          actorType: "staff",
+          actorIdentity: "employee-1",
+          source: "packaging",
+          disposition: "accepted",
+          createdAt: new Date("2026-07-01T00:00:00Z"),
+        },
+        {
+          fieldName: "totalDoseMg",
+          submittedValue: 20,
+          actorType: "staff",
+          actorIdentity: "employee-2",
+          source: "packaging",
+          disposition: "accepted",
+          createdAt: new Date("2026-07-01T00:01:00Z"),
+        },
+      ]
+    );
+
+    const state = computeFieldStates(rules, changes).totalDoseMg;
+
+    expect(state.state).toBe("disputed");
+    expect(state.confirmedValue).toBeNull();
+    expect(state.competingValues).toEqual([
+      20,
+      expect.stringContaining("Declared full package: 20 mg"),
+      expect.stringContaining("Lowest ladder dose needs: 50 mg"),
+    ]);
+  });
+
+  it("reopens a previously cleared finding when relevant package inputs change", () => {
+    const rules = specRuleRows();
+    const oldItem = {
+      unitMaterialMassMg: 1,
+      unitsPerPack: 20,
+      materialMassBasis: "fruiting_body",
+    };
+    const oldContext = fullPackageDoseDisputeReviewContext(oldItem);
+    const reviewerConfirmations = [
+      {
+        fieldName: "totalDoseMg",
+        previousValue: oldContext,
+        submittedValue: 20,
+        actorType: "staff",
+        actorIdentity: "employee-1",
+        source: "packaging",
+        disposition: "accepted",
+        createdAt: new Date("2026-08-01T00:00:00Z"),
+      },
+      {
+        fieldName: "totalDoseMg",
+        previousValue: oldContext,
+        submittedValue: 20,
+        actorType: "staff",
+        actorIdentity: "employee-2",
+        source: "packaging",
+        disposition: "accepted",
+        createdAt: new Date("2026-08-01T00:01:00Z"),
+      },
+    ];
+
+    expect(
+      computeFieldStates(
+        rules,
+        appendFullPackageDoseDisputeChanges(oldItem, reviewerConfirmations)
+      ).totalDoseMg.state
+    ).toBe("confirmed");
+
+    const reopened = computeFieldStates(
+      rules,
+      appendFullPackageDoseDisputeChanges(
+        {
+          unitMaterialMassMg: 1,
+          unitsPerPack: 10,
+          materialMassBasis: "fruiting_body",
+        },
+        reviewerConfirmations
+      )
+    ).totalDoseMg;
+
+    expect(reopened.state).toBe("disputed");
+    expect(reopened.confirmedValue).toBeNull();
+    expect(reopened.competingValues).toEqual([
+      20,
+      expect.stringContaining("Declared full package: 10 mg"),
+      expect.stringContaining("Lowest ladder dose needs: 50 mg"),
+    ]);
   });
 });

@@ -44,6 +44,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       catalogFieldChanges: {
         select: {
           fieldName: true,
+          previousValue: true,
           submittedValue: true,
           actorType: true,
           actorIdentity: true,

@@ -117,6 +117,7 @@ export function ruleToGateRule(rule: FieldRuleRow): GateFieldRule {
 
 export interface CatalogChangeRow {
   fieldName: string;
+  previousValue?: unknown;
   submittedValue: unknown;
   actorType: string;
   actorIdentity: string;
@@ -135,6 +136,7 @@ export interface FullPackageDoseDispute {
   fieldName: "totalDoseMg";
   declaredPackageMaterialMassMg: number;
   minimumDoseMaterialMassMg: number;
+  fingerprint: string;
   declaredValue: string;
   requiredValue: string;
 }
@@ -142,9 +144,32 @@ export interface FullPackageDoseDispute {
 const FULL_PACKAGE_DOSE_DISPUTE_FIELD = "totalDoseMg" as const;
 const FULL_PACKAGE_DOSE_DISPUTE_AT = new Date("1970-01-01T00:00:00.000Z");
 const FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX = "system:kewl-2494-full-package-dose";
+const FULL_PACKAGE_DOSE_DISPUTE_CONTEXT_KIND = "full-package-dose-dispute";
+
+export interface FullPackageDoseDisputeReviewContext {
+  kind: typeof FULL_PACKAGE_DOSE_DISPUTE_CONTEXT_KIND;
+  fingerprint: string;
+  declaredPackageMaterialMassMg: number;
+  minimumDoseMaterialMassMg: number;
+  declaredValue: string;
+  requiredValue: string;
+}
 
 function formatMg(value: number): string {
   return `${value.toLocaleString("en-US")} mg`;
+}
+
+function fullPackageDoseDisputeFingerprint(
+  item: CatalogItemForDoseDispute,
+  dispute: Pick<FullPackageDoseDispute, "declaredPackageMaterialMassMg" | "minimumDoseMaterialMassMg">
+): string {
+  return [
+    `unitMaterialMassMg=${item.unitMaterialMassMg ?? "null"}`,
+    `unitsPerPack=${item.unitsPerPack ?? "null"}`,
+    `materialMassBasis=${item.materialMassBasis ?? "null"}`,
+    `declaredPackageMaterialMassMg=${dispute.declaredPackageMaterialMassMg}`,
+    `minimumDoseMaterialMassMg=${dispute.minimumDoseMaterialMassMg}`,
+  ].join(";");
 }
 
 export function detectFullPackageDoseDispute(
@@ -168,11 +193,16 @@ export function detectFullPackageDoseDispute(
     ...CANONICAL_DOSE_LEVELS.map((level) => level.standardLowMg)
   );
   if (declaredPackageMaterialMassMg >= minimumDoseMaterialMassMg) return null;
+  const fingerprint = fullPackageDoseDisputeFingerprint(item, {
+    declaredPackageMaterialMassMg,
+    minimumDoseMaterialMassMg,
+  });
 
   return {
     fieldName: FULL_PACKAGE_DOSE_DISPUTE_FIELD,
     declaredPackageMaterialMassMg,
     minimumDoseMaterialMassMg,
+    fingerprint,
     declaredValue:
       `Declared full package: ${formatMg(declaredPackageMaterialMassMg)} ` +
       `${CANONICAL_DOSE_BASIS} (${formatMg(divisorMg)} per unit x ${item.unitsPerPack} units)`,
@@ -181,33 +211,81 @@ export function detectFullPackageDoseDispute(
   };
 }
 
+export function fullPackageDoseDisputeReviewContext(
+  item: CatalogItemForDoseDispute
+): FullPackageDoseDisputeReviewContext | null {
+  const dispute = detectFullPackageDoseDispute(item);
+  if (!dispute) return null;
+  return {
+    kind: FULL_PACKAGE_DOSE_DISPUTE_CONTEXT_KIND,
+    fingerprint: dispute.fingerprint,
+    declaredPackageMaterialMassMg: dispute.declaredPackageMaterialMassMg,
+    minimumDoseMaterialMassMg: dispute.minimumDoseMaterialMassMg,
+    declaredValue: dispute.declaredValue,
+    requiredValue: dispute.requiredValue,
+  };
+}
+
+function isCurrentFullPackageDoseDisputeReview(
+  change: CatalogChangeRow,
+  dispute: FullPackageDoseDispute
+): boolean {
+  const previousValue = change.previousValue;
+  return (
+    previousValue !== null &&
+    typeof previousValue === "object" &&
+    (previousValue as Partial<FullPackageDoseDisputeReviewContext>).kind ===
+      FULL_PACKAGE_DOSE_DISPUTE_CONTEXT_KIND &&
+    (previousValue as Partial<FullPackageDoseDisputeReviewContext>).fingerprint ===
+      dispute.fingerprint
+  );
+}
+
+function fullPackageDoseDisputeCreatedAt(
+  changes: CatalogChangeRow[],
+  dispute: FullPackageDoseDispute
+): Date {
+  const latestStaleTotalDoseChangeAt = changes
+    .filter((change) => change.fieldName === dispute.fieldName)
+    .filter((change) => change.actorType === "staff")
+    .filter((change) => change.disposition !== "rejected")
+    .filter((change) => !isCurrentFullPackageDoseDisputeReview(change, dispute))
+    .reduce((latest, change) => Math.max(latest, change.createdAt.getTime()), 0);
+
+  if (latestStaleTotalDoseChangeAt === 0) return FULL_PACKAGE_DOSE_DISPUTE_AT;
+  return new Date(latestStaleTotalDoseChangeAt + 1);
+}
+
 export function appendFullPackageDoseDisputeChanges(
   item: CatalogItemForDoseDispute,
   changes: CatalogChangeRow[]
 ): CatalogChangeRow[] {
   const dispute = detectFullPackageDoseDispute(item);
   if (!dispute) return changes;
+  const syntheticCreatedAt = fullPackageDoseDisputeCreatedAt(changes, dispute);
 
   // The dispute state machine only counts staff-shaped accepted rows; these derived
   // rows deliberately enter that one path instead of creating a second contradiction model.
   const disputeChanges: CatalogChangeRow[] = [
     {
       fieldName: dispute.fieldName,
+      previousValue: null,
       submittedValue: dispute.declaredValue,
       actorType: "staff",
-      actorIdentity: `${FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX}:declared`,
+      actorIdentity: `${FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX}:declared:${dispute.fingerprint}`,
       source: "packaging",
       disposition: "accepted",
-      createdAt: FULL_PACKAGE_DOSE_DISPUTE_AT,
+      createdAt: syntheticCreatedAt,
     },
     {
       fieldName: dispute.fieldName,
+      previousValue: null,
       submittedValue: dispute.requiredValue,
       actorType: "staff",
-      actorIdentity: `${FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX}:minimum`,
+      actorIdentity: `${FULL_PACKAGE_DOSE_DISPUTE_ACTOR_PREFIX}:minimum:${dispute.fingerprint}`,
       source: "personal-knowledge",
       disposition: "accepted",
-      createdAt: FULL_PACKAGE_DOSE_DISPUTE_AT,
+      createdAt: syntheticCreatedAt,
     },
   ];
 
@@ -331,6 +409,7 @@ export async function loadGateForProduct(catalogItemId: string): Promise<Listing
       catalogFieldChanges: {
         select: {
           fieldName: true,
+          previousValue: true,
           submittedValue: true,
           actorType: true,
           actorIdentity: true,
@@ -457,6 +536,7 @@ export async function recomputeCatalogItemProjection(
         orderBy: { createdAt: "asc" },
         select: {
           fieldName: true,
+          previousValue: true,
           submittedValue: true,
           actorType: true,
           actorIdentity: true,

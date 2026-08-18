@@ -18,6 +18,7 @@ import {
   computeFieldStates,
   ensureFieldRules,
   evaluateGateForItem,
+  fullPackageDoseDisputeReviewContext,
   type FieldRuleRow,
 } from "@/domain/myco/staffReviewService";
 import {
@@ -55,6 +56,7 @@ const PRODUCT_INCLUDE = {
     select: {
       id: true,
       fieldName: true,
+      previousValue: true,
       submittedValue: true,
       actorType: true,
       actorIdentity: true,
@@ -343,6 +345,10 @@ export async function POST(
     // "Confirm" means agreeing with what is on screen. For synthetic numeric disputes,
     // descriptive competing values stay visible, but the submitted value must stay numeric.
     const previousValue = currentReviewValue(itemRecord, rule, priorStates[fieldName]?.liveValue);
+    const previousValueForLog =
+      fieldName === "totalDoseMg"
+        ? fullPackageDoseDisputeReviewContext(item) ?? previousValue
+        : previousValue;
 
     let submittedValue: unknown;
     if (action === "dont_know") {
@@ -386,7 +392,7 @@ export async function POST(
     changeRows.push(
       buildCatalogFieldChange({
         fieldName,
-        previousValue,
+        previousValue: previousValueForLog,
         submittedValue,
         actorType: "staff",
         actorIdentity: reviewer.employeeId,
