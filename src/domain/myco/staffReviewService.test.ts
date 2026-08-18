@@ -115,6 +115,7 @@ describe("staff-review catalog projection hardening", () => {
 describe("full-package dose dispute detection", () => {
   it("flags a full package that cannot reach the lowest canonical dose", () => {
     const dispute = detectFullPackageDoseDispute({
+      activeCompound: "psilocybin",
       unitMaterialMassMg: 1,
       unitsPerPack: 20,
       materialMassBasis: "fruiting_body",
@@ -132,6 +133,7 @@ describe("full-package dose dispute detection", () => {
   it("does not flag the ordinary case where only higher dose levels exceed one pack", () => {
     expect(
       detectFullPackageDoseDispute({
+        activeCompound: "psilocybin",
         unitMaterialMassMg: 100,
         unitsPerPack: 2,
         materialMassBasis: "mushroom_material",
@@ -142,6 +144,7 @@ describe("full-package dose dispute detection", () => {
   it("does not model incompatible extract-basis rows as package-size disputes", () => {
     expect(
       detectFullPackageDoseDispute({
+        activeCompound: "psilocybin",
         unitMaterialMassMg: 1,
         unitsPerPack: 20,
         materialMassBasis: "whole_fruit_body_extract",
@@ -153,6 +156,7 @@ describe("full-package dose dispute detection", () => {
     const rules = specRuleRows();
     const changes = appendFullPackageDoseDisputeChanges(
       {
+        activeCompound: "psilocybin",
         unitMaterialMassMg: 1,
         unitsPerPack: 20,
         materialMassBasis: "fruiting_body",
@@ -173,6 +177,7 @@ describe("full-package dose dispute detection", () => {
   it("lets two real reviewer confirmations clear the derived dispute without changing product data", () => {
     const rules = specRuleRows();
     const item = {
+      activeCompound: "psilocybin",
       unitMaterialMassMg: 1,
       unitsPerPack: 20,
       materialMassBasis: "fruiting_body",
@@ -215,6 +220,7 @@ describe("full-package dose dispute detection", () => {
     const rules = specRuleRows();
     const changes = appendFullPackageDoseDisputeChanges(
       {
+        activeCompound: "psilocybin",
         unitMaterialMassMg: 1,
         unitsPerPack: 20,
         materialMassBasis: "fruiting_body",
@@ -255,6 +261,7 @@ describe("full-package dose dispute detection", () => {
   it("reopens a previously cleared finding when relevant package inputs change", () => {
     const rules = specRuleRows();
     const oldItem = {
+      activeCompound: "psilocybin",
       unitMaterialMassMg: 1,
       unitsPerPack: 20,
       materialMassBasis: "fruiting_body",
@@ -294,6 +301,7 @@ describe("full-package dose dispute detection", () => {
       rules,
       appendFullPackageDoseDisputeChanges(
         {
+          activeCompound: "psilocybin",
           unitMaterialMassMg: 1,
           unitsPerPack: 10,
           materialMassBasis: "fruiting_body",
@@ -310,4 +318,18 @@ describe("full-package dose dispute detection", () => {
       expect.stringContaining("Lowest ladder dose needs: 50 mg"),
     ]);
   });
+
+  it.each(["muscimol", "functional-only", "unknown", "", null])(
+    "does not apply the psilocybin-family ladder to %s rows",
+    (activeCompound) => {
+      expect(
+        detectFullPackageDoseDispute({
+          activeCompound,
+          unitMaterialMassMg: 1,
+          unitsPerPack: 20,
+          materialMassBasis: "fruiting_body",
+        })
+      ).toBeNull();
+    }
+  );
 });

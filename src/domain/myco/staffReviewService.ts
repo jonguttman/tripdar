@@ -9,7 +9,10 @@
 
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { resolveLadderDivisorMg } from "@/domain/recommendation-engine/doseBasis";
+import {
+  isSupportedActiveCompound,
+  resolveLadderDivisorMg,
+} from "@/domain/recommendation-engine/doseBasis";
 import { CANONICAL_DOSE_BASIS, CANONICAL_DOSE_LEVELS } from "@/domain/recommendation-engine/types";
 import {
   CATALOG_FIELD_SPECS,
@@ -127,6 +130,7 @@ export interface CatalogChangeRow {
 }
 
 type CatalogItemForDoseDispute = {
+  activeCompound: string | null;
   unitMaterialMassMg: number | null;
   unitsPerPack: number | null;
   materialMassBasis: string | null;
@@ -175,6 +179,8 @@ function fullPackageDoseDisputeFingerprint(
 export function detectFullPackageDoseDispute(
   item: CatalogItemForDoseDispute
 ): FullPackageDoseDispute | null {
+  if (!isSupportedActiveCompound(item.activeCompound)) return null;
+
   const divisorMg = resolveLadderDivisorMg({
     unitMaterialMassMg: item.unitMaterialMassMg,
     materialMassBasis: item.materialMassBasis,

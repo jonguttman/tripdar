@@ -201,6 +201,7 @@ describe("staff-review product submit projection hardening", () => {
 
   it("keeps totalDoseMg numeric through first and second full-package dose dispute confirmations", async () => {
     const impossiblePackage = {
+      activeCompound: "psilocybin",
       unitMaterialMassMg: 1,
       unitsPerPack: 20,
       totalDoseMg: 20,
