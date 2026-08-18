@@ -197,4 +197,87 @@ describe("staff-review product submit projection hardening", () => {
       })
     );
   });
+
+  it("keeps totalDoseMg numeric when a second reviewer confirms a full-package dose dispute", async () => {
+    const existingConfirmation = {
+      id: "change-employee-1",
+      fieldName: "totalDoseMg",
+      submittedValue: 20,
+      actorType: "staff",
+      actorIdentity: "employee-1",
+      source: "packaging",
+      disposition: "accepted",
+      createdAt: new Date("2026-08-01T00:00:00Z"),
+    };
+    const secondConfirmation = {
+      id: "change-employee-2",
+      fieldName: "totalDoseMg",
+      submittedValue: 20,
+      actorType: "staff",
+      actorIdentity: "employee-2",
+      source: "packaging",
+      disposition: "accepted",
+      createdAt: new Date("2026-08-01T00:01:00Z"),
+    };
+    prismaMock.catalogFieldVerificationRule.findMany.mockResolvedValue(specRuleRows());
+    requireReviewerMock.mockResolvedValue({
+      ok: true,
+      tokenId: "token-row-1",
+      partnerId: "partner-1",
+      employeeId: "employee-2",
+      employeeName: "Blake",
+    });
+    prismaMock.storeProductCatalog.findFirst.mockResolvedValue(
+      product({
+        unitMaterialMassMg: 1,
+        unitsPerPack: 20,
+        totalDoseMg: 20,
+        materialMassBasis: "fruiting_body",
+        catalogFieldChanges: [existingConfirmation],
+      })
+    );
+    txMock.storeProductCatalog.findUniqueOrThrow.mockResolvedValue(
+      product({
+        unitMaterialMassMg: 1,
+        unitsPerPack: 20,
+        totalDoseMg: 20,
+        materialMassBasis: "fruiting_body",
+        catalogFieldChanges: [existingConfirmation, secondConfirmation],
+      })
+    );
+
+    const response = await post({
+      answers: [{ fieldName: "totalDoseMg", action: "confirm", source: "packaging" }],
+    });
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data.fieldStates.totalDoseMg).toMatchObject({
+      state: "confirmed",
+      confirmationsCount: 2,
+      requiredConfirmations: 2,
+    });
+    expect(txMock.catalogFieldChange.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          catalogItemId: "catalog-1",
+          fieldName: "totalDoseMg",
+          previousValue: 20,
+          submittedValue: 20,
+        }),
+      ],
+    });
+    expect(txMock.catalogFieldVerificationState.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          state: "confirmed",
+          confirmedValue: 20,
+        }),
+      })
+    );
+    expect(txMock.storeProductCatalog.update).toHaveBeenCalledWith({
+      where: { id: "catalog-1" },
+      data: { totalDoseMg: 20 },
+    });
+  });
 });

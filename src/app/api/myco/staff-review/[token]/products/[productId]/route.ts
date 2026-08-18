@@ -78,6 +78,22 @@ function currentColumnValue(item: Record<string, unknown>, rule: FieldRuleRow): 
   return item[rule.catalogColumn] ?? null;
 }
 
+function currentReviewValue(
+  item: Record<string, unknown>,
+  rule: FieldRuleRow,
+  liveValue: unknown
+): unknown {
+  const columnValue = currentColumnValue(item, rule);
+  if (liveValue === null || liveValue === undefined) return columnValue;
+
+  const normalizedLiveValue = normalizeValue(liveValue, rule.inputType);
+  if (rule.inputType === "number" && normalizedLiveValue === null && columnValue !== null) {
+    return columnValue;
+  }
+
+  return liveValue;
+}
+
 /** Normalises by input type so "250" and 250 never read as a disagreement. */
 function normalizeValue(raw: unknown, inputType: string): unknown {
   if (inputType === "number") {
@@ -185,7 +201,7 @@ export async function GET(
         currentValue:
           rule.fieldName === PHOTO_CHECK_FIELD
             ? state.liveValue
-            : (state.liveValue ?? currentColumnValue(itemRecord, rule)),
+            : currentReviewValue(itemRecord, rule, state.liveValue),
         competingValues: state.everConflicted ? state.competingValues : [],
         yourAnswer: mine ? mine.submittedValue : null,
         yourAnswerAt: mine ? mine.createdAt : null,
@@ -324,10 +340,9 @@ export async function POST(
       ? (answer.source as CatalogFieldSource)
       : "unsure";
 
-    // "Confirm" means agreeing with what is on screen, which is the live candidate from
-    // the log — NOT the catalog column, which lags until a field reaches its threshold.
-    const previousValue =
-      priorStates[fieldName]?.liveValue ?? currentColumnValue(itemRecord, rule);
+    // "Confirm" means agreeing with what is on screen. For synthetic numeric disputes,
+    // descriptive competing values stay visible, but the submitted value must stay numeric.
+    const previousValue = currentReviewValue(itemRecord, rule, priorStates[fieldName]?.liveValue);
 
     let submittedValue: unknown;
     if (action === "dont_know") {
