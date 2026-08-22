@@ -1,37 +1,16 @@
 /**
- * KEWL-2335 — mint and revoke the no-login staff review link.
+ * KEWL-2335 — inventory and revoke the legacy no-login staff review link.
  *
- * ONE SHARED LINK for the store's whole roster, per Jon's 2026-07-28 override: everyone
- * gets the same URL and picks their PIN the first time they open it. Built on KEWL-2332's
- * `CatalogAccessToken` (hash-only storage, revocable, expirable) — the raw token is
- * returned exactly once, at mint time, and is not recoverable afterwards.
- *
- * The per-reviewer binding KEWL-2364 introduced is gone as the auth model. What replaces it
- * is the enrollment window (KEWL-2379): the link is only claimable for a bounded period,
- * the window auto-closes at full roster coverage, and every claim is logged and resettable.
- *
- * Minting revokes every live staff link for the partner, including the per-reviewer ones
- * minted earlier on 2026-07-28, so exactly one link is valid at a time.
+ * KEWL-3446 / KEWL-3795 keeps email-possession invitations canonical. New shared-link PIN
+ * enrollment is closed; this route remains only for legacy inventory and revocation.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/domain/auth/adminSession";
 import { prisma } from "@/lib/prisma";
+import { buildRevokedTokenPatch } from "@/domain/myco/catalogTokens";
 import {
-  buildRevokedTokenPatch,
-  createCatalogAccessToken,
-  hashCatalogAccessToken,
-} from "@/domain/myco/catalogTokens";
-import { ensureFieldRules } from "@/domain/myco/staffReviewService";
-import { staffReviewerWhere } from "@/domain/myco/staffReviewRoster";
-import { lockStaffLinkMint } from "@/domain/myco/staffLinkMintLock";
-import {
-  DEFAULT_ENROLLMENT_HOURS,
-  enrollmentClosesAtFrom,
   isEnrollmentOpen,
-  preMintPinWarnings,
-  recordEnrollmentEvent,
-  requestFingerprint,
 } from "@/domain/myco/reviewerEnrollment";
 
 export const dynamic = "force-dynamic";
@@ -42,13 +21,6 @@ async function requireAdmin() {
     return NextResponse.json({ success: false, error: { message: "Unauthorized" } }, { status: 401 });
   }
   return session.user.email;
-}
-
-function staffLinkUrl(token: string): string {
-  const base =
-    process.env.NEXTAUTH_URL?.replace(/\/$/, "") ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  return `${base}/staff/catalog/${token}`;
 }
 
 export async function GET() {
@@ -95,125 +67,18 @@ export async function GET() {
   });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(_request?: NextRequest) {
   const auth = await requireAdmin();
   if (auth instanceof NextResponse) return auth;
 
-  const body = (await request.json().catch(() => ({}))) as {
-    partnerId?: unknown;
-    expiresInDays?: unknown;
-    enrollmentHours?: unknown;
-  };
-  const partnerId = typeof body.partnerId === "string" ? body.partnerId : "";
-  const partner = await prisma.partner.findUnique({ where: { id: partnerId }, select: { id: true } });
-  if (!partner) {
-    return NextResponse.json({ success: false, error: { message: "Partner not found" } }, { status: 404 });
-  }
-
-  const reviewers = await prisma.mycoEmployee.findMany({
-    where: staffReviewerWhere(partner.id),
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, email: true, pinHash: true, pinSetAt: true },
-  });
-  if (reviewers.length === 0) {
-    return NextResponse.json(
-      { success: false, error: { message: "No active reviewers for this partner" } },
-      { status: 404 }
-    );
-  }
-
-  // Pre-ship assertion (Jon's explicit ask). A reviewer who already holds a PIN CANNOT
-  // claim their name on the new link — enrollment is compare-and-set on a null hash — so
-  // shipping the link without noticing would silently lock that person out.
-  const warnings = preMintPinWarnings(reviewers);
-
-  const days = Number(body.expiresInDays);
-  const expiresAt = Number.isFinite(days) && days > 0
-    ? new Date(Date.now() + days * 24 * 60 * 60 * 1000)
-    : null;
-  const enrollmentClosesAt = enrollmentClosesAtFrom(
-    typeof body.enrollmentHours === "number" ? body.enrollmentHours : DEFAULT_ENROLLMENT_HOURS
-  );
-
-  // Seed the approved required-field set on first mint so the surface has config to read.
-  await ensureFieldRules(null);
-
-  const fingerprint = requestFingerprint(request.headers);
-  const token = createCatalogAccessToken();
-
-  const record = await prisma.$transaction(async (tx) => {
-    // KEWL-2491 — the same partner-scoped advisory lock `scripts/mint-staff-link.lib.mjs`
-    // takes. Without it, this route and the script can both read "no active link" under
-    // Postgres Read Committed and both create one, leaving two live links for one partner.
-    // Taken before the supersede below so no other minter can slip between them.
-    //
-    // The script additionally compare-and-swaps its revoke against a token the operator
-    // inspected. This route deliberately does NOT: it has no inspected-token premise — it
-    // is an authenticated admin action whose contract is the unconditional supersede-all
-    // documented above, and making it conditional would let a forwarded old link survive
-    // a mint. Both entry points share the lock; only the script carries the CAS.
-    await lockStaffLinkMint(tx, { partnerId: partner.id });
-
-    // Exactly one live staff link per partner: supersede every previous one, shared or
-    // per-reviewer, so a forwarded old copy stops working the moment this is minted.
-    await tx.catalogAccessToken.updateMany({
-      where: { purpose: "staff_review", partnerId: partner.id, status: "active" },
-      data: buildRevokedTokenPatch(auth, "superseded by a newly minted shared staff link"),
-    });
-
-    const created = await tx.catalogAccessToken.create({
-      data: {
-        tokenHash: hashCatalogAccessToken(token),
-        purpose: "staff_review",
-        status: "active",
-        partnerId: partner.id,
-        issuedToType: "staff",
-        // No `issuedToId`: this link is the roster's, not one person's.
-        issuedToId: null,
-        issuedToEmail: null,
-        issuedBy: auth,
-        expiresAt,
-        enrollmentOpen: true,
-        enrollmentClosesAt,
-      },
-      select: { id: true, issuedAt: true, expiresAt: true, enrollmentClosesAt: true },
-    });
-
-    await recordEnrollmentEvent(tx, {
-      partnerId: partner.id,
-      tokenId: created.id,
-      employeeName: "—",
-      eventType: "enrollment_opened",
-      actorType: "admin",
-      actorIdentity: auth,
-      reason: `shared staff link minted; enrollment open until ${enrollmentClosesAt.toISOString()}`,
-      ip: fingerprint.ip,
-      userAgent: fingerprint.userAgent,
-    });
-
-    return created;
-  });
-
   return NextResponse.json({
-    success: true,
-    data: {
-      id: record.id,
-      shared: true,
-      // Shown once. We store only the SHA-256 hash, so this cannot be retrieved later.
-      url: staffLinkUrl(token),
-      issuedAt: record.issuedAt,
-      expiresAt: record.expiresAt,
-      enrollmentClosesAt: record.enrollmentClosesAt,
-      roster: reviewers.map((reviewer) => ({
-        id: reviewer.id,
-        name: reviewer.name,
-        email: reviewer.email,
-        hasPin: Boolean(reviewer.pinHash),
-      })),
-      // Non-empty means someone on the roster cannot claim their name. Do not send the link.
-      warnings,
+    success: false,
+    error: {
+      code: "legacy_pin_enrollment_closed",
+      message:
+        "Legacy PIN enrollment is closed. Use staff email invitations for reviewer re-entry.",
     },
-  });
+  }, { status: 410 });
 }
 
 export async function DELETE(request: NextRequest) {

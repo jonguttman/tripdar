@@ -1,28 +1,19 @@
 /**
  * KEWL-2335 — reviewer sign-in.
  *
- * POST { employeeId, pin } — sets the PIN on first use, verifies it thereafter.
+ * POST { employeeId, pin } — verifies legacy PINs only.
  * DELETE — signs out on this device.
  *
- * KEWL-2379: `employeeId` is client-supplied again, because Jon's override put the shared
- * link and the "pick your name" step back. Two properties keep that honest, and neither
- * depends on trusting the client:
- *
- *  - First use is gated on an OPEN enrollment window (`enrollment_closed` otherwise, never
- *    a silent pass), and every attempt — accepted or rejected — is written to the
- *    append-only ledger with IP and user-agent.
- *  - First use is a compare-and-set on `pinHash IS NULL`, kept from `f0f7d28`. A set PIN
- *    can never be overwritten here, and two devices racing the same name have exactly one
- *    winner. Claiming a name that already has a PIN degenerates to "wrong PIN".
+ * KEWL-3446 / KEWL-3795: TMT's canonical reviewer re-entry path is email possession
+ * through StaffReviewInvitation -> StaffReviewSession. The shared-link PIN enrollment path
+ * is legacy and now fails closed for first use; do not create a new PIN here.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   failedAttemptPatch,
-  hashPin,
   isLockedOut,
-  isTooObviousPin,
   isValidPinFormat,
   lockoutSecondsRemaining,
   REVIEWER_SESSION_TTL_MS,
@@ -36,7 +27,6 @@ import {
   reviewerSessionSecret,
 } from "@/domain/myco/staffReviewAuth";
 import {
-  closeEnrollmentIfRosterComplete,
   ENROLLMENT_CLOSED_CODE,
   ENROLLMENT_CLOSED_MESSAGE,
   recordEnrollmentEvent,
@@ -93,46 +83,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const now = new Date();
 
   if (firstUse) {
-    // Fail closed outside the window. Recorded, so an attempt after the deadline is
-    // visible to Jon rather than just bouncing silently.
-    if (!roster.enrollmentOpen) {
-      await recordEnrollmentEvent(prisma, {
-        ...ledgerIdentity,
-        ...ledgerReviewer,
-        eventType: "enrollment_rejected",
-        actorType: "enrollment",
-        actorIdentity: reviewer.name,
-        reason: "enrollment window closed",
-        ip: fingerprint.ip,
-        userAgent: fingerprint.userAgent,
-      });
-      return fail(ENROLLMENT_CLOSED_MESSAGE, 403, { code: ENROLLMENT_CLOSED_CODE });
-    }
-
-    if (isTooObviousPin(pin)) return fail("Pick a less guessable 4 digits.", 400);
-
-    // Compare-and-set: `pinHash: null` in the WHERE is what makes a set PIN unstealable.
-    const claimed = await prisma.mycoEmployee.updateMany({
-      where: { id: reviewer.id, pinHash: null },
-      data: { pinHash: await hashPin(pin), pinSetAt: now, ...successfulAttemptPatch(now) },
-    });
-    // Lost the race, or the roster read was stale and a PIN already existed. Same answer as
-    // a wrong PIN on purpose — it doesn't tell the caller which of the two happened.
-    if (claimed.count === 0) return fail("That PIN doesn't match.", 401);
-
+    // KEWL-3446 keeps email re-entry canonical. A still-reachable shared staff link must
+    // fail closed for new PIN enrollment even if an old token row still says open.
     await recordEnrollmentEvent(prisma, {
       ...ledgerIdentity,
       ...ledgerReviewer,
-      eventType: "enrolled",
+      eventType: "enrollment_rejected",
       actorType: "enrollment",
       actorIdentity: reviewer.name,
-      reason: "first use of the shared staff link",
+      reason: "legacy PIN enrollment closed",
       ip: fingerprint.ip,
       userAgent: fingerprint.userAgent,
     });
-
-    // Jon's auto-close: the window ends the moment nobody is left to enroll.
-    await closeEnrollmentIfRosterComplete(prisma, ledgerIdentity);
+    return fail(ENROLLMENT_CLOSED_MESSAGE, 403, { code: ENROLLMENT_CLOSED_CODE });
   } else {
     const valid = await verifyPin(pin, reviewer.pinHash);
     if (!valid) {

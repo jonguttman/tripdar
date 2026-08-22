@@ -10,19 +10,19 @@ const STATE_COPY: Record<StaffInviteState, { title: string; body: string }> = {
   },
   expired: {
     title: "Invitation expired",
-    body: "This staff review invitation is no longer active. Ask Jon for a fresh link.",
+    body: "This staff review invitation is no longer active. Ask your manager to send another email invitation.",
   },
   revoked: {
     title: "Invitation revoked",
-    body: "This staff review invitation was cancelled. Ask Jon for a fresh link.",
+    body: "This staff review invitation was cancelled. Ask your manager to send another email invitation.",
   },
   used: {
     title: "Invitation already used",
-    body: "This invitation has already been confirmed. Continue from the device where you opened it, or ask Jon for a fresh link.",
+    body: "This invitation has already been confirmed. Continue from the device where you opened it, or ask your manager to send another email invitation.",
   },
   invalid: {
     title: "Invitation unavailable",
-    body: "This staff review invitation cannot be used right now. Ask Jon for a fresh link.",
+    body: "This staff review invitation cannot be used right now. Ask your manager to send another email invitation.",
   },
 };
 

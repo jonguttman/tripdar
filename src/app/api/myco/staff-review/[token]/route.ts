@@ -3,8 +3,8 @@
  *
  * The only endpoint reachable without a PIN. Returns the reviewer roster so the reviewer
  * can pick their name (KEWL-2379: Jon's one-shared-link override), whether each has set a
- * PIN yet, and the state of the enrollment window so the client can say plainly why an
- * unclaimed name is not selectable rather than failing at the PIN step.
+ * PIN yet. KEWL-3795 keeps legacy PIN enrollment closed for unclaimed reviewers; email
+ * possession through StaffReviewInvitation -> StaffReviewSession is the canonical path.
  *
  * `hasPin` is roster metadata, not a secret: everyone holding this link is one of six
  * named co-workers who already know each other.
@@ -71,7 +71,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       partnerName: partner?.name ?? "",
       signedInAs,
       enrollment: {
-        open: roster.enrollmentOpen,
+        open: roster.kind === "catalog_token" ? false : roster.enrollmentOpen,
         closesAt: roster.enrollmentClosesAt?.toISOString() ?? null,
       },
       reviewers: roster.reviewers.map((reviewer) => ({
@@ -80,7 +80,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         hasPin: reviewer.hasPin,
         // Unclaimed + window shut = this name cannot be picked at all right now. Told to the
         // client so the picker explains it up front instead of after a wasted PIN attempt.
-        claimable: reviewer.hasPin || roster.enrollmentOpen,
+        claimable: reviewer.hasPin,
         lockedOut: Boolean(reviewer.pinLockedUntil && reviewer.pinLockedUntil.getTime() > now),
       })),
     },

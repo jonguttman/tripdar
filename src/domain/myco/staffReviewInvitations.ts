@@ -279,7 +279,7 @@ export async function confirmStaffReviewInvitation(input: {
         maxAge: Math.floor(REVIEWER_SESSION_TTL_MS / 1000),
       };
     }
-    return fail(409, "already_confirmed", "This invitation was already used. Ask Jon for a new link.");
+    return fail(409, "already_confirmed", "This invitation was already used. Ask your manager to send another email invitation.");
   }
   if (state !== "ready") return fail(state === "expired" || state === "revoked" ? 410 : 403, state);
 
@@ -318,7 +318,7 @@ export async function confirmStaffReviewInvitation(input: {
     });
   });
 
-  if (!confirmed) return fail(409, "replayed", "This invitation was already used. Ask Jon for a new link.");
+  if (!confirmed) return fail(409, "replayed", "This invitation was already used. Ask your manager to send another email invitation.");
 
   return {
     ok: true,

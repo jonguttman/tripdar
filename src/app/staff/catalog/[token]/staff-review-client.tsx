@@ -3,7 +3,7 @@
 /**
  * KEWL-2335 — staff catalog review, mobile first.
  *
- * Three screens in one component: PIN sign-in, the product list ordered by urgency, and
+ * Three screens in one component: legacy PIN sign-in, the product list ordered by urgency, and
  * the per-product field review. Every field answer saves on its own the
  * moment it is tapped — staff do this in short bursts behind a counter, so nothing
  * waits for a "submit the whole product" step and nothing is ever lost mid-product.
@@ -33,14 +33,14 @@ interface Reviewer {
   id: string;
   name: string;
   hasPin: boolean;
-  /** False only for an unclaimed name once the enrollment window has shut (KEWL-2379). */
+  /** False for unclaimed names because legacy PIN enrollment is closed (KEWL-3795). */
   claimable: boolean;
   lockedOut: boolean;
 }
 
 interface Bootstrap {
   partnerName: string;
-  /** One shared link for the roster (KEWL-2379) — you pick your name, then your PIN. */
+  /** Shared legacy link for roster PIN holders. New access uses email re-entry. */
   signedInAs: string | null;
   enrollment: { open: boolean; closesAt: string | null };
   reviewers: Reviewer[];
@@ -537,7 +537,8 @@ function IdentifyScreen({
         {header}
         <h2 className="mt-6 text-base font-medium text-neutral-800">Who are you?</h2>
         <p className="mt-1 text-sm text-neutral-600">
-          Tap your name. First time, you'll pick a 4-digit PIN — after that it's just your PIN.
+          Tap your name if you already have a PIN. For access, use the email re-entry link
+          your manager sends.
         </p>
 
         <ul className="mt-4 divide-y divide-neutral-200 rounded-lg border border-neutral-300">
@@ -562,10 +563,10 @@ function IdentifyScreen({
                     </span>
                     <span className="block text-xs text-neutral-500">
                       {blocked
-                        ? "PIN sign-up closed — ask Jon"
+                        ? "PIN enrollment is closed"
                         : reviewer.hasPin
                           ? "Enter your PIN"
-                          : "Pick your PIN"}
+                          : "Use email re-entry"}
                     </span>
                   </span>
                   <span aria-hidden className="shrink-0 text-neutral-400">
@@ -579,7 +580,7 @@ function IdentifyScreen({
 
         {bootstrap.enrollment.open ? (
           <p className="mt-4 text-xs text-neutral-500">
-            New sign-ups close{" "}
+            Legacy PIN enrollment closes{" "}
             {bootstrap.enrollment.closesAt
               ? new Date(bootstrap.enrollment.closesAt).toLocaleString()
               : "once everyone has set a PIN"}
@@ -587,7 +588,7 @@ function IdentifyScreen({
           </p>
         ) : (
           <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-            PIN sign-up is closed. If you haven't set one yet, ask Jon to reopen it.
+            PIN enrollment is closed. Ask your manager to approve another PIN enrollment.
           </p>
         )}
       </main>
@@ -626,7 +627,7 @@ function IdentifyScreen({
             <p className="mt-1 text-sm text-neutral-600">
               {picked.hasPin
                 ? "Four digits, so your reviews stay filed under your name."
-                : "Choose 4 digits you'll remember — it keeps anyone else who gets this link out of your reviews. Pick something other than 1234."}
+                : "PIN enrollment is closed. Ask your manager to approve another PIN enrollment."}
             </p>
           </div>
 
@@ -654,7 +655,7 @@ function IdentifyScreen({
             disabled={submitting || pin.length !== 4}
             className="min-h-[52px] w-full rounded-lg bg-neutral-950 px-4 text-base font-medium text-white disabled:opacity-50"
           >
-            {submitting ? "Checking…" : picked.hasPin ? "Start reviewing" : "Set PIN and start"}
+            {submitting ? "Checking…" : picked.hasPin ? "Start reviewing" : "PIN enrollment closed"}
           </button>
         </section>
       )}

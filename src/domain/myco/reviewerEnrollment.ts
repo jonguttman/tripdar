@@ -31,7 +31,7 @@ export const MAX_ENROLLMENT_HOURS = 24 * 14;
 
 export const ENROLLMENT_CLOSED_CODE = "enrollment_closed";
 export const ENROLLMENT_CLOSED_MESSAGE =
-  "PIN sign-up for this link has closed. Ask Jon to reopen enrollment.";
+  "PIN enrollment is closed. Ask your manager to approve another PIN enrollment.";
 
 export type EnrollmentEventType =
   | "enrolled"
