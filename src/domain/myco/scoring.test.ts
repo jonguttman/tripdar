@@ -19,6 +19,7 @@ function candidate(overrides: Partial<ProductCandidate> & { id: string }): Produ
     vibeScores: emptyVibeScores(),
     strengthOffset: "standard",
     strengthRationale: null,
+    fieldVerificationStates: {},
     dose: {
       format: "capsule",
       activeCompound: "psilocybin",

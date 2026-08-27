@@ -32,6 +32,8 @@ export interface ProductCandidate {
   vibeScores: VibeScores;
   strengthOffset: StrengthOffsetValue;
   strengthRationale: string | null;
+  fieldVerificationStates: Record<string, { state: string; confirmedValue: unknown }>;
+  fieldCurrentValues?: Record<string, unknown>;
   dose: Omit<DoseProductInput, "strengthOffset" | "strengthRationale">;
 }
 
