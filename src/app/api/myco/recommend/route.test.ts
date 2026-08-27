@@ -42,14 +42,47 @@ const VIBE_SCORES = {
   depth_direction: 0.7,
 };
 
-function confirmed(fieldName: string) {
-  return { [fieldName]: { state: "confirmed", confirmedValue: "confirmed" } };
+const BASE_DOSE_FIELD_VALUES = {
+  activeCompound: "psilocybin",
+  doseBasis: "active-compound",
+  productUnitMg: 100,
+  unitsPerPack: 10,
+  totalDoseMg: 1000,
+};
+
+const LEGACY_DOSE_LADDER_VALUES = {
+  brandMicroUnits: 1,
+  brandMiniUnits: 2,
+  brandMacroUnits: 5,
+};
+
+function confirmed(fieldName: string, confirmedValue: unknown) {
+  return { [fieldName]: { state: "confirmed", confirmedValue } };
+}
+
+function confirmedFields(values: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(values).map(([fieldName, confirmedValue]) => [
+      fieldName,
+      { state: "confirmed", confirmedValue },
+    ])
+  );
 }
 
 function candidate(
   index: number,
   fieldVerificationStates: ProductCandidate["fieldVerificationStates"] = {}
 ): ProductCandidate {
+  const dose = {
+    format: "capsule",
+    activeCompound: "psilocybin",
+    productUnitMg: 100,
+    brandDoseTiers: null,
+    brandMicroUnits: 1,
+    brandMiniUnits: 2,
+    brandMacroUnits: 5,
+  };
+
   return {
     id: `tmt-product-${index}`,
     productName: `TMT Product ${index}`,
@@ -66,15 +99,17 @@ function candidate(
     strengthOffset: index === 2 ? "stronger" : "standard",
     strengthRationale: index === 2 ? "Staff note" : null,
     fieldVerificationStates,
-    dose: {
-      format: "capsule",
-      activeCompound: "psilocybin",
-      productUnitMg: 100,
+    fieldCurrentValues: {
+      ...BASE_DOSE_FIELD_VALUES,
+      ...LEGACY_DOSE_LADDER_VALUES,
+      ingredients: ["ingredient one", "ingredient two"],
+      onsetMinutes: 30,
+      durationMinutes: 240,
+      brandDoseGuidance: "Take one capsule.",
       brandDoseTiers: null,
-      brandMicroUnits: 1,
-      brandMiniUnits: 2,
-      brandMacroUnits: 5,
+      strengthOffset: index === 2 ? "stronger" : "standard",
     },
+    dose,
   };
 }
 
@@ -110,13 +145,10 @@ describe("POST /api/myco/recommend field verification suppression", () => {
   });
 
   it("returns four products and suppresses unverified response fields", async () => {
-    const doseVerifiedExceptStrength = {
-      ...confirmed("activeCompound"),
-      ...confirmed("doseBasis"),
-      ...confirmed("productUnitMg"),
-      ...confirmed("unitsPerPack"),
-      ...confirmed("totalDoseMg"),
-    };
+    const doseVerifiedExceptStrength = confirmedFields({
+      ...BASE_DOSE_FIELD_VALUES,
+      ...LEGACY_DOSE_LADDER_VALUES,
+    });
     candidatesMock.getRecommendableProducts.mockResolvedValue([
       candidate(1),
       candidate(2, doseVerifiedExceptStrength),
@@ -151,5 +183,38 @@ describe("POST /api/myco/recommend field verification suppression", () => {
       ]),
       { intents: ["focus"], experienceLevel: "experienced", intensity: "moderate" }
     );
+  });
+
+  it("suppresses dose guidance when mass fields are confirmed but the dose ladder is not", async () => {
+    candidatesMock.getRecommendableProducts.mockResolvedValue([
+      candidate(1, confirmedFields(BASE_DOSE_FIELD_VALUES)),
+    ]);
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.results).toHaveLength(1);
+    expect(body.results[0].productName).toBe("TMT Product 1");
+    expect(body.results[0].doseGuidance).toBeNull();
+  });
+
+  it("suppresses a stale confirmed field when the live catalog value has changed", async () => {
+    candidatesMock.getRecommendableProducts.mockResolvedValue([
+      candidate(1, {
+        ...confirmed("ingredients", ["old ingredient"]),
+        ...confirmed("onsetMinutes", 20),
+      }),
+    ]);
+
+    const response = await POST(request());
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.results[0]).toMatchObject({
+      productName: "TMT Product 1",
+      ingredients: null,
+      onsetMinutes: null,
+    });
   });
 });
