@@ -13,6 +13,20 @@ npm run photo:pipeline -- make-fixtures --out "$PAPERCLIP_SCRATCH_DIR/photo-fixt
 
 By default the worker uses Prisma when `DATABASE_URL` is set. In a local checkout with no database configured it uses `tripdar-product-images/logs/photo-job-ledger.json`; pass `--ledger prisma` to require the DB-backed path.
 
+## Testing
+
+The pipeline test is a Vitest suite (`pipeline.test.mjs` imports from `vitest`), so it **must** run under Vitest — Node's native test runner (`node --test`) will fail because it does not provide Vitest's worker state.
+
+Run the focused photo-pipeline test:
+
+```sh
+npx vitest run scripts/photo-pipeline/pipeline.test.mjs
+# equivalently, via the configured runner:
+npm test -- scripts/photo-pipeline/pipeline.test.mjs
+```
+
+`npm test` (bare) runs the full `vitest run` suite. Use the focused command above for a fast, non-destructive readiness check before processing a real photo batch.
+
 ## External services
 
 - `ANTHROPIC_API_KEY` enables Claude vision quality assessment.
