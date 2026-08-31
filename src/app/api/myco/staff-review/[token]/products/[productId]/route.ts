@@ -14,9 +14,11 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireReviewer, REVIEWER_SESSION_COOKIE } from "@/domain/myco/staffReviewAuth";
 import {
+  appendFullPackageDoseDisputeChanges,
   computeFieldStates,
   ensureFieldRules,
   evaluateGateForItem,
+  fullPackageDoseDisputeReviewContext,
   type FieldRuleRow,
 } from "@/domain/myco/staffReviewService";
 import {
@@ -54,6 +56,7 @@ const PRODUCT_INCLUDE = {
     select: {
       id: true,
       fieldName: true,
+      previousValue: true,
       submittedValue: true,
       actorType: true,
       actorIdentity: true,
@@ -75,6 +78,22 @@ function toJsonInput(value: unknown): Prisma.InputJsonValue | typeof Prisma.DbNu
 function currentColumnValue(item: Record<string, unknown>, rule: FieldRuleRow): unknown {
   if (!rule.catalogColumn) return null;
   return item[rule.catalogColumn] ?? null;
+}
+
+function currentReviewValue(
+  item: Record<string, unknown>,
+  rule: FieldRuleRow,
+  liveValue: unknown
+): unknown {
+  const columnValue = currentColumnValue(item, rule);
+  if (liveValue === null || liveValue === undefined) return columnValue;
+
+  const normalizedLiveValue = normalizeValue(liveValue, rule.inputType);
+  if (rule.inputType === "number" && normalizedLiveValue === null && columnValue !== null) {
+    return columnValue;
+  }
+
+  return liveValue;
 }
 
 /** Normalises by input type so "250" and 250 never read as a disagreement. */
@@ -135,7 +154,11 @@ export async function GET(
           },
           select: { legacyEmployeeId: true, employeeId: true },
         });
-  const fieldStates = computeFieldStates(rules, item.catalogFieldChanges, identityAliases);
+  const fieldStates = computeFieldStates(
+    rules,
+    appendFullPackageDoseDisputeChanges(item, item.catalogFieldChanges),
+    identityAliases
+  );
   const gate = evaluateGateForItem({
     item,
     extras: {
@@ -180,7 +203,7 @@ export async function GET(
         currentValue:
           rule.fieldName === PHOTO_CHECK_FIELD
             ? state.liveValue
-            : (state.liveValue ?? currentColumnValue(itemRecord, rule)),
+            : currentReviewValue(itemRecord, rule, state.liveValue),
         competingValues: state.everConflicted ? state.competingValues : [],
         yourAnswer: mine ? mine.submittedValue : null,
         yourAnswerAt: mine ? mine.createdAt : null,
@@ -292,7 +315,11 @@ export async function POST(
           },
           select: { legacyEmployeeId: true, employeeId: true },
         });
-  const priorStates = computeFieldStates(rules, item.catalogFieldChanges, priorIdentityAliases);
+  const priorStates = computeFieldStates(
+    rules,
+    appendFullPackageDoseDisputeChanges(item, item.catalogFieldChanges),
+    priorIdentityAliases
+  );
   const changeRows: ReturnType<typeof buildCatalogFieldChange>[] = [];
 
   for (const answer of answers) {
@@ -315,10 +342,13 @@ export async function POST(
       ? (answer.source as CatalogFieldSource)
       : "unsure";
 
-    // "Confirm" means agreeing with what is on screen, which is the live candidate from
-    // the log — NOT the catalog column, which lags until a field reaches its threshold.
-    const previousValue =
-      priorStates[fieldName]?.liveValue ?? currentColumnValue(itemRecord, rule);
+    // "Confirm" means agreeing with what is on screen. For synthetic numeric disputes,
+    // descriptive competing values stay visible, but the submitted value must stay numeric.
+    const previousValue = currentReviewValue(itemRecord, rule, priorStates[fieldName]?.liveValue);
+    const previousValueForLog =
+      fieldName === "totalDoseMg"
+        ? fullPackageDoseDisputeReviewContext(item) ?? previousValue
+        : previousValue;
 
     let submittedValue: unknown;
     if (action === "dont_know") {
@@ -362,7 +392,7 @@ export async function POST(
     changeRows.push(
       buildCatalogFieldChange({
         fieldName,
-        previousValue,
+        previousValue: previousValueForLog,
         submittedValue,
         actorType: "staff",
         actorIdentity: reviewer.employeeId,
@@ -430,7 +460,11 @@ export async function POST(
             },
             select: { legacyEmployeeId: true, employeeId: true },
           });
-    const states = computeFieldStates(rules, refreshedItem.catalogFieldChanges, refreshedIdentityAliases);
+    const states = computeFieldStates(
+      rules,
+      appendFullPackageDoseDisputeChanges(refreshedItem, refreshedItem.catalogFieldChanges),
+      refreshedIdentityAliases
+    );
     const updates: Record<string, unknown> = {};
 
     for (const fieldName of touched) {

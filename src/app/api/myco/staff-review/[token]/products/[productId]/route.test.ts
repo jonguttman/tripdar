@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CATALOG_FIELD_SPECS } from "@/domain/myco/catalogFieldSpec";
+import { fullPackageDoseDisputeReviewContext } from "@/domain/myco/staffReviewService";
 import { createPrismaMock } from "@/test/prismaMock";
 
 const requireReviewerMock = vi.hoisted(() => vi.fn());
@@ -196,5 +197,140 @@ describe("staff-review product submit projection hardening", () => {
         source: "staffReviewProductSubmit",
       })
     );
+  });
+
+  it("keeps totalDoseMg numeric through first and second full-package dose dispute confirmations", async () => {
+    const impossiblePackage = {
+      activeCompound: "psilocybin",
+      unitMaterialMassMg: 1,
+      unitsPerPack: 20,
+      totalDoseMg: 20,
+      materialMassBasis: "fruiting_body",
+    };
+    const disputeContext = fullPackageDoseDisputeReviewContext(impossiblePackage);
+    expect(disputeContext).not.toBeNull();
+    const firstConfirmation = {
+      id: "change-employee-1",
+      fieldName: "totalDoseMg",
+      previousValue: disputeContext,
+      submittedValue: 20,
+      actorType: "staff",
+      actorIdentity: "employee-1",
+      source: "packaging",
+      disposition: "accepted",
+      createdAt: new Date("2026-08-01T00:00:00Z"),
+    };
+    const secondConfirmation = {
+      id: "change-employee-2",
+      fieldName: "totalDoseMg",
+      previousValue: disputeContext,
+      submittedValue: 20,
+      actorType: "staff",
+      actorIdentity: "employee-2",
+      source: "packaging",
+      disposition: "accepted",
+      createdAt: new Date("2026-08-01T00:01:00Z"),
+    };
+    prismaMock.catalogFieldVerificationRule.findMany.mockResolvedValue(specRuleRows());
+    requireReviewerMock
+      .mockResolvedValueOnce({
+        ok: true,
+        tokenId: "token-row-1",
+        partnerId: "partner-1",
+        employeeId: "employee-1",
+        employeeName: "Avery",
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        tokenId: "token-row-1",
+        partnerId: "partner-1",
+        employeeId: "employee-2",
+        employeeName: "Blake",
+      });
+    prismaMock.storeProductCatalog.findFirst
+      .mockResolvedValueOnce(
+        product({
+          ...impossiblePackage,
+          catalogFieldChanges: [],
+        })
+      )
+      .mockResolvedValueOnce(
+        product({
+          ...impossiblePackage,
+          catalogFieldChanges: [firstConfirmation],
+        })
+      );
+    txMock.storeProductCatalog.findUniqueOrThrow
+      .mockResolvedValueOnce(
+        product({
+          ...impossiblePackage,
+          catalogFieldChanges: [firstConfirmation],
+        })
+      )
+      .mockResolvedValueOnce(
+        product({
+          ...impossiblePackage,
+          catalogFieldChanges: [firstConfirmation, secondConfirmation],
+        })
+      );
+
+    const firstResponse = await post({
+      answers: [{ fieldName: "totalDoseMg", action: "confirm", source: "packaging" }],
+    });
+    const firstBody = await firstResponse.json();
+    const secondResponse = await post({
+      answers: [{ fieldName: "totalDoseMg", action: "confirm", source: "packaging" }],
+    });
+    const secondBody = await secondResponse.json();
+
+    expect(firstResponse.status).toBe(200);
+    expect(firstBody.data.fieldStates.totalDoseMg).toMatchObject({
+      state: "disputed",
+      confirmationsCount: 1,
+      requiredConfirmations: 2,
+    });
+    expect(secondResponse.status).toBe(200);
+    expect(secondBody.data.fieldStates.totalDoseMg).toMatchObject({
+      state: "confirmed",
+      confirmationsCount: 2,
+      requiredConfirmations: 2,
+    });
+    const firstCreated = txMock.catalogFieldChange.createMany.mock.calls[0][0].data[0];
+    const secondCreated = txMock.catalogFieldChange.createMany.mock.calls[1][0].data[0];
+    expect(firstCreated).toMatchObject({
+      catalogItemId: "catalog-1",
+      fieldName: "totalDoseMg",
+      previousValue: expect.objectContaining({
+        kind: "full-package-dose-dispute",
+        declaredPackageMaterialMassMg: 20,
+        minimumDoseMaterialMassMg: 50,
+      }),
+      submittedValue: 20,
+    });
+    expect(secondCreated).toMatchObject({
+      catalogItemId: "catalog-1",
+      fieldName: "totalDoseMg",
+      previousValue: expect.objectContaining({
+        kind: "full-package-dose-dispute",
+        declaredPackageMaterialMassMg: 20,
+        minimumDoseMaterialMassMg: 50,
+      }),
+      submittedValue: 20,
+    });
+    expect(typeof firstCreated.submittedValue).toBe("number");
+    expect(typeof secondCreated.submittedValue).toBe("number");
+    expect(txMock.catalogFieldVerificationState.upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          state: "confirmed",
+          confirmedValue: 20,
+        }),
+      })
+    );
+    expect(txMock.storeProductCatalog.update).toHaveBeenCalledTimes(1);
+    expect(txMock.storeProductCatalog.update).toHaveBeenCalledWith({
+      where: { id: "catalog-1" },
+      data: { totalDoseMg: 20 },
+    });
   });
 });
